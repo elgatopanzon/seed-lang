@@ -249,11 +249,14 @@ describe('seed cli', () => {
 
       assert.equal(status.code, 0);
       assert.equal(parsed.total, 2);
+      assert.equal(parsed.verified, 2);
+      assert.equal(parsed.passed, 1);
       assert.equal(parsed.confirmed, 1);
       assert.equal(parsed.failed, 1);
       assert.equal(parsed.pending, 0);
-      assert.equal(parsed.completed, false);
-      assert.equal(parsed.completion, 0.5);
+      assert.equal(parsed.completed, true);
+      assert.equal(parsed.satisfied, false);
+      assert.equal(parsed.completion, 1);
 
       const session = JSON.parse(fs.readFileSync(sessionPath(cwd), 'utf8'));
       const confirmed = session.items.find((entry) => entry.id === 'verify-first');

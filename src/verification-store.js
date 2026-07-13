@@ -499,12 +499,17 @@ function getStatus({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
   const needsReview = state.items.filter((entry) => entry.status === 'needs_review').length;
   const failedIds = state.items.filter((entry) => entry.status === 'failed').map((entry) => entry.id);
 
-  const completion = total === 0 ? 0 : confirmed / total;
-  const completed = total > 0 && confirmed === total;
+  const verified = confirmed + failed;
+  const passed = confirmed;
+  const completion = total === 0 ? 0 : verified / total;
+  const completed = total > 0 && verified === total;
+  const satisfied = completed && failed === 0;
 
   return {
     sessionId,
     total,
+    verified,
+    passed,
     pending,
     claimed,
     confirmed,
@@ -514,6 +519,7 @@ function getStatus({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
     failedIds,
     completion,
     completed,
+    satisfied,
   };
 }
 

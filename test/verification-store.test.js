@@ -278,13 +278,16 @@ describe('verification store', () => {
       const status = getStatus({ cwd, sessionId: 'default' });
 
       assert.equal(status.total, 3);
+      assert.equal(status.verified, 2);
+      assert.equal(status.passed, 1);
       assert.equal(status.confirmed, 1);
       assert.equal(status.failed, 1);
       assert.equal(status.pending, 1);
       assert.equal(status.claimed, 0);
       assert.equal(status.failedIds[0], 'verify-next');
       assert.equal(status.completed, false);
-      assert.equal(status.completion, 1 / 3);
+      assert.equal(status.satisfied, false);
+      assert.equal(status.completion, 2 / 3);
     });
   });
 
