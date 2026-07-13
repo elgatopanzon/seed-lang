@@ -24,6 +24,47 @@ describe('validation', () => {
     assert.ok(codes(result.errors).includes('missing-required-section'));
   });
 
+  test('reports every required top-level section when missing or malformed', () => {
+    const requiredSections = [
+      'metadata',
+      'scope',
+      'interfaces',
+      'behavior',
+      'errors',
+      'constraints',
+      'freedom',
+      'verifications',
+    ];
+
+    requiredSections.forEach((section) => {
+      const missingDocument = parse(renderSeedTemplate());
+      delete missingDocument[section];
+
+      assert.ok(
+        validateSeedDocument(missingDocument).errors.some((entry) => entry.path === `/${section}`),
+        `expected missing ${section} to yield an error`,
+      );
+
+      const malformedDocument = parse(renderSeedTemplate());
+      malformedDocument[section] = 'wrong shape';
+
+      assert.ok(
+        validateSeedDocument(malformedDocument).errors.some((entry) => entry.path === `/${section}`),
+        `expected malformed ${section} to yield an error`,
+      );
+    });
+  });
+
+  test('allows state to be omitted', () => {
+    const document = parse(renderSeedTemplate());
+    delete document.state;
+
+    const result = validateSeedDocument(document);
+
+    assert.equal(result.errors.length, 0);
+    assert.equal(result.warnings.length, 0);
+  });
+
   test('reports duplicate and malformed verification ids as errors', () => {
     const document = parse(renderSeedTemplate());
     document.verifications = [
@@ -35,6 +76,9 @@ describe('validation', () => {
     const result = validateSeedDocument(document);
     const errorCodes = codes(result.errors);
 
+    result.errors.forEach((entry) => {
+      assert.deepEqual(Object.keys(entry), ['code', 'path', 'message']);
+    });
     assert.ok(errorCodes.includes('duplicate-verification-id'));
     assert.ok(errorCodes.includes('malformed-verification-id'));
     assert.equal(result.warnings.length, 0);
@@ -82,6 +126,9 @@ describe('validation', () => {
 
     assert.equal(result.errors.length, 0);
     assert.ok(result.warnings.length >= 2);
+    result.warnings.forEach((entry) => {
+      assert.deepEqual(Object.keys(entry), ['code', 'path', 'message']);
+    });
     assert.ok(codes(result.warnings).includes('interface-without-examples'));
     assert.ok(codes(result.warnings).includes('persistence-without-semantics'));
     assert.ok(codes(result.warnings).includes('outputs-without-errors'));

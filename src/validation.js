@@ -91,8 +91,12 @@ function validateBehavior(document, errors, warnings) {
 }
 
 function validateState(document, errors, warnings) {
+  if (document.state === undefined) {
+    return;
+  }
+
   if (!isObject(document.state)) {
-    pushError(errors, 'missing-required-section', '/state', 'state is required and must be an object');
+    pushError(errors, 'invalid-optional-section', '/state', 'state must be an object when provided');
     return;
   }
 
@@ -113,6 +117,13 @@ function validateErrorsSection(document, errors) {
   const path = '/errors';
   if (!Array.isArray(document.errors)) {
     pushError(errors, 'missing-required-section', path, 'errors section is required and must be an array');
+  }
+}
+
+function validateRequiredArraySection(document, errors, section) {
+  const path = `/${section}`;
+  if (!Array.isArray(document[section])) {
+    pushError(errors, 'missing-required-section', path, `${section} section is required and must be an array`);
   }
 }
 
@@ -162,6 +173,8 @@ function validateSeedDocument(document) {
   validateMetadata(document, errors);
   validateScope(document, errors);
   validateErrorsSection(document, errors);
+  validateRequiredArraySection(document, errors, 'constraints');
+  validateRequiredArraySection(document, errors, 'freedom');
   validateState(document, errors, warnings);
   validateBehavior(document, errors, warnings);
   validateInterfaces(document, errors, warnings);
