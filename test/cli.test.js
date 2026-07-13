@@ -88,6 +88,37 @@ describe('seed cli', () => {
     });
   });
 
+
+  test('init writes verified genomes from repeatable and list options', () => {
+    withTempDir((cwd) => {
+      const result = runCli(['init', '--gnome', 'cli-nodejs', '--gnomes', 'cli-human-output,cli-json-output'], cwd);
+      assert.equal(result.code, 0);
+
+      const document = parse(fs.readFileSync(path.join(cwd, DEFAULT_SEED_PATH), 'utf8'));
+      assert.deepEqual(document.genomes, ['cli-nodejs', 'cli-human-output', 'cli-json-output']);
+
+      const blueprint = runCli(['blueprint', '--section', 'interfaces'], cwd);
+      assert.equal(blueprint.code, 0);
+      assert.ok(blueprint.stdout.includes('Genomes: cli-interface [builtin], cli-nodejs [builtin], cli-human-output [builtin], cli-json-output [builtin]'));
+    });
+  });
+
+  test('init accepts genome spelling aliases and rejects invalid genomes before writing', () => {
+    withTempDir((cwd) => {
+      const alias = runCli(['init', '--genome', 'cli-nodejs[constraints]', '--genomes', 'cli-human-output'], cwd);
+      assert.equal(alias.code, 0);
+      const document = parse(fs.readFileSync(path.join(cwd, DEFAULT_SEED_PATH), 'utf8'));
+      assert.deepEqual(document.genomes, ['cli-nodejs[constraints]', 'cli-human-output']);
+    });
+
+    withTempDir((cwd) => {
+      const invalid = runCli(['init', '--gnome', 'missing-genome'], cwd);
+      assert.equal(invalid.code, 1);
+      assert.ok(invalid.stderr.includes('Unknown genome missing-genome'));
+      assert.equal(fs.existsSync(path.join(cwd, DEFAULT_SEED_PATH)), false);
+    });
+  });
+
   test('validate accepts generated template and rejects malformed YAML', () => {
     withTempDir((cwd) => {
       runCli(['init'], cwd);

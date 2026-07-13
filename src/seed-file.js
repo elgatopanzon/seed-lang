@@ -6,20 +6,21 @@ const { compileSeedDocument } = require('./genomes');
 const DEFAULT_SEED_PATH = 'seed/seed.yml';
 const STABLE_VERIFICATION_ID = 'seed-baseline-visibility';
 
-function renderSeedTemplate() {
+function renderSeedTemplate(options = {}) {
   return (
-    stringify(seedTemplateDocument())
+    stringify(seedTemplateDocument(options))
       .replace(/\n+$/, '')
       .concat('\n')
   );
 }
 
-function seedTemplateDocument() {
-  return {
+function seedTemplateDocument({ genomes = [] } = {}) {
+  const document = {
     metadata: {
       name: 'project-name',
       summary: 'Bounded behavior contract for a local repository.',
     },
+    ...(genomes.length > 0 ? { genomes } : {}),
     scope: {
       included: {
         'local-filesystem': 'Local filesystem artifacts within the repository root.',
@@ -102,9 +103,12 @@ function seedTemplateDocument() {
       },
     ],
   };
+
+  return document;
 }
 
-function initSeed({ cwd, overwrite = false } = {}) {
+
+function initSeed({ cwd, overwrite = false, genomes = [] } = {}) {
   const root = cwd ?? process.cwd();
   const seedPath = resolve(root, DEFAULT_SEED_PATH);
   const seedDir = dirname(seedPath);
@@ -113,9 +117,11 @@ function initSeed({ cwd, overwrite = false } = {}) {
     throw new Error(`Seed already exists at ${seedPath}. Use overwrite=true to replace it.`);
   }
 
+  compileSeedDocument({ document: { genomes }, cwd: root, seedPath: DEFAULT_SEED_PATH });
+
   mkdirSync(seedDir, { recursive: true });
 
-  const text = renderSeedTemplate();
+  const text = renderSeedTemplate({ genomes });
   writeFileSync(seedPath, text, 'utf8');
 
   return {

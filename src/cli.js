@@ -26,7 +26,7 @@ const DEFAULT_OWNER = 'seed-cli';
 
 function usage() {
   return [
-    'seed init [--overwrite]',
+    'seed init [--overwrite] [--gnome ID] [--gnomes ID[,ID...]]',
     'seed validate',
     'seed blueprint [--json] [--section ID] [--filter @ADDRESS] [--limit N] [--offset N] [--head N] [--tail N] [--pager]',
     'seed verify start',
@@ -71,6 +71,47 @@ function ensureNoExtraArgs(args, allowed) {
   }
 
   return args.every((item) => !item.startsWith('-'));
+}
+
+function splitGenomeList(value) {
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function parseInitArgs(args) {
+  const options = {
+    overwrite: false,
+    genomes: [],
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+
+    if (arg === '--overwrite') {
+      options.overwrite = true;
+    } else if (['--gnome', '--genome', '--gnomes', '--genomes'].includes(arg)) {
+      const value = args[index + 1];
+      if (!value || value.startsWith('-')) {
+        return { error: `${arg} requires a genome id or comma-separated genome list.` };
+      }
+
+      const genomes = splitGenomeList(value);
+      if (genomes.length === 0) {
+        return { error: `${arg} requires a genome id or comma-separated genome list.` };
+      }
+
+      options.genomes.push(...genomes);
+      index += 1;
+    } else if (arg.startsWith('-')) {
+      return { error: `Unknown option for seed init: ${arg}` };
+    } else {
+      return { error: `seed init does not take positional arguments: ${arg}` };
+    }
+  }
+
+  return { options };
 }
 
 function parseConstraintActionArgs(args, command, optionName) {
@@ -357,15 +398,16 @@ function run(argv = process.argv.slice(2)) {
   const [command, ...rest] = argv;
 
   if (command === 'init') {
-    const allowed = rest.filter((item) => item.startsWith('-'));
-    if (allowed.some((item) => item !== '--overwrite') || !ensureNoExtraArgs(rest.filter((item) => !item.startsWith('-')), 0)) {
-      return exitWithError(`Unknown option for seed init: ${allowed.join(' ')}`);
+    const parsed = parseInitArgs(rest);
+    if (parsed.error) {
+      return exitWithError(parsed.error);
     }
 
     try {
       const created = initSeed({
         cwd: process.cwd(),
-        overwrite: rest.includes('--overwrite'),
+        overwrite: parsed.options.overwrite,
+        genomes: parsed.options.genomes,
       });
       console.log(`Initialized seed contract at ${created.path}`);
       return 0;
