@@ -55,9 +55,13 @@ describe('validation', () => {
     });
   });
 
-  test('allows artifacts and state to be omitted', () => {
+  test('allows optional addressable sections to be omitted', () => {
     const document = parse(renderSeedTemplate());
     delete document.artifacts;
+    delete document.security;
+    delete document.environment;
+    delete document.observability;
+    delete document.compatibility;
     delete document.state;
     document.verifications[0].description = 'The Seed contract template can be initialized and validated.';
     document.verifications[0].method = 'Run seed init, then seed validate.';
@@ -91,6 +95,9 @@ describe('validation', () => {
           whitespace: 'Whitespace is counted.',
         },
       }, errors),
+      ...normalizeAddressableSection('security', {
+        'no-network-access': 'Must not make outbound network calls.',
+      }, errors),
     ];
 
     assert.deepEqual(errors, []);
@@ -98,6 +105,7 @@ describe('validation', () => {
     assert.ok(items.some((item) => item.address === 'freedom.module-layout'));
     assert.ok(items.some((item) => item.address === 'behavior.counting'));
     assert.ok(items.some((item) => item.address === 'behavior.counting.whitespace'));
+    assert.ok(items.some((item) => item.address === 'security.no-network-access'));
   });
 
   test('rejects anonymous strings in list-based addressable sections', () => {
@@ -247,8 +255,8 @@ describe('validation', () => {
 
   test('validates non-artifact @ references against addressable contract items', () => {
     const document = parse(renderSeedTemplate());
-    document.verifications[0].description = 'Confirm @behavior.local-commands still holds.';
-    document.verifications[0].method = 'Read @behavior.local-commands and validate implementation behavior.';
+    document.verifications[0].description = 'Confirm @behavior.local-commands and @security.repo-local-boundary still hold.';
+    document.verifications[0].method = 'Read @behavior.local-commands and @security.repo-local-boundary, then validate implementation behavior.';
 
     const valid = validateSeedDocument(document);
     assert.deepEqual(valid.errors, []);

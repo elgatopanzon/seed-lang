@@ -66,6 +66,18 @@ function seedTemplateDocument() {
         semantics: 'verification state and snapshots are ephemeral command history artifacts',
       },
     },
+    security: {
+      'repo-local-boundary': 'Seed commands must not read or write outside the repository root unless explicitly directed.',
+    },
+    environment: {
+      'local-node-runtime': 'Seed CLI behavior assumes a local Node.js runtime.',
+    },
+    observability: {
+      'clear-command-errors': 'Command failures must print clear user-facing errors.',
+    },
+    compatibility: {
+      'default-seed-path': 'The default Seed file path remains seed/seed.yml.',
+    },
     constraints: {
       'repo-local-only': 'Only local filesystem artifacts under repository root are in scope.',
     },

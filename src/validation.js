@@ -15,6 +15,10 @@ const REQUIRED_SECTIONS = [
 
 const OPTIONAL_ADDRESSABLE_SECTIONS = [
   'artifacts',
+  'security',
+  'environment',
+  'observability',
+  'compatibility',
   'state',
 ];
 

@@ -41,6 +41,10 @@ describe('seed file primitives', () => {
     assert.equal(Object.keys(doc.scope.excluded).length > 0, true);
     assert.equal(typeof doc.interfaces, 'object');
     assert.equal(typeof doc.artifacts, 'object');
+    assert.equal(typeof doc.security, 'object');
+    assert.equal(typeof doc.environment, 'object');
+    assert.equal(typeof doc.observability, 'object');
+    assert.equal(typeof doc.compatibility, 'object');
     assert.equal(Array.isArray(doc.verifications), true);
     assert.equal(Array.isArray(doc.verifications[0].evidence_required), true);
     assert.equal(doc.verifications[0].evidence_required.length > 0, true);
