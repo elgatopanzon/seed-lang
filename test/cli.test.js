@@ -200,7 +200,10 @@ describe('seed cli', () => {
       assert.equal(diff.code, 0);
       assert.ok(diff.stdout.includes('--- .seed/seed.snapshot.yml'));
       assert.ok(diff.stdout.includes('+++ seed/seed.yml (compiled)'));
+      assert.ok(diff.stdout.includes('@@ -'));
       assert.ok(diff.stdout.includes('Seed commands expose changed behavior for diff output.'));
+      assert.equal(diff.stdout.includes('## Interfaces'), false);
+      assert.ok(diff.stdout.split('\n').length < 16);
     });
   });
   test('blueprint renders markdown and json views from the Seed file', () => {

@@ -37,25 +37,25 @@ function buildLineDiff(beforeText, afterText) {
 
   while (left < before.length && right < after.length) {
     if (before[left] === after[right]) {
-      changes.push({ kind: 'same', line: before[left] });
+      changes.push({ kind: 'same', line: before[left], oldLine: left + 1, newLine: right + 1 });
       left += 1;
       right += 1;
     } else if (table[left + 1][right] >= table[left][right + 1]) {
-      changes.push({ kind: 'remove', line: before[left] });
+      changes.push({ kind: 'remove', line: before[left], oldLine: left + 1, newLine: right + 1 });
       left += 1;
     } else {
-      changes.push({ kind: 'add', line: after[right] });
+      changes.push({ kind: 'add', line: after[right], oldLine: left + 1, newLine: right + 1 });
       right += 1;
     }
   }
 
   while (left < before.length) {
-    changes.push({ kind: 'remove', line: before[left] });
+    changes.push({ kind: 'remove', line: before[left], oldLine: left + 1, newLine: right + 1 });
     left += 1;
   }
 
   while (right < after.length) {
-    changes.push({ kind: 'add', line: after[right] });
+    changes.push({ kind: 'add', line: after[right], oldLine: left + 1, newLine: right + 1 });
     right += 1;
   }
 
@@ -63,32 +63,70 @@ function buildLineDiff(beforeText, afterText) {
 }
 
 function colorize(text, code, enabled) {
-  return enabled ? `\u001b[${code}m${text}\u001b[0m` : text;
+  return enabled ? '\u001b[' + code + 'm' + text + '\u001b[0m' : text;
 }
 
-function renderDiff(changes, { color = process.stdout.isTTY } = {}) {
+function hunkRanges(changes, context) {
+  const ranges = [];
+
+  changes.forEach((change, index) => {
+    if (change.kind === 'same') {
+      return;
+    }
+
+    const start = Math.max(0, index - context);
+    const end = Math.min(changes.length - 1, index + context);
+    const previous = ranges[ranges.length - 1];
+
+    if (previous && start <= previous.end + 1) {
+      previous.end = Math.max(previous.end, end);
+    } else {
+      ranges.push({ start, end });
+    }
+  });
+
+  return ranges;
+}
+
+function hunkHeader(hunk) {
+  const oldLines = hunk.filter((change) => change.kind !== 'add');
+  const newLines = hunk.filter((change) => change.kind !== 'remove');
+  const oldStart = oldLines[0]?.oldLine ?? hunk[0]?.oldLine ?? 1;
+  const newStart = newLines[0]?.newLine ?? hunk[0]?.newLine ?? 1;
+  const oldCount = oldLines.length;
+  const newCount = newLines.length;
+
+  return '@@ -' + oldStart + ',' + oldCount + ' +' + newStart + ',' + newCount + ' @@';
+}
+
+function renderDiff(changes, { color = process.stdout.isTTY, context = 3 } = {}) {
   const rendered = [
     colorize('--- .seed/seed.snapshot.yml', '31', color),
     colorize('+++ seed/seed.yml (compiled)', '32', color),
   ];
 
-  changes.forEach((change) => {
-    if (change.kind === 'same') {
-      rendered.push(` ${change.line}`);
-    } else if (change.kind === 'remove') {
-      rendered.push(colorize(`-${change.line}`, '31', color));
-    } else {
-      rendered.push(colorize(`+${change.line}`, '32', color));
-    }
+  hunkRanges(changes, context).forEach((range) => {
+    const hunk = changes.slice(range.start, range.end + 1);
+    rendered.push(hunkHeader(hunk));
+
+    hunk.forEach((change) => {
+      if (change.kind === 'same') {
+        rendered.push(' ' + change.line);
+      } else if (change.kind === 'remove') {
+        rendered.push(colorize('-' + change.line, '31', color));
+      } else {
+        rendered.push(colorize('+' + change.line, '32', color));
+      }
+    });
   });
 
-  return `${rendered.join('\n')}\n`;
+  return rendered.join('\n') + '\n';
 }
 
 function getSeedDiff({ cwd = process.cwd(), noColor = false } = {}) {
   const snapPath = snapshotPath(cwd);
   if (!existsSync(snapPath)) {
-    throw new Error(`Seed snapshot missing at ${snapPath}. Run seed verify start first.`);
+    throw new Error('Seed snapshot missing at ' + snapPath + '. Run seed verify start first.');
   }
 
   const snapshotText = readFileSync(snapPath, 'utf8');
