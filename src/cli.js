@@ -24,8 +24,8 @@ function usage() {
     'seed validate',
     'seed verify start',
     'seed verify next',
-    'seed verify confirm <constraint-id>',
-    'seed verify fail <constraint-id>',
+    'seed verify confirm <constraint-id> [--evidence TEXT]',
+    'seed verify fail <constraint-id> [--reason TEXT]',
     'seed verify status',
     '',
     `seed source defaults to ${DEFAULT_SEED_PATH} and current working directory`,
@@ -64,6 +64,48 @@ function ensureNoExtraArgs(args, allowed) {
   }
 
   return args.every((item) => !item.startsWith('-'));
+}
+
+function parseConstraintActionArgs(args, command, optionName) {
+  if (args.length === 0 || args[0].startsWith('-')) {
+    return { error: `seed verify ${command} requires exactly one <constraint-id>.` };
+  }
+
+  const constraintId = args[0];
+
+  if (args.length === 1) {
+    return { constraintId, payload: undefined };
+  }
+
+  const option = `--${optionName}`;
+  if (args.length === 2) {
+    if (args[1] === option) {
+      return { error: `seed verify ${command} ${option} requires a value.` };
+    }
+
+    if (args[1].startsWith('--')) {
+      return { error: `Unknown option for seed verify ${command}: ${args[1]}` };
+    }
+
+    return { error: `seed verify ${command} requires exactly one <constraint-id>.` };
+  }
+
+  if (args.length > 3) {
+    return { error: `Unknown option for seed verify ${command}: ${args[1]}` };
+  }
+
+  if (args[1] !== option) {
+    return { error: `Unknown option for seed verify ${command}: ${args[1]}` };
+  }
+
+  if (args[2] === undefined || args[2].startsWith('--') || args[2] === '') {
+    return { error: `seed verify ${command} ${option} requires a value.` };
+  }
+
+  return {
+    constraintId,
+    payload: args[2],
+  };
 }
 
 function handleValidate(cwd) {
@@ -149,13 +191,13 @@ function handleVerifyNext(cwd) {
   return 0;
 }
 
-function handleVerifyConfirm(cwd, constraintId) {
+function handleVerifyConfirm(cwd, constraintId, evidence) {
   try {
     const item = confirmItem({
       cwd,
       itemId: constraintId,
       owner: DEFAULT_OWNER,
-      evidence: `Confirmed through CLI for ${constraintId}`,
+      evidence,
     });
 
     console.log(`Confirmed verification ${constraintId}`);
@@ -166,13 +208,13 @@ function handleVerifyConfirm(cwd, constraintId) {
   }
 }
 
-function handleVerifyFail(cwd, constraintId) {
+function handleVerifyFail(cwd, constraintId, reason) {
   try {
     const item = failItem({
       cwd,
       itemId: constraintId,
       owner: DEFAULT_OWNER,
-      reason: `Failed through CLI for ${constraintId}`,
+      reason,
     });
 
     console.log(`Marked verification ${constraintId} as failed`);
@@ -255,21 +297,21 @@ function run(argv = process.argv.slice(2)) {
     }
 
     if (subcommand === 'confirm') {
-      if (!ensureNoExtraArgs(subRest, 1)) {
-        return exitWithError('seed verify confirm requires exactly one <constraint-id>.');
+      const parsed = parseConstraintActionArgs(subRest, 'confirm', 'evidence', 'evidence');
+      if (parsed.error) {
+        return exitWithError(parsed.error);
       }
 
-      const [id] = subRest;
-      return handleVerifyConfirm(process.cwd(), id);
+      return handleVerifyConfirm(process.cwd(), parsed.constraintId, parsed.payload);
     }
 
     if (subcommand === 'fail') {
-      if (!ensureNoExtraArgs(subRest, 1)) {
-        return exitWithError('seed verify fail requires exactly one <constraint-id>.');
+      const parsed = parseConstraintActionArgs(subRest, 'fail', 'reason', 'reason');
+      if (parsed.error) {
+        return exitWithError(parsed.error);
       }
 
-      const [id] = subRest;
-      return handleVerifyFail(process.cwd(), id);
+      return handleVerifyFail(process.cwd(), parsed.constraintId, parsed.payload);
     }
 
     if (subcommand === 'status') {

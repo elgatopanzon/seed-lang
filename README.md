@@ -6,8 +6,8 @@ Seed is a contract language for specifying bounded software behavior as the sole
 - `seed validate`
 - `seed verify start`
 - `seed verify next`
-- `seed verify confirm <constraint-id>`
-- `seed verify fail <constraint-id>`
+- `seed verify confirm <constraint-id> [--evidence TEXT]`
+- `seed verify fail <constraint-id> [--reason TEXT]`
 - `seed verify status`
 
 Defaults:

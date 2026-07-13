@@ -65,12 +65,96 @@ describe('validation', () => {
     assert.equal(result.warnings.length, 0);
   });
 
+  test('requires metadata summary', () => {
+    const missingSummary = parse(renderSeedTemplate());
+    delete missingSummary.metadata.summary;
+
+    const result = validateSeedDocument(missingSummary);
+    assert.equal(result.errors.some((entry) => entry.path === '/metadata/summary'), true);
+  });
+
+  test('requires scope included and excluded as non-empty string arrays', () => {
+    const missingIncluded = parse(renderSeedTemplate());
+    delete missingIncluded.scope.included;
+
+    const missingExcluded = parse(renderSeedTemplate());
+    delete missingExcluded.scope.excluded;
+
+    const emptyInvalid = parse(renderSeedTemplate());
+    emptyInvalid.scope.excluded = [];
+
+    const badEntry = parse(renderSeedTemplate());
+    badEntry.scope.excluded = [''];
+
+    assert.equal(
+      validateSeedDocument(missingIncluded).errors.some((entry) => entry.path === '/scope/included'),
+      true,
+    );
+    assert.equal(
+      validateSeedDocument(missingExcluded).errors.some((entry) => entry.path === '/scope/excluded'),
+      true,
+    );
+    assert.equal(
+      validateSeedDocument(emptyInvalid).errors.some((entry) => entry.path === '/scope/excluded'),
+      true,
+    );
+    assert.equal(
+      validateSeedDocument(badEntry).errors.some((entry) => entry.path === '/scope/excluded'),
+      true,
+    );
+  });
+
+  test('requires verification description/method/evidenceGuidance and allows optional traceability', () => {
+    const invalid = parse(renderSeedTemplate());
+    invalid.verifications = [
+      {
+        id: invalid.verifications[0].id,
+        title: invalid.verifications[0].title,
+        method: invalid.verifications[0].method,
+      },
+    ];
+
+    const missingMethod = parse(renderSeedTemplate());
+    delete missingMethod.verifications[0].method;
+    const missingDescription = parse(renderSeedTemplate());
+    delete missingDescription.verifications[0].description;
+    const missingEvidenceGuidance = parse(renderSeedTemplate());
+    delete missingEvidenceGuidance.verifications[0].evidenceGuidance;
+
+    assert.equal(validateSeedDocument(invalid).errors.some((entry) => entry.path === '/verifications/0/description'), true);
+    assert.equal(validateSeedDocument(missingMethod).errors.some((entry) => entry.path === '/verifications/0/method'), true);
+    assert.equal(validateSeedDocument(missingEvidenceGuidance).errors.some((entry) => entry.path === '/verifications/0/evidenceGuidance'), true);
+
+    const validWithTraceability = parse(renderSeedTemplate());
+    validWithTraceability.verifications[0].traceability = ['metadata.name', 'scope.included'];
+    const valid = validateSeedDocument(validWithTraceability);
+    assert.equal(valid.errors.length, 0);
+  });
+
   test('reports duplicate and malformed verification ids as errors', () => {
     const document = parse(renderSeedTemplate());
     document.verifications = [
-      { id: 'seed-baseline-visibility', title: 'One', evidence: ['proof'] },
-      { id: 'seed-baseline-visibility', title: 'Two', evidence: ['proof'] },
-      { id: 'Invalid ID', title: 'Three', evidence: ['proof'] },
+      {
+        id: 'seed-baseline-visibility',
+        title: 'One',
+        description: 'desc',
+        method: 'method',
+        evidenceGuidance: ['evidence'],
+      },
+      {
+        id: 'seed-baseline-visibility',
+        title: 'Two',
+        description: 'desc',
+        method: 'method',
+        evidenceGuidance: ['evidence'],
+      },
+      {
+        id: 'Invalid ID',
+        title: 'Three',
+        description: 'desc',
+        method: 'method',
+        evidenceGuidance: ['evidence'],
+      },
     ];
 
     const result = validateSeedDocument(document);
@@ -114,13 +198,6 @@ describe('validation', () => {
       'CLI output contract',
     ];
     document.errors = [];
-    document.verifications = [
-      {
-        id: 'seed-baseline-visibility',
-        title: document.verifications[0].title,
-        evidence: [],
-      },
-    ];
 
     const result = validateSeedDocument(document);
 
@@ -132,6 +209,5 @@ describe('validation', () => {
     assert.ok(codes(result.warnings).includes('interface-without-examples'));
     assert.ok(codes(result.warnings).includes('persistence-without-semantics'));
     assert.ok(codes(result.warnings).includes('outputs-without-errors'));
-    assert.ok(codes(result.warnings).includes('verification-without-evidence'));
   });
 });

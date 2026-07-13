@@ -33,6 +33,10 @@ function validateMetadata(document, errors) {
   if (!isString(document.metadata.version)) {
     pushError(errors, 'missing-required-field', '/metadata/version', 'metadata.version is required and must be a non-empty string');
   }
+
+  if (!isString(document.metadata.summary)) {
+    pushError(errors, 'missing-required-field', '/metadata/summary', 'metadata.summary is required and must be a non-empty string');
+  }
 }
 
 function validateScope(document, errors) {
@@ -41,8 +45,20 @@ function validateScope(document, errors) {
     return;
   }
 
-  if (!isString(document.scope.boundary)) {
-    pushError(errors, 'missing-required-field', '/scope/boundary', 'scope.boundary is required and must be a non-empty string');
+  if (!Array.isArray(document.scope.included)) {
+    pushError(errors, 'missing-required-field', '/scope/included', 'scope.included is required and must be an array');
+  } else if (document.scope.included.length === 0) {
+    pushError(errors, 'invalid-scope', '/scope/included', 'scope.included must contain at least one behavior string');
+  } else if (!document.scope.included.every(isString)) {
+    pushError(errors, 'invalid-scope', '/scope/included', 'scope.included entries must be non-empty strings');
+  }
+
+  if (!Array.isArray(document.scope.excluded)) {
+    pushError(errors, 'missing-required-field', '/scope/excluded', 'scope.excluded is required and must be an array');
+  } else if (document.scope.excluded.length === 0) {
+    pushError(errors, 'invalid-scope', '/scope/excluded', 'scope.excluded must contain at least one behavior string');
+  } else if (!document.scope.excluded.every(isString)) {
+    pushError(errors, 'invalid-scope', '/scope/excluded', 'scope.excluded entries must be non-empty strings');
   }
 }
 
@@ -153,8 +169,28 @@ function validateVerifications(document, errors, warnings) {
     }
     seenIds.add(id);
 
-    if (!Array.isArray(entry.evidence) || entry.evidence.length === 0) {
-      pushWarning(warnings, 'verification-without-evidence', `${entryPath}/evidence`, 'verification should provide evidence guidance');
+    if (!isString(entry.description)) {
+      pushError(errors, 'missing-required-field', `${entryPath}/description`, 'verification description is required and must be a non-empty string');
+    }
+
+    if (!isString(entry.method)) {
+      pushError(errors, 'missing-required-field', `${entryPath}/method`, 'verification method is required and must be a non-empty string');
+    }
+
+    if (!Array.isArray(entry.evidenceGuidance)) {
+      pushError(errors, 'missing-required-field', `${entryPath}/evidenceGuidance`, 'verification evidenceGuidance is required and must be an array');
+    } else if (!entry.evidenceGuidance.length) {
+      pushError(errors, 'invalid-verification', `${entryPath}/evidenceGuidance`, 'verification evidenceGuidance is required and must be non-empty');
+    } else if (!entry.evidenceGuidance.every(isString)) {
+      pushError(errors, 'invalid-verification', `${entryPath}/evidenceGuidance`, 'verification evidenceGuidance entries must be non-empty strings');
+    }
+
+    if (entry.traceability !== undefined) {
+      if (!Array.isArray(entry.traceability)) {
+        pushError(errors, 'invalid-verification', `${entryPath}/traceability`, 'verification traceability must be an array when provided');
+      } else if (!entry.traceability.every(isString)) {
+        pushError(errors, 'invalid-verification', `${entryPath}/traceability`, 'verification traceability entries must be non-empty strings');
+      }
     }
   });
 }

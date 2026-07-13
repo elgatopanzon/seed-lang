@@ -18,12 +18,16 @@ function seedTemplateDocument() {
     metadata: {
       name: 'project-name',
       version: '0.1.0',
-      description: 'Bounded behavior contract for a local project',
+      summary: 'Bounded behavior contract for a local repository.',
     },
     scope: {
-      boundary: 'prototype command execution and local repository behavior',
-      assumptions: [
-        'Runs in an isolated repository workspace',
+      included: [
+        'Local filesystem artifacts within the repository root.',
+        'Command-level state under `.seed` and `seed/seed.yml`.',
+      ],
+      excluded: [
+        'External services outside this repository.',
+        'Remote synchronization and publishing workflows.',
       ],
     },
     interfaces: [
@@ -64,10 +68,17 @@ function seedTemplateDocument() {
       {
         id: STABLE_VERIFICATION_ID,
         title: 'Seed contract can be created and loaded without validation failures',
-        evidence: [
+        description: 'The Seed contract template can be initialized, read, and validated for structural correctness.',
+        method: 'Run seed init, then seed validate, then check for zero structural errors.',
+        evidenceGuidance: [
           'Initialize and load seed/seed.yml successfully.',
           'Fail loudly if YAML cannot be parsed.',
           'Reject overwrite unless requested explicitly.',
+        ],
+        traceability: [
+          'metadata',
+          'scope',
+          'verifications',
         ],
       },
     ],

@@ -33,18 +33,23 @@ function sampleDocument() {
         id: 'verify-begin',
         title: 'first verification',
         description: 'confirm the first behavior',
-        evidence: ['manual-check'],
+        method: 'manual review',
+        evidenceGuidance: ['manual-check'],
         traceability: ['behavior.summary[0]'],
       },
       {
         id: 'verify-next',
         title: 'second verification',
-        evidence: ['manual-check'],
+        description: 'confirm second behavior',
+        method: 'manual review',
+        evidenceGuidance: ['manual-check'],
       },
       {
         id: 'verify-final',
         title: 'third verification',
-        evidence: ['manual-check'],
+        description: 'confirm third behavior',
+        method: 'manual review',
+        evidenceGuidance: ['manual-check'],
       },
     ],
   };
@@ -538,6 +543,84 @@ describe('verification store', () => {
       assert.throws(() => {
         getStatus({ cwd, sessionId: 'expected-session' });
       }, /does not match requested sessionId/);
+    });
+  });
+
+  test('confirmItem accepts omitted evidence and stores null', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+
+      claimNext({ cwd, owner: 'worker-A', now: () => 1_000 });
+      confirmItem({
+        cwd,
+        itemId: 'verify-begin',
+        owner: 'worker-A',
+        now: () => 2_000,
+      });
+
+      const session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      const confirmed = session.items.find((entry) => entry.id === 'verify-begin');
+      assert.equal(confirmed.evidence, null);
+      assert.equal(confirmed.reason, null);
+    });
+  });
+
+  test('failItem accepts omitted reason and stores null', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+
+      claimNext({ cwd, owner: 'worker-A', now: () => 1_000 });
+      failItem({
+        cwd,
+        itemId: 'verify-begin',
+        owner: 'worker-A',
+        now: () => 2_000,
+      });
+
+      const session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      const failed = session.items.find((entry) => entry.id === 'verify-begin');
+      assert.equal(failed.reason, null);
+      assert.equal(failed.evidence, null);
+    });
+  });
+
+  test('failItem and confirmItem reject non-string evidence/reason values', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+
+      claimNext({ cwd, owner: 'worker-A', now: () => 1_000 });
+      assert.throws(() => {
+        confirmItem({
+          cwd,
+          itemId: 'verify-begin',
+          owner: 'worker-A',
+          evidence: 12,
+          now: () => 1_500,
+        });
+      }, /confirmItem requires evidence/);
+
+      claimNext({ cwd, owner: 'worker-A', now: () => 2_000 });
+      assert.throws(() => {
+        failItem({
+          cwd,
+          itemId: 'verify-next',
+          owner: 'worker-A',
+          reason: 12,
+          now: () => 2_500,
+        });
+      }, /failItem requires reason/);
     });
   });
 });

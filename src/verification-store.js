@@ -262,9 +262,7 @@ function buildSessionItems(seedDocument) {
     claim: null,
     title: verification.title ?? null,
     description: verification.description ?? null,
-    evidenceGuidance: structuredClone(
-      verification.evidenceGuidance ?? verification.evidence ?? null,
-    ),
+    evidenceGuidance: structuredClone(verification.evidenceGuidance),
     traceability: structuredClone(verification.traceability ?? null),
     attempts: 0,
     evidence: null,
@@ -453,16 +451,16 @@ function transitionItem({
     }
 
     if (targetStatus === 'confirmed') {
-      if (typeof evidence !== 'string') {
-        throw new Error(`confirmItem requires evidence string for item ${itemId}.`);
+      if (evidence !== undefined && typeof evidence !== 'string') {
+        throw new Error(`confirmItem requires evidence to be a string for item ${itemId}.`);
       }
-      item.evidence = evidence;
+      item.evidence = evidence === undefined ? null : evidence;
       item.reason = null;
     } else if (targetStatus === 'failed') {
-      if (typeof reason !== 'string') {
-        throw new Error(`failItem requires reason string for item ${itemId}.`);
+      if (reason !== undefined && typeof reason !== 'string') {
+        throw new Error(`failItem requires reason to be a string for item ${itemId}.`);
       }
-      item.reason = reason;
+      item.reason = reason === undefined ? null : reason;
       item.evidence = null;
     } else {
       throw new Error(`Unknown transition status ${targetStatus}.`);

@@ -34,8 +34,15 @@ describe('seed file primitives', () => {
     assert.equal(typeof text, 'string');
     assert.ok(text.includes('verifications:'));
     assert.equal(doc?.verifications?.[0]?.id, 'seed-baseline-visibility');
+    assert.equal(doc?.metadata?.summary, 'Bounded behavior contract for a local repository.');
+    assert.equal(Array.isArray(doc?.scope?.included), true);
+    assert.equal(doc.scope.included.length > 0, true);
+    assert.equal(Array.isArray(doc?.scope?.excluded), true);
+    assert.equal(doc.scope.excluded.length > 0, true);
     assert.equal(Array.isArray(doc.interfaces), true);
     assert.equal(Array.isArray(doc.verifications), true);
+    assert.equal(Array.isArray(doc.verifications[0].evidenceGuidance), true);
+    assert.equal(doc.verifications[0].evidenceGuidance.length > 0, true);
   });
 
   test('initSeed writes seed file and preserves template contract', () => {

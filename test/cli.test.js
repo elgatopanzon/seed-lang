@@ -136,7 +136,6 @@ describe('seed cli', () => {
       assert.ok(result.stdout.includes('interface-without-examples'));
       assert.ok(result.stdout.includes('outputs-without-errors'));
       assert.ok(result.stdout.includes('persistence-without-semantics'));
-      assert.ok(result.stdout.includes('verification-without-evidence'));
     });
   });
 
@@ -155,8 +154,20 @@ describe('seed cli', () => {
     withTempDir((cwd) => {
       writeSeedFromTemplate(cwd, (document) => {
         document.verifications = [
-          { id: 'verify-first', title: 'First check', evidence: ['manual'] },
-          { id: 'verify-second', title: 'Second check', evidence: ['manual'] },
+          {
+            id: 'verify-first',
+            title: 'First check',
+            description: 'check first',
+            method: 'manual',
+            evidenceGuidance: ['manual'],
+          },
+          {
+            id: 'verify-second',
+            title: 'Second check',
+            description: 'check second',
+            method: 'manual',
+            evidenceGuidance: ['manual'],
+          },
         ];
       });
 
@@ -191,8 +202,20 @@ describe('seed cli', () => {
     withTempDir((cwd) => {
       writeSeedFromTemplate(cwd, (document) => {
         document.verifications = [
-          { id: 'verify-first', title: 'First check', evidence: ['manual'] },
-          { id: 'verify-second', title: 'Second check', evidence: ['manual'] },
+          {
+            id: 'verify-first',
+            title: 'First check',
+            description: 'check first',
+            method: 'manual',
+            evidenceGuidance: ['manual'],
+          },
+          {
+            id: 'verify-second',
+            title: 'Second check',
+            description: 'check second',
+            method: 'manual',
+            evidenceGuidance: ['manual'],
+          },
         ];
       });
 
@@ -200,10 +223,18 @@ describe('seed cli', () => {
 
       const firstNext = runCli(['verify', 'next'], cwd);
       assert.equal(firstNext.code, 0);
-      assert.equal(runCli(['verify', 'confirm', 'verify-first'], cwd).code, 0);
+      const confirmWithEvidence = runCli(
+        ['verify', 'confirm', 'verify-first', '--evidence', 'manual-check'],
+        cwd,
+      );
+      assert.equal(confirmWithEvidence.code, 0);
 
       assert.equal(runCli(['verify', 'next'], cwd).code, 0);
-      assert.equal(runCli(['verify', 'fail', 'verify-second'], cwd).code, 0);
+      const failWithReason = runCli(
+        ['verify', 'fail', 'verify-second', '--reason', 'environment missing'],
+        cwd,
+      );
+      assert.equal(failWithReason.code, 0);
 
       const invalidConfirm = runCli(['verify', 'confirm', 'verify-missing'], cwd);
       assert.equal(invalidConfirm.code, 1);
@@ -223,6 +254,50 @@ describe('seed cli', () => {
       assert.equal(parsed.pending, 0);
       assert.equal(parsed.completed, false);
       assert.equal(parsed.completion, 0.5);
+
+      const session = JSON.parse(fs.readFileSync(sessionPath(cwd), 'utf8'));
+      const confirmed = session.items.find((entry) => entry.id === 'verify-first');
+      const failed = session.items.find((entry) => entry.id === 'verify-second');
+      assert.equal(confirmed.evidence, 'manual-check');
+      assert.equal(confirmed.reason, null);
+      assert.equal(failed.reason, 'environment missing');
+      assert.equal(failed.evidence, null);
+    });
+  });
+
+  test('verify confirm and fail options accept only known flags and require values', () => {
+    withTempDir((cwd) => {
+      runCli(['init'], cwd);
+      runCli(['verify', 'start'], cwd);
+      runCli(['verify', 'next'], cwd);
+
+      const missingValue = runCli(
+        ['verify', 'confirm', 'seed-baseline-visibility', '--evidence'],
+        cwd,
+      );
+      assert.equal(missingValue.code, 1);
+      assert.ok(missingValue.stderr.includes('--evidence requires a value'));
+
+      const wrongOption = runCli(
+        ['verify', 'confirm', 'seed-baseline-visibility', '--reason', 'nope'],
+        cwd,
+      );
+      assert.equal(wrongOption.code, 1);
+      assert.ok(wrongOption.stderr.includes('Unknown option for seed verify confirm'));
+
+      const missingId = runCli(
+        ['verify', 'confirm', '--evidence', 'nope'],
+        cwd,
+      );
+      assert.equal(missingId.code, 1);
+      assert.ok(missingId.stderr.includes('requires exactly one <constraint-id>'));
+
+      const failMissingValue = runCli(
+        ['verify', 'fail', 'seed-baseline-visibility', '--reason'],
+        cwd,
+      );
+      assert.equal(failMissingValue.code, 1);
+      assert.ok(failMissingValue.stderr.includes('--reason requires a value'));
     });
   });
 });
