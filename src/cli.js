@@ -184,6 +184,10 @@ function handleVerifyNext(cwd) {
     console.log(`description: ${result.item.description}`);
   }
 
+  if (Array.isArray(result.item.artifacts) && result.item.artifacts.length > 0) {
+    console.log(`artifacts: ${result.item.artifacts.join(', ')}`);
+  }
+
   if (Array.isArray(result.item.evidenceGuidance) && result.item.evidenceGuidance.length > 0) {
     console.log(`evidence guidance: ${result.item.evidenceGuidance.join('; ')}`);
   }

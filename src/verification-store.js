@@ -8,6 +8,7 @@ const {
 } = require('node:fs');
 const { createHash } = require('node:crypto');
 const { dirname, join, resolve } = require('node:path');
+const { normalizeAddressableSection } = require('./validation');
 
 const DEFAULT_SESSION_ID = 'default';
 const DEFAULT_LEASE_MS = 60_000;
@@ -210,27 +211,31 @@ function assertSessionShape(session, sourcePath, expectedSessionId, expectedSnap
   });
 }
 
+function normalizedVerifications(seedDocument) {
+  const errors = [];
+  const items = normalizeAddressableSection('verifications', seedDocument.verifications, errors);
+
+  if (errors.length > 0) {
+    throw new Error(`startSession requires valid verifications: ${errors.map((entry) => entry.message).join('; ')}`);
+  }
+
+  return items;
+}
+
 function assertSeedDocument(seedDocument) {
   if (!seedDocument || typeof seedDocument !== 'object' || Array.isArray(seedDocument)) {
     throw new Error('startSession requires seed document object.');
   }
 
-  if (!Array.isArray(seedDocument.verifications)) {
-    throw new Error('startSession requires seed document with verifications array.');
-  }
-
+  const verifications = normalizedVerifications(seedDocument);
   const ids = new Set();
-  seedDocument.verifications.forEach((entry, index) => {
-    if (!entry || typeof entry !== 'object') {
-      throw new Error(`startSession requires verification entry at index ${index} to be an object.`);
+
+  verifications.forEach((entry) => {
+    const id = entry.address.replace(/^verifications\./, '');
+    if (ids.has(id)) {
+      throw new Error(`startSession requires all verification ids to be unique. Duplicate id found: ${id}`);
     }
-    if (typeof entry.id !== 'string' || !entry.id) {
-      throw new Error(`startSession requires verification entry at index ${index} to provide an id.`);
-    }
-    if (ids.has(entry.id)) {
-      throw new Error(`startSession requires all verification ids to be unique. Duplicate id found: ${entry.id}`);
-    }
-    ids.add(entry.id);
+    ids.add(id);
   });
 }
 
@@ -256,18 +261,22 @@ function normalizeNow(now) {
 }
 
 function buildSessionItems(seedDocument) {
-  return seedDocument.verifications.map((verification) => ({
-    id: verification.id,
-    status: 'pending',
-    claim: null,
-    title: verification.title ?? null,
-    description: verification.description ?? null,
-    evidenceGuidance: structuredClone(verification.evidenceGuidance),
-    traceability: structuredClone(verification.traceability ?? null),
-    attempts: 0,
-    evidence: null,
-    reason: null,
-  }));
+  return normalizedVerifications(seedDocument).map((verification) => {
+    const id = verification.address.replace(/^verifications\./, '');
+    return {
+      id,
+      address: verification.address,
+      status: 'pending',
+      claim: null,
+      title: verification.value.title ?? null,
+      description: verification.value.description ?? null,
+      artifacts: structuredClone(verification.value.artifacts ?? []),
+      evidenceGuidance: structuredClone(verification.value.evidenceGuidance),
+      attempts: 0,
+      evidence: null,
+      reason: null,
+    };
+  });
 }
 
 function isClaimStale(claim, now) {
@@ -308,10 +317,11 @@ function nextPendingItem(items) {
 function itemSummary(item) {
   return {
     id: item.id,
+    address: item.address ?? null,
     title: item.title ?? null,
     description: item.description ?? null,
+    artifacts: item.artifacts ?? [],
     evidenceGuidance: item.evidenceGuidance,
-    traceability: item.traceability ?? null,
     status: item.status,
   };
 }

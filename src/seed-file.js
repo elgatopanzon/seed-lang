@@ -1,5 +1,5 @@
 const { existsSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
-const { dirname, join, resolve } = require('node:path');
+const { dirname, resolve } = require('node:path');
 const { parse, stringify } = require('yaml');
 
 const DEFAULT_SEED_PATH = 'seed/seed.yml';
@@ -17,68 +17,74 @@ function seedTemplateDocument() {
   return {
     metadata: {
       name: 'project-name',
-      version: '0.1.0',
       summary: 'Bounded behavior contract for a local repository.',
     },
     scope: {
-      included: [
-        'Local filesystem artifacts within the repository root.',
-        'Command-level state under `.seed` and `seed/seed.yml`.',
-      ],
-      excluded: [
-        'External services outside this repository.',
-        'Remote synchronization and publishing workflows.',
-      ],
+      included: {
+        'local-filesystem': 'Local filesystem artifacts within the repository root.',
+        'local-state': 'Command-level state under `.seed` and `seed/seed.yml`.',
+      },
+      excluded: {
+        'external-services': 'External services outside this repository.',
+        'remote-publishing': 'Remote synchronization and publishing workflows.',
+      },
     },
-    interfaces: [
-      {
-        id: 'local-files',
-        purpose: 'Read and write project-local seed and state artifacts.',
+    artifacts: {
+      'baseline-seed': {
+        path: 'seed/seed.yml',
+        description: 'The project-local Seed file used as the contract source.',
+      },
+    },
+    interfaces: {
+      cli: {
+        purpose: 'User invokes Seed from a terminal.',
         examples: [
           'seed init',
           'seed validate',
         ],
       },
-    ],
-    behavior: {
-      summary: [
-        'Seed commands must only read/write files inside the repository root unless directed.',
-        'Seed contract state is authoritative for bounded project expectations.',
-      ],
     },
-    errors: [
-      {
+    behavior: {
+      'local-commands': {
+        description: 'Seed commands must only read/write files inside the repository root unless directed.',
+      },
+      'contract-authority': {
+        description: 'Seed contract state is authoritative for bounded project expectations.',
+      },
+    },
+    errors: {
+      'missing-seed-file': {
         code: 'seed.missing_file',
         when: 'Required seed contract is absent.',
         remediation: 'Run seed init to create seed/seed.yml.',
       },
-    ],
-    state: {
-      location: '.seed',
-      persistence: 'local repository',
-      semantics: 'verification state and snapshots are ephemeral command history artifacts',
     },
-    constraints: [
-      'Only local filesystem artifacts under repository root are in scope.',
-    ],
-    freedom: [
-      'Implementation choices outside this contract are unconstrained.',
-    ],
+    state: {
+      'repo-local-state': {
+        location: '.seed',
+        persistence: 'local repository',
+        semantics: 'verification state and snapshots are ephemeral command history artifacts',
+      },
+    },
+    constraints: {
+      'repo-local-only': 'Only local filesystem artifacts under repository root are in scope.',
+    },
+    freedom: {
+      'implementation-choice': 'Implementation choices outside this contract are unconstrained.',
+    },
     verifications: [
       {
         id: STABLE_VERIFICATION_ID,
         title: 'Seed contract can be created and loaded without validation failures',
-        description: 'The Seed contract template can be initialized, read, and validated for structural correctness.',
-        method: 'Run seed init, then seed validate, then check for zero structural errors.',
+        description: 'The Seed contract template at @baseline-seed can be initialized, read, and validated for structural correctness.',
+        artifacts: [
+          'baseline-seed',
+        ],
+        method: 'Run seed init, then seed validate, then check for zero structural errors using @baseline-seed.',
         evidenceGuidance: [
           'Initialize and load seed/seed.yml successfully.',
           'Fail loudly if YAML cannot be parsed.',
           'Reject overwrite unless requested explicitly.',
-        ],
-        traceability: [
-          'metadata',
-          'scope',
-          'verifications',
         ],
       },
     ],

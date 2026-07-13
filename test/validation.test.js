@@ -3,19 +3,19 @@ const assert = require('node:assert/strict');
 const { parse } = require('yaml');
 
 const { renderSeedTemplate } = require('../src/seed-file');
-const { validateSeedDocument } = require('../src/validation');
+const { normalizeAddressableSection, validateSeedDocument } = require('../src/validation');
 
 describe('validation', () => {
   function codes(list) {
     return list.map((entry) => entry.code);
   }
 
-  test('rendered template has no structural errors', () => {
+  test('rendered template has no structural errors or warnings', () => {
     const document = parse(renderSeedTemplate());
     const result = validateSeedDocument(document);
 
-    assert.equal(result.errors.length, 0);
-    assert.equal(result.warnings.length, 0);
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.warnings, []);
   });
 
   test('reports malformed required structure', () => {
@@ -55,56 +55,61 @@ describe('validation', () => {
     });
   });
 
-  test('allows state to be omitted', () => {
+  test('allows artifacts and state to be omitted', () => {
     const document = parse(renderSeedTemplate());
+    delete document.artifacts;
     delete document.state;
+    document.verifications[0].description = 'The Seed contract template can be initialized and validated.';
+    document.verifications[0].method = 'Run seed init, then seed validate.';
+    delete document.verifications[0].artifacts;
 
     const result = validateSeedDocument(document);
 
-    assert.equal(result.errors.length, 0);
-    assert.equal(result.warnings.length, 0);
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.warnings, []);
   });
 
-  test('requires metadata summary', () => {
-    const missingSummary = parse(renderSeedTemplate());
-    delete missingSummary.metadata.summary;
+  test('does not require metadata version', () => {
+    const document = parse(renderSeedTemplate());
 
-    const result = validateSeedDocument(missingSummary);
-    assert.equal(result.errors.some((entry) => entry.path === '/metadata/summary'), true);
+    assert.equal(document.metadata.version, undefined);
+    assert.equal(validateSeedDocument(document).errors.some((entry) => entry.path === '/metadata/version'), false);
   });
 
-  test('requires scope included and excluded as non-empty string arrays', () => {
-    const missingIncluded = parse(renderSeedTemplate());
-    delete missingIncluded.scope.included;
+  test('normalizes list objects, tree objects, and tree string shorthand into addresses', () => {
+    const errors = [];
+    const items = [
+      ...normalizeAddressableSection('constraints', [
+        { id: 'output-json', description: 'Output is JSON.' },
+      ], errors),
+      ...normalizeAddressableSection('freedom', {
+        'module-layout': 'Any maintainable module layout is allowed.',
+      }, errors),
+      ...normalizeAddressableSection('behavior', {
+        counting: {
+          description: 'Count input characters.',
+          whitespace: 'Whitespace is counted.',
+        },
+      }, errors),
+    ];
 
-    const missingExcluded = parse(renderSeedTemplate());
-    delete missingExcluded.scope.excluded;
-
-    const emptyInvalid = parse(renderSeedTemplate());
-    emptyInvalid.scope.excluded = [];
-
-    const badEntry = parse(renderSeedTemplate());
-    badEntry.scope.excluded = [''];
-
-    assert.equal(
-      validateSeedDocument(missingIncluded).errors.some((entry) => entry.path === '/scope/included'),
-      true,
-    );
-    assert.equal(
-      validateSeedDocument(missingExcluded).errors.some((entry) => entry.path === '/scope/excluded'),
-      true,
-    );
-    assert.equal(
-      validateSeedDocument(emptyInvalid).errors.some((entry) => entry.path === '/scope/excluded'),
-      true,
-    );
-    assert.equal(
-      validateSeedDocument(badEntry).errors.some((entry) => entry.path === '/scope/excluded'),
-      true,
-    );
+    assert.deepEqual(errors, []);
+    assert.ok(items.some((item) => item.address === 'constraints.output-json'));
+    assert.ok(items.some((item) => item.address === 'freedom.module-layout'));
+    assert.ok(items.some((item) => item.address === 'behavior.counting'));
+    assert.ok(items.some((item) => item.address === 'behavior.counting.whitespace'));
   });
 
-  test('requires verification description/method/evidenceGuidance and allows optional traceability', () => {
+  test('rejects anonymous strings in list-based addressable sections', () => {
+    const document = parse(renderSeedTemplate());
+    document.constraints = ['Must not be anonymous.'];
+
+    const result = validateSeedDocument(document);
+
+    assert.ok(codes(result.errors).includes('invalid-addressable-item'));
+  });
+
+  test('requires verification description/method/evidenceGuidance and rejects manual traceability', () => {
     const invalid = parse(renderSeedTemplate());
     invalid.verifications = [
       {
@@ -116,22 +121,18 @@ describe('validation', () => {
 
     const missingMethod = parse(renderSeedTemplate());
     delete missingMethod.verifications[0].method;
-    const missingDescription = parse(renderSeedTemplate());
-    delete missingDescription.verifications[0].description;
     const missingEvidenceGuidance = parse(renderSeedTemplate());
     delete missingEvidenceGuidance.verifications[0].evidenceGuidance;
+    const manualTraceability = parse(renderSeedTemplate());
+    manualTraceability.verifications[0].traceability = ['metadata.name', 'scope.included'];
 
     assert.equal(validateSeedDocument(invalid).errors.some((entry) => entry.path === '/verifications/0/description'), true);
     assert.equal(validateSeedDocument(missingMethod).errors.some((entry) => entry.path === '/verifications/0/method'), true);
     assert.equal(validateSeedDocument(missingEvidenceGuidance).errors.some((entry) => entry.path === '/verifications/0/evidenceGuidance'), true);
-
-    const validWithTraceability = parse(renderSeedTemplate());
-    validWithTraceability.verifications[0].traceability = ['metadata.name', 'scope.included'];
-    const valid = validateSeedDocument(validWithTraceability);
-    assert.equal(valid.errors.length, 0);
+    assert.ok(codes(validateSeedDocument(manualTraceability).errors).includes('manual-traceability'));
   });
 
-  test('reports duplicate and malformed verification ids as errors', () => {
+  test('reports duplicate and malformed addresses as errors', () => {
     const document = parse(renderSeedTemplate());
     document.verifications = [
       {
@@ -163,19 +164,17 @@ describe('validation', () => {
     result.errors.forEach((entry) => {
       assert.deepEqual(Object.keys(entry), ['code', 'path', 'message']);
     });
-    assert.ok(errorCodes.includes('duplicate-verification-id'));
-    assert.ok(errorCodes.includes('malformed-verification-id'));
-    assert.equal(result.warnings.length, 0);
+    assert.ok(errorCodes.includes('duplicate-address'));
+    assert.ok(errorCodes.includes('malformed-id'));
   });
 
   test('flags interface without examples as warning', () => {
     const document = parse(renderSeedTemplate());
-    document.interfaces = [
-      {
-        id: 'local-files',
-        purpose: 'Read and write local artifacts.',
+    document.interfaces = {
+      cli: {
+        purpose: 'CLI behavior path.',
       },
-    ];
+    };
 
     const result = validateSeedDocument(document);
 
@@ -184,20 +183,99 @@ describe('validation', () => {
     assert.equal(result.warnings[0].code, 'interface-without-examples');
   });
 
+  test('validates artifact paths and references', () => {
+    const document = parse(renderSeedTemplate());
+    document.artifacts = {
+      'file-with-aba': {
+        path: 'artifacts/aba.txt',
+        description: 'Input file containing aba.',
+      },
+    };
+    document.verifications[0] = {
+      id: 'counts-basic-file',
+      title: 'Counts characters in one file',
+      description: 'Given @file-with-aba, the CLI reports expected counts.',
+      artifacts: ['file-with-aba'],
+      method: 'Run the CLI using @file-with-aba as input.',
+      evidenceGuidance: ['Command used.', 'Observed output.'],
+    };
+
+    const result = validateSeedDocument(document);
+
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.warnings, []);
+  });
+
+  test('rejects missing artifact definitions, missing artifact declarations, and invalid absolute paths', () => {
+    const document = parse(renderSeedTemplate());
+    document.artifacts = {
+      'file-with-aba': {
+        path: '/tmp/aba.txt',
+        description: 'Input file containing aba.',
+      },
+    };
+    document.verifications[0] = {
+      id: 'counts-basic-file',
+      title: 'Counts characters in one file',
+      description: 'Given @file-with-aba and @missing-artifact, the CLI reports expected counts.',
+      artifacts: ['missing-artifact'],
+      method: 'Run the CLI using @file-with-aba as input.',
+      evidenceGuidance: ['Observed output.'],
+    };
+
+    const result = validateSeedDocument(document);
+    const errorCodes = codes(result.errors);
+
+    assert.ok(errorCodes.includes('invalid-artifact-path'));
+    assert.ok(errorCodes.includes('missing-artifact'));
+    assert.ok(errorCodes.includes('missing-artifact-declaration'));
+    assert.ok(errorCodes.includes('invalid-reference'));
+  });
+
+  test('warns when a global artifact is never referenced', () => {
+    const document = parse(renderSeedTemplate());
+    document.artifacts.unused = {
+      path: 'artifacts/unused.txt',
+      description: 'Unused input.',
+    };
+
+    const result = validateSeedDocument(document);
+
+    assert.equal(result.errors.length, 0);
+    assert.ok(codes(result.warnings).includes('unreferenced-artifact'));
+  });
+
+  test('validates non-artifact @ references against addressable contract items', () => {
+    const document = parse(renderSeedTemplate());
+    document.verifications[0].description = 'Confirm @behavior.local-commands still holds.';
+    document.verifications[0].method = 'Read @behavior.local-commands and validate implementation behavior.';
+
+    const valid = validateSeedDocument(document);
+    assert.deepEqual(valid.errors, []);
+
+    document.verifications[0].description = 'Confirm @behavior.missing still holds.';
+    const invalid = validateSeedDocument(document);
+    assert.ok(codes(invalid.errors).includes('invalid-reference'));
+  });
+
   test('flags warnings for weak-contract violations while keeping document valid', () => {
     const document = parse(renderSeedTemplate());
-    document.interfaces = [
-      {
-        id: 'cli',
+    document.interfaces = {
+      cli: {
         purpose: 'CLI behavior path.',
         examples: [],
       },
-    ];
-    document.state.semantics = null;
-    document.behavior.outputs = [
-      'CLI output contract',
-    ];
-    document.errors = [];
+    };
+    document.state = {
+      'repo-local-state': {
+        location: '.seed',
+        persistence: 'local repository',
+      },
+    };
+    document.behavior.outputs = {
+      'cli-output': 'CLI output contract',
+    };
+    document.errors = {};
 
     const result = validateSeedDocument(document);
 

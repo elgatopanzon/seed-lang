@@ -35,11 +35,12 @@ describe('seed file primitives', () => {
     assert.ok(text.includes('verifications:'));
     assert.equal(doc?.verifications?.[0]?.id, 'seed-baseline-visibility');
     assert.equal(doc?.metadata?.summary, 'Bounded behavior contract for a local repository.');
-    assert.equal(Array.isArray(doc?.scope?.included), true);
-    assert.equal(doc.scope.included.length > 0, true);
-    assert.equal(Array.isArray(doc?.scope?.excluded), true);
-    assert.equal(doc.scope.excluded.length > 0, true);
-    assert.equal(Array.isArray(doc.interfaces), true);
+    assert.equal(typeof doc?.scope?.included, 'object');
+    assert.equal(Object.keys(doc.scope.included).length > 0, true);
+    assert.equal(typeof doc?.scope?.excluded, 'object');
+    assert.equal(Object.keys(doc.scope.excluded).length > 0, true);
+    assert.equal(typeof doc.interfaces, 'object');
+    assert.equal(typeof doc.artifacts, 'object');
     assert.equal(Array.isArray(doc.verifications), true);
     assert.equal(Array.isArray(doc.verifications[0].evidenceGuidance), true);
     assert.equal(doc.verifications[0].evidenceGuidance.length > 0, true);
@@ -50,7 +51,7 @@ describe('seed file primitives', () => {
     const result = initSeed({ cwd });
 
     assert.equal(result.path, path.join(cwd, DEFAULT_SEED_PATH));
-    assert.equal(result.document.metadata.version, '0.1.0');
+    assert.equal(result.document.metadata.version, undefined);
     assert.equal(fs.existsSync(result.path), true);
 
     fs.rmSync(cwd, { recursive: true, force: true });

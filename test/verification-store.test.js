@@ -34,8 +34,8 @@ function sampleDocument() {
         title: 'first verification',
         description: 'confirm the first behavior',
         method: 'manual review',
+        artifacts: ['sample-input'],
         evidenceGuidance: ['manual-check'],
-        traceability: ['behavior.summary[0]'],
       },
       {
         id: 'verify-next',
@@ -97,8 +97,9 @@ describe('verification store', () => {
       assert.equal(session.items.every((entry) => entry.status === 'pending'), true);
       assert.equal(session.items[0].title, 'first verification');
       assert.equal(session.items[0].description, 'confirm the first behavior');
+      assert.equal(session.items[0].address, 'verifications.verify-begin');
+      assert.deepEqual(session.items[0].artifacts, ['sample-input']);
       assert.deepEqual(session.items[0].evidenceGuidance, ['manual-check']);
-      assert.deepEqual(session.items[0].traceability, ['behavior.summary[0]']);
       return true;
     });
 

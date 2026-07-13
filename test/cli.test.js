@@ -108,7 +108,7 @@ describe('seed cli', () => {
 
       assert.equal(malformed.code, 1);
       assert.ok(malformed.stdout.includes('Errors ('));
-      assert.ok(malformed.stdout.includes('missing-required-field /metadata/version'));
+      assert.ok(malformed.stdout.includes('missing-required-field /metadata/summary'));
       assert.ok(malformed.stdout.includes('missing-required-section /scope'));
       assert.ok(malformed.stderr.includes('Seed validation failed with structural errors'));
     });
@@ -117,17 +117,17 @@ describe('seed cli', () => {
   test('validate shows warnings on weak but structurally valid contracts', () => {
     withTempDir((cwd) => {
       writeSeedFromTemplate(cwd, (document) => {
-        document.interfaces = [
-          {
-            id: 'cli',
+        document.interfaces = {
+          cli: {
             purpose: 'CLI contract path.',
             examples: [],
           },
-        ];
-        document.behavior.outputs = ['CLI output stream'];
-        document.errors = [];
-        document.state.semantics = null;
-        document.verifications[0].evidence = [];
+        };
+        document.behavior.outputs = {
+          'cli-output': 'CLI output stream',
+        };
+        document.errors = {};
+        delete document.state['repo-local-state'].semantics;
       });
 
       const result = runCli(['validate'], cwd);
@@ -153,12 +153,19 @@ describe('seed cli', () => {
   test('verify next claims pending items exclusively and recovers stale leases', () => {
     withTempDir((cwd) => {
       writeSeedFromTemplate(cwd, (document) => {
+        document.artifacts = {
+          sample: {
+            path: 'seed/sample.txt',
+            description: 'Sample input file.',
+          },
+        };
         document.verifications = [
           {
             id: 'verify-first',
             title: 'First check',
-            description: 'check first',
-            method: 'manual',
+            description: 'check first with @sample',
+            artifacts: ['sample'],
+            method: 'manual using @sample',
             evidenceGuidance: ['manual'],
           },
           {
@@ -176,6 +183,7 @@ describe('seed cli', () => {
       const firstClaim = runCli(['verify', 'next'], cwd);
       assert.equal(firstClaim.code, 0);
       assert.ok(firstClaim.stdout.includes('Claimed verification verify-first'));
+      assert.ok(firstClaim.stdout.includes('artifacts: sample'));
 
       const secondClaim = runCli(['verify', 'next'], cwd);
       assert.equal(secondClaim.code, 0);
