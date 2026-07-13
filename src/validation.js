@@ -22,6 +22,11 @@ const OPTIONAL_ADDRESSABLE_SECTIONS = [
   'state',
 ];
 
+const ADDRESSABLE_SECTIONS = [
+  ...REQUIRED_SECTIONS,
+  ...OPTIONAL_ADDRESSABLE_SECTIONS,
+];
+
 const PROPERTY_FIELDS = new Set([
   'artifacts',
   'code',
@@ -274,6 +279,18 @@ function collectAddressableItems(document, errors) {
   return items;
 }
 
+function collectPresentAddressableItems(document, errors) {
+  const items = [];
+
+  ADDRESSABLE_SECTIONS.forEach((section) => {
+    if (document[section] !== undefined) {
+      items.push(...normalizeAddressableSection(section, document[section], errors, { allowEmpty: section === 'errors' }));
+    }
+  });
+
+  return items;
+}
+
 function validateDuplicateAddresses(items, errors) {
   const seen = new Map();
   items.forEach((item) => {
@@ -484,6 +501,29 @@ function validateVerifications(items, errors) {
   });
 }
 
+function validateGenomeDocument(document) {
+  const errors = [];
+  const warnings = [];
+
+  if (!isObject(document)) {
+    return {
+      errors: [issue('invalid-document', '/', 'Genome document must be a non-null object')],
+      warnings,
+    };
+  }
+
+  const items = collectPresentAddressableItems(document, errors);
+  validateDuplicateAddresses(items, errors);
+  validateArtifacts(document, items.filter((item) => item.section === 'artifacts'), errors);
+  validateInterfaces(items, warnings);
+  validateBehavior(document, warnings);
+  validateState(document, warnings);
+  validateVerifications(items, errors);
+  validateReferences(document, items, errors, warnings);
+
+  return { errors, warnings };
+}
+
 function validateSeedDocument(document) {
   const errors = [];
   const warnings = [];
@@ -511,6 +551,8 @@ function validateSeedDocument(document) {
 
 module.exports = {
   collectAddressableItems,
+  collectPresentAddressableItems,
   normalizeAddressableSection,
+  validateGenomeDocument,
   validateSeedDocument,
 };

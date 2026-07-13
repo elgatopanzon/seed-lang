@@ -91,7 +91,7 @@ describe('seed cli', () => {
 
   test('init writes verified genomes from repeatable and list options', () => {
     withTempDir((cwd) => {
-      const result = runCli(['init', '--gnome', 'cli-nodejs', '--gnomes', 'cli-human-output,cli-json-output'], cwd);
+      const result = runCli(['init', '--genome', 'cli-nodejs', '--genomes', 'cli-human-output,cli-json-output'], cwd);
       assert.equal(result.code, 0);
 
       const document = parse(fs.readFileSync(path.join(cwd, DEFAULT_SEED_PATH), 'utf8'));
@@ -103,7 +103,7 @@ describe('seed cli', () => {
     });
   });
 
-  test('init accepts genome spelling aliases and rejects invalid genomes before writing', () => {
+  test('init rejects invalid genomes before writing', () => {
     withTempDir((cwd) => {
       const alias = runCli(['init', '--genome', 'cli-nodejs[constraints]', '--genomes', 'cli-human-output'], cwd);
       assert.equal(alias.code, 0);
@@ -112,7 +112,7 @@ describe('seed cli', () => {
     });
 
     withTempDir((cwd) => {
-      const invalid = runCli(['init', '--gnome', 'missing-genome'], cwd);
+      const invalid = runCli(['init', '--genome', 'missing-genome'], cwd);
       assert.equal(invalid.code, 1);
       assert.ok(invalid.stderr.includes('Unknown genome missing-genome'));
       assert.equal(fs.existsSync(path.join(cwd, DEFAULT_SEED_PATH)), false);
@@ -256,6 +256,102 @@ describe('seed cli', () => {
       const badSection = runCli(['blueprint', '--section', 'missing'], cwd);
       assert.equal(badSection.code, 1);
       assert.ok(badSection.stderr.includes('Unknown blueprint section missing'));
+    });
+  });
+
+
+  test('genome list supports builtin, user, and repo filters', () => {
+    withTempDir((cwd) => {
+      const home = tempDir();
+      const originalHome = process.env.HOME;
+      try {
+        process.env.HOME = home;
+        fs.mkdirSync(path.join(home, '.seed', 'genomes'), { recursive: true });
+        fs.writeFileSync(path.join(home, '.seed', 'genomes', 'user-demo.yml'), 'constraints:\n  user-demo: User genome.\n', 'utf8');
+        fs.mkdirSync(path.join(cwd, 'seed', 'genomes'), { recursive: true });
+        fs.writeFileSync(path.join(cwd, 'seed', 'genomes', 'repo-demo.yml'), 'constraints:\n  repo-demo: Repo genome.\n', 'utf8');
+
+        const builtin = runCli(['genome', 'list', '--builtin'], cwd);
+        assert.equal(builtin.code, 0);
+        assert.ok(builtin.stdout.includes('builtin\tcli-nodejs\tbuiltin:cli-nodejs'));
+        assert.equal(builtin.stdout.includes('user-demo'), false);
+        assert.equal(builtin.stdout.includes('repo-demo'), false);
+
+        const user = runCli(['genome', 'list', '--user'], cwd);
+        assert.equal(user.code, 0);
+        assert.ok(user.stdout.includes('user\tuser-demo'));
+        assert.equal(user.stdout.includes('repo-demo'), false);
+
+        const repo = runCli(['genome', 'list', '--repo'], cwd);
+        assert.equal(repo.code, 0);
+        assert.ok(repo.stdout.includes('repo\trepo-demo'));
+        assert.equal(repo.stdout.includes('user-demo'), false);
+      } finally {
+        process.env.HOME = originalHome;
+        fs.rmSync(home, { recursive: true, force: true });
+      }
+    });
+  });
+
+  test('genome init creates repo genome and refuses overwrite', () => {
+    withTempDir((cwd) => {
+      const first = runCli(['genome', 'init', 'repo-created'], cwd);
+      const second = runCli(['genome', 'init', 'repo-created'], cwd);
+      const third = runCli(['genome', 'init', 'repo-created', '--overwrite'], cwd);
+      const genomePath = path.join(cwd, 'seed', 'genomes', 'repo-created.yml');
+
+      assert.equal(first.code, 0);
+      assert.equal(second.code, 1);
+      assert.equal(third.code, 0);
+      assert.equal(fs.existsSync(genomePath), true);
+      const document = parse(fs.readFileSync(genomePath, 'utf8'));
+      assert.equal(document.metadata.name, 'repo-created');
+      assert.ok(second.stderr.includes('Genome already exists'));
+    });
+  });
+
+  test('genome validate checks all by default and can filter repo genomes', () => {
+    withTempDir((cwd) => {
+      fs.mkdirSync(path.join(cwd, 'seed', 'genomes'), { recursive: true });
+      fs.writeFileSync(path.join(cwd, 'seed', 'genomes', 'good.yml'), 'constraints:\n  good: Good genome.\n', 'utf8');
+      fs.writeFileSync(path.join(cwd, 'seed', 'genomes', 'bad.yml'), 'constraints:\n  - anonymous\n', 'utf8');
+
+      const repo = runCli(['genome', 'validate', '--repo'], cwd);
+      assert.equal(repo.code, 1);
+      assert.ok(repo.stdout.includes('Failed genomes (1/2):'));
+      assert.ok(repo.stdout.includes('repo\tbad'));
+      assert.ok(repo.stdout.includes('invalid-addressable-item'));
+
+      fs.unlinkSync(path.join(cwd, 'seed', 'genomes', 'bad.yml'));
+      const all = runCli(['genome', 'validate'], cwd);
+      assert.equal(all.code, 0);
+      assert.ok(all.stdout.includes('All genomes valid'));
+    });
+  });
+
+  test('genome blueprint renders compiled genome without seed file context', () => {
+    withTempDir((cwd) => {
+      fs.mkdirSync(path.join(cwd, 'seed', 'genomes'), { recursive: true });
+      fs.writeFileSync(path.join(cwd, 'seed', 'genomes', 'repo-blueprint.yml'), [
+        'genomes:',
+        '  - cli-nodejs[constraints]',
+        'behavior:',
+        '  demo: Demo behavior.',
+      ].join('\n'), 'utf8');
+
+      const markdown = runCli(['genome', 'blueprint', 'repo-blueprint', '--section', 'constraints'], cwd);
+      assert.equal(markdown.code, 0);
+      assert.ok(markdown.stdout.includes('# Seed Blueprint'));
+      assert.ok(markdown.stdout.includes('Source: '));
+      assert.ok(markdown.stdout.includes('repo-blueprint.yml'));
+      assert.ok(markdown.stdout.includes('`constraints.nodejs-cli-runtime` [builtin:cli-nodejs]'));
+      assert.equal(markdown.stdout.includes('seed/seed.yml'), false);
+
+      const json = runCli(['genome', 'blueprint', 'repo-blueprint', '--json'], cwd);
+      assert.equal(json.code, 0);
+      const parsed = JSON.parse(json.stdout);
+      assert.equal(parsed.source.path.endsWith('repo-blueprint.yml'), true);
+      assert.ok(parsed.sections.some((section) => section.id === 'functional-behavior'));
     });
   });
 

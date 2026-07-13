@@ -7,13 +7,19 @@ const {
   initSeed,
   loadSeed,
 } = require('./seed-file');
-const { validateSeedDocument } = require('./validation');
+const { validateGenomeDocument, validateSeedDocument } = require('./validation');
 const {
   applyLineWindow,
   compileBlueprint,
   pageOutput,
   renderMarkdown,
 } = require('./blueprint');
+const {
+  compileGenomeDocument,
+  initRepoGenome,
+  listGenomeDefinitions,
+  validateGenomeDefinitions,
+} = require('./genomes');
 const {
   claimNext,
   confirmItem,
@@ -26,8 +32,12 @@ const DEFAULT_OWNER = 'seed-cli';
 
 function usage() {
   return [
-    'seed init [--overwrite] [--gnome ID] [--gnomes ID[,ID...]]',
+    'seed init [--overwrite] [--genome ID] [--genomes ID[,ID...]]',
     'seed validate',
+    'seed genome list [--builtin] [--user] [--repo]',
+    'seed genome init <name> [--overwrite]',
+    'seed genome validate [--builtin] [--user] [--repo]',
+    'seed genome blueprint <name> [--json] [--section ID] [--filter @ADDRESS] [--limit N] [--offset N] [--head N] [--tail N] [--pager]',
     'seed blueprint [--json] [--section ID] [--filter @ADDRESS] [--limit N] [--offset N] [--head N] [--tail N] [--pager]',
     'seed verify start',
     'seed verify next',
@@ -91,7 +101,7 @@ function parseInitArgs(args) {
 
     if (arg === '--overwrite') {
       options.overwrite = true;
-    } else if (['--gnome', '--genome', '--gnomes', '--genomes'].includes(arg)) {
+    } else if (['--genome', '--genomes'].includes(arg)) {
       const value = args[index + 1];
       if (!value || value.startsWith('-')) {
         return { error: `${arg} requires a genome id or comma-separated genome list.` };
@@ -187,6 +197,174 @@ function parseNonNegativeInteger(value, option) {
   }
 
   return { value: parsed };
+}
+
+function parseOriginFilters(args, command) {
+  const origins = [];
+  const rest = [];
+
+  for (const arg of args) {
+    if (arg === '--builtin' || arg === '--builtins') {
+      origins.push('builtin');
+    } else if (arg === '--user') {
+      origins.push('user');
+    } else if (arg === '--repo') {
+      origins.push('repo');
+    } else if (arg.startsWith('-')) {
+      return { error: `Unknown option for ${command}: ${arg}` };
+    } else {
+      rest.push(arg);
+    }
+  }
+
+  return {
+    origins: [...new Set(origins)],
+    rest,
+  };
+}
+
+function formatGenomeEntry(entry) {
+  return `${entry.origin}\t${entry.id}\t${entry.path}`;
+}
+
+function handleGenomeList(cwd, args) {
+  const parsed = parseOriginFilters(args, 'seed genome list');
+  if (parsed.error) {
+    return exitWithError(parsed.error);
+  }
+  if (parsed.rest.length > 0) {
+    return exitWithError(`seed genome list does not take positional arguments: ${parsed.rest[0]}`);
+  }
+
+  const entries = listGenomeDefinitions({ cwd, origins: parsed.origins });
+  entries.forEach((entry) => console.log(formatGenomeEntry(entry)));
+  return 0;
+}
+
+function handleGenomeInit(cwd, args) {
+  let overwrite = false;
+  const names = [];
+
+  for (const arg of args) {
+    if (arg === '--overwrite') {
+      overwrite = true;
+    } else if (arg.startsWith('-')) {
+      return exitWithError(`Unknown option for seed genome init: ${arg}`);
+    } else {
+      names.push(arg);
+    }
+  }
+
+  if (names.length !== 1) {
+    return exitWithError('seed genome init requires exactly one <name>.');
+  }
+
+  try {
+    const created = initRepoGenome({ cwd, id: names[0], overwrite });
+    console.log(`Initialized repo genome ${created.id} at ${created.path}`);
+    return 0;
+  } catch (error) {
+    return exitWithError(error.message);
+  }
+}
+
+function handleGenomeValidate(cwd, args) {
+  const parsed = parseOriginFilters(args, 'seed genome validate');
+  if (parsed.error) {
+    return exitWithError(parsed.error);
+  }
+  if (parsed.rest.length > 0) {
+    return exitWithError(`seed genome validate does not take positional arguments: ${parsed.rest[0]}`);
+  }
+
+  const results = validateGenomeDefinitions({ cwd, origins: parsed.origins });
+  const failed = results.filter((entry) => entry.errors.length > 0);
+
+  if (failed.length === 0) {
+    console.log(`All genomes valid (${results.length} checked).`);
+    return 0;
+  }
+
+  console.log(`Failed genomes (${failed.length}/${results.length}):`);
+  failed.forEach((entry) => {
+    console.log(`- ${entry.origin}\t${entry.id}\t${entry.path ?? ''}`);
+    printIssues('error', entry.errors);
+  });
+  return exitWithError('Genome validation failed.');
+}
+
+function handleGenomeBlueprint(cwd, args) {
+  if (args.length === 0 || args[0].startsWith('-')) {
+    return exitWithError('seed genome blueprint requires exactly one <name>.');
+  }
+
+  const [name, ...blueprintArgs] = args;
+  const parsed = parseBlueprintArgs(blueprintArgs);
+  if (parsed.error) {
+    return exitWithError(parsed.error);
+  }
+
+  try {
+    const genome = compileGenomeDocument({ id: name, cwd });
+    const validation = validateGenomeDocument(genome.document);
+    printValidationResult(validation);
+    if (validation.errors.length > 0) {
+      return exitWithError(`Genome validation failed with ${validation.errors.length} structural error(s).`);
+    }
+
+    const blueprint = compileBlueprint({
+      document: genome.document,
+      seedPath: genome.path,
+      genomes: genome.genomes ?? [],
+      provenance: genome.provenance ?? {},
+      filters: parsed.options.filters,
+      section: parsed.options.section,
+      limit: parsed.options.limit,
+      offset: parsed.options.offset,
+      partial: true,
+    });
+
+    if (parsed.options.json) {
+      console.log(JSON.stringify(blueprint, null, 2));
+      return 0;
+    }
+
+    const rendered = applyLineWindow(renderMarkdown(blueprint), {
+      head: parsed.options.head,
+      tail: parsed.options.tail,
+    });
+
+    if (parsed.options.pager) {
+      return pageOutput(rendered);
+    }
+
+    process.stdout.write(rendered);
+    return 0;
+  } catch (error) {
+    return exitWithError(error.message);
+  }
+}
+
+function handleGenome(cwd, args) {
+  if (args.length === 0) {
+    return exitWithError('seed genome requires a subcommand.');
+  }
+
+  const [subcommand, ...rest] = args;
+  if (subcommand === 'list') {
+    return handleGenomeList(cwd, rest);
+  }
+  if (subcommand === 'init') {
+    return handleGenomeInit(cwd, rest);
+  }
+  if (subcommand === 'validate') {
+    return handleGenomeValidate(cwd, rest);
+  }
+  if (subcommand === 'blueprint') {
+    return handleGenomeBlueprint(cwd, rest);
+  }
+
+  return exitWithError(`Unknown genome subcommand ${subcommand}.`);
 }
 
 function parseBlueprintArgs(args) {
@@ -426,6 +604,10 @@ function run(argv = process.argv.slice(2)) {
 
   if (command === 'blueprint') {
     return handleBlueprint(process.cwd(), rest);
+  }
+
+  if (command === 'genome') {
+    return handleGenome(process.cwd(), rest);
   }
 
   if (command === 'verify') {

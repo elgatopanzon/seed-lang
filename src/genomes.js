@@ -1,10 +1,11 @@
-const { existsSync, readFileSync } = require('node:fs');
+const { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } = require('node:fs');
 const { join, resolve } = require('node:path');
 const { parse, stringify } = require('yaml');
-const { collectAddressableItems } = require('./validation');
+const { collectAddressableItems, validateGenomeDocument } = require('./validation');
 
 const REFERENCE_PATTERN = /@([A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)*)/g;
 const MAX_GENOME_DEPTH = 64;
+const GENOME_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
 const BUILTIN_GENOMES = {
   'cli-interface': {
@@ -137,6 +138,93 @@ function mergeSeedFragments(base, override) {
 
 function genomePath(root, id) {
   return join(root, `${id}.yml`);
+}
+
+function repoGenomeDir(cwd) {
+  return resolve(cwd ?? process.cwd(), 'seed', 'genomes');
+}
+
+function userGenomeDir(home = process.env.HOME) {
+  return home ? join(home, '.seed', 'genomes') : null;
+}
+
+function validateGenomeId(id) {
+  if (typeof id !== 'string' || !GENOME_ID_PATTERN.test(id)) {
+    throw new Error('genome id must start with an alphanumeric character and contain only letters, numbers, underscores, or hyphens');
+  }
+}
+
+function listGenomeFiles(root, origin) {
+  if (!root || !existsSync(root)) {
+    return [];
+  }
+
+  return readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && /\.ya?ml$/i.test(entry.name))
+    .map((entry) => {
+      const id = entry.name.replace(/\.ya?ml$/i, '');
+      return {
+        id,
+        origin,
+        path: join(root, entry.name),
+      };
+    });
+}
+
+function listGenomeDefinitions({ cwd, home = process.env.HOME, origins } = {}) {
+  const selected = origins?.length ? new Set(origins) : null;
+  const entries = [];
+
+  if (!selected || selected.has('builtin')) {
+    entries.push(...Object.keys(BUILTIN_GENOMES).map((id) => ({
+      id,
+      origin: 'builtin',
+      path: `builtin:${id}`,
+    })));
+  }
+
+  if (!selected || selected.has('user')) {
+    entries.push(...listGenomeFiles(userGenomeDir(home), 'user'));
+  }
+
+  if (!selected || selected.has('repo')) {
+    entries.push(...listGenomeFiles(repoGenomeDir(cwd), 'repo'));
+  }
+
+  return entries.sort((left, right) => {
+    const originOrder = { builtin: 0, user: 1, repo: 2 };
+    return (originOrder[left.origin] - originOrder[right.origin]) || left.id.localeCompare(right.id);
+  });
+}
+
+function initRepoGenome({ cwd, id, overwrite = false } = {}) {
+  validateGenomeId(id);
+  const root = repoGenomeDir(cwd);
+  const target = genomePath(root, id);
+
+  if (existsSync(target) && !overwrite) {
+    throw new Error(`Genome already exists at ${target}. Use --overwrite to replace it.`);
+  }
+
+  mkdirSync(root, { recursive: true });
+  const document = {
+    metadata: {
+      name: id,
+      summary: 'Repository-local Seed genome.',
+    },
+    constraints: {
+      example: 'Replace this example constraint with reusable Seed content.',
+    },
+  };
+  const text = stringify(document).replace(/\n+$/, '').concat('\n');
+  writeFileSync(target, text, 'utf8');
+
+  return {
+    id,
+    path: target,
+    text,
+    document,
+  };
 }
 
 function loadGenomeFile(path, id, origin) {
@@ -502,6 +590,57 @@ function compileGenomeById(id, context) {
   };
 }
 
+function compileGenomeDocument({ id, cwd, home, maxDepth = MAX_GENOME_DEPTH } = {}) {
+  validateGenomeId(id);
+  const context = {
+    cwd,
+    home,
+    stack: [],
+    maxDepth,
+  };
+  const compiled = compileGenomeById(id, context);
+
+  return {
+    id,
+    path: compiled.genome.path,
+    origin: compiled.genome.origin,
+    document: compiled.document,
+    text: stringify(compiled.document).replace(/\n+$/, '').concat('\n'),
+    genomes: compiled.genomes,
+    provenance: compiled.provenance,
+  };
+}
+
+function validateGenomeDefinition({ id, cwd, home } = {}) {
+  try {
+    const compiled = compileGenomeDocument({ id, cwd, home });
+    const result = validateGenomeDocument(compiled.document);
+    return {
+      id,
+      origin: compiled.origin,
+      path: compiled.path,
+      errors: result.errors,
+      warnings: result.warnings,
+    };
+  } catch (error) {
+    return {
+      id,
+      origin: 'unknown',
+      path: null,
+      errors: [{ code: 'genome-error', path: '/', message: error.message }],
+      warnings: [],
+    };
+  }
+}
+
+function validateGenomeDefinitions({ cwd, home, origins } = {}) {
+  return listGenomeDefinitions({ cwd, home, origins }).map((entry) => validateGenomeDefinition({
+    id: entry.id,
+    cwd,
+    home,
+  }));
+}
+
 function compileSeedDocument({ document, cwd, home, seedPath = 'seed/seed.yml', maxDepth = MAX_GENOME_DEPTH } = {}) {
   const context = {
     cwd,
@@ -527,8 +666,13 @@ function compileSeedDocument({ document, cwd, home, seedPath = 'seed/seed.yml', 
 
 module.exports = {
   BUILTIN_GENOMES,
+  compileGenomeDocument,
   compileSeedDocument,
+  initRepoGenome,
+  listGenomeDefinitions,
   mergeSeedFragments,
   parseGenomeSpec,
   resolveGenome,
+  validateGenomeDefinition,
+  validateGenomeDefinitions,
 };

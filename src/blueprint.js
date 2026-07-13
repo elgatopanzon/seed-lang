@@ -1,6 +1,6 @@
 const { spawnSync } = require('node:child_process');
 const { stringify } = require('yaml');
-const { collectAddressableItems } = require('./validation');
+const { collectAddressableItems, collectPresentAddressableItems } = require('./validation');
 
 const REFERENCE_PATTERN = /@([A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)*)/g;
 
@@ -68,9 +68,11 @@ function sourceLabel(source) {
   return source.path ?? '';
 }
 
-function buildItems(document, seedPath, provenance = {}) {
+function buildItems(document, seedPath, provenance = {}, partial = false) {
   const errors = [];
-  const normalized = collectAddressableItems(document, errors);
+  const normalized = partial
+    ? collectPresentAddressableItems(document, errors)
+    : collectAddressableItems(document, errors);
   if (errors.length > 0) {
     throw new Error(`Cannot build blueprint from invalid addressable sections: ${errors.map((entry) => entry.message).join('; ')}`);
   }
@@ -144,8 +146,8 @@ function sectionItems(definition, items, selected, options) {
   return entries;
 }
 
-function compileBlueprint({ document, seedPath, genomes = [], provenance = {}, filters = [], section, limit, offset } = {}) {
-  const items = buildItems(document, seedPath, provenance);
+function compileBlueprint({ document, seedPath, genomes = [], provenance = {}, filters = [], section, limit, offset, partial = false } = {}) {
+  const items = buildItems(document, seedPath, provenance, partial);
   const selected = resolveFilterAddresses(filters, items);
   const options = { limit, offset };
   const sections = SECTION_DEFINITIONS
