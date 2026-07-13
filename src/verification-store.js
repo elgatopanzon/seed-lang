@@ -6,13 +6,22 @@ const {
   renameSync,
   writeFileSync,
 } = require('node:fs');
+const { createHash } = require('node:crypto');
 const { dirname, join, resolve } = require('node:path');
-const { parse, stringify } = require('yaml');
 
 const DEFAULT_SESSION_ID = 'default';
 const DEFAULT_LEASE_MS = 60_000;
-const VALID_STATUSES = ['pending', 'claimed', 'confirmed', 'failed'];
+const SESSION_SCHEMA_VERSION = 1;
+const VALID_STATUSES = [
+  'pending',
+  'claimed',
+  'confirmed',
+  'failed',
+  'blocked',
+  'needs_review',
+];
 const SAFE_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+const SHA256_HEX = /^[a-f0-9]{64}$/;
 
 function assertSessionId(sessionId) {
   if (typeof sessionId !== 'string' || !SAFE_SESSION_ID.test(sessionId)) {
@@ -42,29 +51,20 @@ function sessionsDir(cwd) {
   return join(seedRootPath(cwd), 'sessions');
 }
 
+function locksDir(cwd) {
+  return join(seedRootPath(cwd), 'locks');
+}
+
 function sessionPath(cwd, sessionId) {
   return join(sessionsDir(cwd), `${sessionId}.json`);
 }
 
 function lockPath(cwd, sessionId) {
-  return join(sessionsDir(cwd), `${sessionId}.lock`);
+  return join(locksDir(cwd), `${sessionId}.lock`);
 }
 
 function ensureStateDir(path) {
   mkdirSync(dirname(path), { recursive: true });
-}
-
-function readYamlFile(path, label) {
-  if (!existsSync(path)) {
-    throw new Error(`${label} missing at ${path}.`);
-  }
-
-  const text = readFileSync(path, 'utf8');
-  try {
-    return parse(text);
-  } catch (error) {
-    throw new Error(`Failed to parse ${label} at ${path}: ${error.message}`);
-  }
 }
 
 function readJsonFile(path, label) {
@@ -88,6 +88,12 @@ function writeJsonAtomically(path, payload) {
 
 function withLock(path, action) {
   let locked = false;
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+  } catch (error) {
+    throw new Error(`Failed to prepare lock directory for ${path}: ${error.message}`);
+  }
+
   try {
     mkdirSync(path);
     locked = true;
@@ -125,10 +131,21 @@ function isClaimObject(value) {
     && typeof value.claimedAt === 'number'
     && Number.isFinite(value.claimedAt)
     && typeof value.leaseUntil === 'number'
-    && Number.isFinite(value.leaseUntil);
+    && Number.isFinite(value.leaseUntil)
+    && value.leaseUntil >= value.claimedAt;
 }
 
-function assertSessionShape(session, sourcePath, expectedSessionId) {
+function assertFiniteTimestamp(value, field, sourcePath) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`Corrupt session state at ${sourcePath}: ${field} must be a finite timestamp.`);
+  }
+}
+
+function seedHash(seedText) {
+  return createHash('sha256').update(seedText, 'utf8').digest('hex');
+}
+
+function assertSessionShape(session, sourcePath, expectedSessionId, expectedSnapshotPath) {
   if (!session || typeof session !== 'object' || Array.isArray(session)) {
     throw new Error(`Corrupt session state at ${sourcePath}: expected object.`);
   }
@@ -141,6 +158,23 @@ function assertSessionShape(session, sourcePath, expectedSessionId) {
     throw new Error(
       `Corrupt session state at ${sourcePath}: stored sessionId ${session.sessionId} does not match requested sessionId ${expectedSessionId}.`,
     );
+  }
+
+  if (session.schemaVersion !== SESSION_SCHEMA_VERSION) {
+    throw new Error(
+      `Corrupt session state at ${sourcePath}: unsupported schemaVersion ${session.schemaVersion}.`,
+    );
+  }
+
+  if (typeof session.seedHash !== 'string' || !SHA256_HEX.test(session.seedHash)) {
+    throw new Error(`Corrupt session state at ${sourcePath}: seedHash must be a SHA-256 hex digest.`);
+  }
+
+  assertFiniteTimestamp(session.createdAt, 'createdAt', sourcePath);
+  assertFiniteTimestamp(session.updatedAt, 'updatedAt', sourcePath);
+
+  if (session.snapshotPath !== expectedSnapshotPath) {
+    throw new Error(`Corrupt session state at ${sourcePath}: snapshotPath does not match repo-local snapshot.`);
   }
 
   if (!Array.isArray(session.items)) {
@@ -200,13 +234,19 @@ function assertSeedDocument(seedDocument) {
   });
 }
 
-function ensureSnapshotSeedPath(cwd) {
-  return resolve(cwd, 'seed', 'seed.yml');
-}
-
 function readSessionState(cwd, sessionId, sourceLabel) {
   const state = readJsonFile(sessionPath(cwd, sessionId), sourceLabel);
-  assertSessionShape(state, sourceLabel, sessionId);
+  const sourceSnapshotPath = snapshotPath(cwd);
+  assertSessionShape(state, sourceLabel, sessionId, sourceSnapshotPath);
+
+  if (!existsSync(sourceSnapshotPath)) {
+    throw new Error(`Snapshot missing at ${sourceSnapshotPath}.`);
+  }
+
+  const snapshotText = readFileSync(sourceSnapshotPath, 'utf8');
+  if (seedHash(snapshotText) !== state.seedHash) {
+    throw new Error(`Corrupt session state at ${sourceLabel}: seedHash does not match snapshot.`);
+  }
   return state;
 }
 
@@ -221,9 +261,11 @@ function buildSessionItems(seedDocument) {
     status: 'pending',
     claim: null,
     title: verification.title ?? null,
-    evidenceGuidance: Array.isArray(verification.evidence)
-      ? verification.evidence.slice()
-      : [],
+    description: verification.description ?? null,
+    evidenceGuidance: structuredClone(
+      verification.evidenceGuidance ?? verification.evidence ?? null,
+    ),
+    traceability: structuredClone(verification.traceability ?? null),
     attempts: 0,
     evidence: null,
     reason: null,
@@ -269,7 +311,9 @@ function itemSummary(item) {
   return {
     id: item.id,
     title: item.title ?? null,
+    description: item.description ?? null,
     evidenceGuidance: item.evidenceGuidance,
+    traceability: item.traceability ?? null,
     status: item.status,
   };
 }
@@ -292,31 +336,23 @@ function startSession({
   const nowValue = normalizeNow(now);
   const root = seedRootPath(cwd);
   const items = buildSessionItems(seedDocument);
-
-  const snapshot = {
-    createdAt: nowValue,
-    seedPath: ensureSnapshotSeedPath(workspaceRoot(cwd)),
-    text: seedText,
-    verifications: items.map(({ id, title, evidenceGuidance }) => ({
-      id,
-      title,
-      evidenceGuidance,
-    })),
-  };
-
-  ensureStateDir(snapshotPath(cwd));
-  writeFileSync(snapshotPath(cwd), stringify(snapshot), 'utf8');
+  const sourceSnapshotPath = snapshotPath(cwd);
 
   const session = {
+    schemaVersion: SESSION_SCHEMA_VERSION,
     sessionId,
+    seedHash: seedHash(seedText),
     createdAt: nowValue,
     updatedAt: nowValue,
-    snapshotPath: snapshotPath(cwd),
+    snapshotPath: sourceSnapshotPath,
     items,
   };
 
-  ensureStateDir(sessionPath(cwd, sessionId));
-  writeJsonAtomically(sessionPath(cwd, sessionId), session);
+  withLock(lockPath(cwd, sessionId), () => {
+    ensureStateDir(sourceSnapshotPath);
+    writeFileSync(sourceSnapshotPath, seedText, 'utf8');
+    writeJsonAtomically(sessionPath(cwd, sessionId), session);
+  });
 
   return { rootPath: root, session };
 }
@@ -461,6 +497,8 @@ function getStatus({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
   const claimed = state.items.filter((entry) => entry.status === 'claimed').length;
   const confirmed = state.items.filter((entry) => entry.status === 'confirmed').length;
   const failed = state.items.filter((entry) => entry.status === 'failed').length;
+  const blocked = state.items.filter((entry) => entry.status === 'blocked').length;
+  const needsReview = state.items.filter((entry) => entry.status === 'needs_review').length;
   const failedIds = state.items.filter((entry) => entry.status === 'failed').map((entry) => entry.id);
 
   const completion = total === 0 ? 0 : confirmed / total;
@@ -473,6 +511,8 @@ function getStatus({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
     claimed,
     confirmed,
     failed,
+    blocked,
+    needs_review: needsReview,
     failedIds,
     completion,
     completed,

@@ -1,8 +1,8 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { createHash } = require('node:crypto');
 const assert = require('node:assert/strict');
-const { parse } = require('yaml');
 const { test, describe } = require('node:test');
 
 const {
@@ -32,7 +32,9 @@ function sampleDocument() {
       {
         id: 'verify-begin',
         title: 'first verification',
+        description: 'confirm the first behavior',
         evidence: ['manual-check'],
+        traceability: ['behavior.summary[0]'],
       },
       {
         id: 'verify-next',
@@ -57,34 +59,41 @@ function snapshotFile(cwd) {
 }
 
 function lockPath(cwd, sessionId = 'default') {
-  return path.join(cwd, '.seed', 'sessions', `${sessionId}.lock`);
+  return path.join(cwd, '.seed', 'locks', `${sessionId}.lock`);
 }
 
 describe('verification store', () => {
-  test('startSession writes snapshot and pending session items in seed order', () => {
+  test('startSession writes the original snapshot and versioned, hashed items in seed order', () => {
     const result = withTempDir((cwd) => {
       const document = sampleDocument();
       startSession({
         cwd,
         seedDocument: document,
-        seedText: 'seed-contract-text',
+        seedText: 'metadata:\n  name: exact-source\n',
         sessionId: 'default',
+        now: () => 12_345,
       });
 
       const snapText = fs.readFileSync(snapshotFile(cwd), 'utf8');
-      const snapshot = parse(snapText);
       const session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
 
-      assert.equal(Array.isArray(snapshot.verifications), true);
-      assert.deepEqual(
-        snapshot.verifications.map((entry) => entry.id),
-        ['verify-begin', 'verify-next', 'verify-final'],
+      assert.equal(snapText, 'metadata:\n  name: exact-source\n');
+      assert.equal(session.schemaVersion, 1);
+      assert.equal(
+        session.seedHash,
+        createHash('sha256').update(snapText, 'utf8').digest('hex'),
       );
+      assert.equal(session.createdAt, 12_345);
+      assert.equal(session.updatedAt, 12_345);
       assert.deepEqual(
         session.items.map((entry) => entry.id),
         ['verify-begin', 'verify-next', 'verify-final'],
       );
       assert.equal(session.items.every((entry) => entry.status === 'pending'), true);
+      assert.equal(session.items[0].title, 'first verification');
+      assert.equal(session.items[0].description, 'confirm the first behavior');
+      assert.deepEqual(session.items[0].evidenceGuidance, ['manual-check']);
+      assert.deepEqual(session.items[0].traceability, ['behavior.summary[0]']);
       return true;
     });
 
@@ -286,6 +295,91 @@ describe('verification store', () => {
       assert.throws(() => {
         claimNext({ cwd, owner: 'worker-A' });
       }, /Could not acquire lock/);
+    });
+  });
+
+  test('blocked and needs_review are valid stored statuses reported without transitions', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+      const session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      session.items[0].status = 'blocked';
+      session.items[1].status = 'needs_review';
+      fs.writeFileSync(sessionFile(cwd), JSON.stringify(session, null, 2), 'utf8');
+
+      const status = getStatus({ cwd });
+      assert.equal(status.blocked, 1);
+      assert.equal(status.needs_review, 1);
+      assert.throws(() => {
+        confirmItem({
+          cwd,
+          itemId: 'verify-begin',
+          owner: 'worker-A',
+          evidence: 'not claimable',
+        });
+      }, /Invalid transition/);
+    });
+  });
+
+  test('missing or invalid session schema fields are rejected as corrupt state', () => {
+    const mutations = [
+      (session) => { delete session.schemaVersion; },
+      (session) => { session.schemaVersion = 2; },
+      (session) => { delete session.seedHash; },
+      (session) => { session.seedHash = 'not-a-sha256'; },
+      (session) => { delete session.createdAt; },
+      (session) => { session.updatedAt = 'yesterday'; },
+    ];
+
+    mutations.forEach((mutate) => {
+      withTempDir((cwd) => {
+        startSession({
+          cwd,
+          seedDocument: sampleDocument(),
+          seedText: 'seed-contract-text',
+        });
+        const session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+        mutate(session);
+        fs.writeFileSync(sessionFile(cwd), JSON.stringify(session, null, 2), 'utf8');
+
+        assert.throws(() => getStatus({ cwd }), /Corrupt session state/);
+      });
+    });
+  });
+
+  test('invalid claim timestamps are rejected as corrupt state', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+      const session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      session.items[0].status = 'claimed';
+      session.items[0].claim = {
+        owner: 'worker-A',
+        claimedAt: 2_000,
+        leaseUntil: 1_000,
+      };
+      fs.writeFileSync(sessionFile(cwd), JSON.stringify(session, null, 2), 'utf8');
+
+      assert.throws(() => getStatus({ cwd }), /claim metadata/);
+    });
+  });
+
+  test('snapshot content that does not match the stored seed hash is rejected', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'metadata:\n  name: original\n',
+      });
+      fs.writeFileSync(snapshotFile(cwd), 'metadata:\n  name: altered\n', 'utf8');
+
+      assert.throws(() => getStatus({ cwd }), /seedHash does not match snapshot/);
     });
   });
 
