@@ -9,6 +9,12 @@ const {
 } = require('./seed-file');
 const { validateSeedDocument } = require('./validation');
 const {
+  applyLineWindow,
+  compileBlueprint,
+  pageOutput,
+  renderMarkdown,
+} = require('./blueprint');
+const {
   claimNext,
   confirmItem,
   failItem,
@@ -22,6 +28,7 @@ function usage() {
   return [
     'seed init [--overwrite]',
     'seed validate',
+    'seed blueprint [--json] [--section ID] [--filter @ADDRESS] [--limit N] [--offset N] [--head N] [--tail N] [--pager]',
     'seed verify start',
     'seed verify next',
     'seed verify confirm <constraint-id> [--evidence TEXT]',
@@ -126,6 +133,106 @@ function handleValidate(cwd) {
 
   console.log(`Seed contract valid at ${seed.path}`);
   return 0;
+}
+
+function parseNonNegativeInteger(value, option) {
+  if (value === undefined || value === '' || value.startsWith('-')) {
+    return { error: `${option} requires a non-negative integer.` };
+  }
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    return { error: `${option} requires a non-negative integer.` };
+  }
+
+  return { value: parsed };
+}
+
+function parseBlueprintArgs(args) {
+  const options = {
+    filters: [],
+    json: false,
+    pager: false,
+  };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+
+    if (arg === '--json') {
+      options.json = true;
+    } else if (arg === '--pager') {
+      options.pager = true;
+    } else if (arg === '--filter') {
+      const value = args[index + 1];
+      if (!value || value.startsWith('-')) {
+        return { error: '--filter requires an @address value.' };
+      }
+      options.filters.push(value);
+      index += 1;
+    } else if (arg === '--section') {
+      const value = args[index + 1];
+      if (!value || value.startsWith('-')) {
+        return { error: '--section requires a section id.' };
+      }
+      options.section = value;
+      index += 1;
+    } else if (['--limit', '--offset', '--head', '--tail'].includes(arg)) {
+      const parsed = parseNonNegativeInteger(args[index + 1], arg);
+      if (parsed.error) {
+        return parsed;
+      }
+      options[arg.slice(2)] = parsed.value;
+      index += 1;
+    } else {
+      return { error: `Unknown option for seed blueprint: ${arg}` };
+    }
+  }
+
+  return { options };
+}
+
+function handleBlueprint(cwd, args) {
+  const parsed = parseBlueprintArgs(args);
+  if (parsed.error) {
+    return exitWithError(parsed.error);
+  }
+
+  let seed;
+  try {
+    seed = ensureSeedReady(cwd);
+  } catch (error) {
+    return exitWithError(error.message);
+  }
+
+  try {
+    const blueprint = compileBlueprint({
+      document: seed.document,
+      seedPath: DEFAULT_SEED_PATH,
+      filters: parsed.options.filters,
+      section: parsed.options.section,
+      limit: parsed.options.limit,
+      offset: parsed.options.offset,
+    });
+
+    if (parsed.options.json) {
+      console.log(JSON.stringify(blueprint, null, 2));
+      return 0;
+    }
+
+    const rendered = applyLineWindow(renderMarkdown(blueprint), {
+      head: parsed.options.head,
+      tail: parsed.options.tail,
+    });
+
+    if (parsed.options.pager) {
+      return pageOutput(rendered);
+    }
+
+    process.stdout.write(rendered);
+    return 0;
+  } catch (error) {
+    return exitWithError(error.message);
+  }
 }
 
 function ensureSeedReady(cwd) {
@@ -271,6 +378,10 @@ function run(argv = process.argv.slice(2)) {
     }
 
     return handleValidate(process.cwd());
+  }
+
+  if (command === 'blueprint') {
+    return handleBlueprint(process.cwd(), rest);
   }
 
   if (command === 'verify') {

@@ -27,12 +27,17 @@ function runCli(args, cwd) {
   const originalCwd = process.cwd();
   const originalLog = console.log;
   const originalError = console.error;
+  const originalWrite = process.stdout.write;
 
   console.log = (...items) => {
     output.push(items.map(String).join(' '));
   };
   console.error = (...items) => {
     errorOutput.push(items.map(String).join(' '));
+  };
+  process.stdout.write = (chunk) => {
+    output.push(String(chunk).replace(/\n$/, ''));
+    return true;
   };
 
   try {
@@ -47,6 +52,7 @@ function runCli(args, cwd) {
     process.chdir(originalCwd);
     console.log = originalLog;
     console.error = originalError;
+    process.stdout.write = originalWrite;
   }
 }
 
@@ -136,6 +142,64 @@ describe('seed cli', () => {
       assert.ok(result.stdout.includes('interface-without-examples'));
       assert.ok(result.stdout.includes('outputs-without-errors'));
       assert.ok(result.stdout.includes('persistence-without-semantics'));
+    });
+  });
+
+
+  test('blueprint renders markdown and json views from the Seed file', () => {
+    withTempDir((cwd) => {
+      runCli(['init'], cwd);
+
+      const markdown = runCli(['blueprint'], cwd);
+      assert.equal(markdown.code, 0);
+      assert.ok(markdown.stdout.includes('# Seed Blueprint'));
+      assert.ok(markdown.stdout.includes('## Interfaces'));
+      assert.ok(markdown.stdout.includes('`interfaces.cli`'));
+
+      const json = runCli(['blueprint', '--json'], cwd);
+      assert.equal(json.code, 0);
+      const parsed = JSON.parse(json.stdout);
+      assert.equal(parsed.kind, 'seed-blueprint');
+      assert.equal(parsed.source.path, DEFAULT_SEED_PATH);
+      assert.ok(parsed.sections.some((section) => section.id === 'interfaces'));
+    });
+  });
+
+  test('blueprint supports section, pagination, line windows, and reference filters', () => {
+    withTempDir((cwd) => {
+      runCli(['init'], cwd);
+
+      const section = runCli(['blueprint', '--section', 'artifacts', '--limit', '1', '--offset', '0'], cwd);
+      assert.equal(section.code, 0);
+      assert.ok(section.stdout.includes('## Artifacts'));
+      assert.ok(section.stdout.includes('`artifacts.baseline-seed`'));
+      assert.equal(section.stdout.includes('## Interfaces'), false);
+
+      const filtered = runCli(['blueprint', '--filter', '@security.repo-local-boundary', '--json'], cwd);
+      assert.equal(filtered.code, 0);
+      const parsed = JSON.parse(filtered.stdout);
+      const addresses = parsed.sections.flatMap((entry) => entry.items.map((item) => item.address));
+      assert.ok(addresses.includes('security.repo-local-boundary'));
+      assert.equal(addresses.includes('interfaces.cli'), false);
+
+      const windowed = runCli(['blueprint', '--head', '2', '--tail', '2'], cwd);
+      assert.equal(windowed.code, 0);
+      assert.ok(windowed.stdout.split('\n').length <= 6);
+      assert.ok(windowed.stdout.includes('...'));
+    });
+  });
+
+  test('blueprint rejects unknown options and sections clearly', () => {
+    withTempDir((cwd) => {
+      runCli(['init'], cwd);
+
+      const badOption = runCli(['blueprint', '--bogus'], cwd);
+      assert.equal(badOption.code, 1);
+      assert.ok(badOption.stderr.includes('Unknown option for seed blueprint'));
+
+      const badSection = runCli(['blueprint', '--section', 'missing'], cwd);
+      assert.equal(badSection.code, 1);
+      assert.ok(badSection.stderr.includes('Unknown blueprint section missing'));
     });
   });
 
