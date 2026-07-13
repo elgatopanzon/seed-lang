@@ -98,6 +98,22 @@ describe('seed cli', () => {
     });
   });
 
+  test('validate rejects structurally malformed valid YAML', () => {
+    withTempDir((cwd) => {
+      const malformedPath = path.join(cwd, DEFAULT_SEED_PATH);
+      fs.mkdirSync(path.dirname(malformedPath), { recursive: true });
+      fs.writeFileSync(malformedPath, 'metadata:\n  name: incomplete\n', 'utf8');
+
+      const malformed = runCli(['validate'], cwd);
+
+      assert.equal(malformed.code, 1);
+      assert.ok(malformed.stdout.includes('Errors ('));
+      assert.ok(malformed.stdout.includes('missing-required-field /metadata/version'));
+      assert.ok(malformed.stdout.includes('missing-required-section /scope'));
+      assert.ok(malformed.stderr.includes('Seed validation failed with structural errors'));
+    });
+  });
+
   test('validate shows warnings on weak but structurally valid contracts', () => {
     withTempDir((cwd) => {
       writeSeedFromTemplate(cwd, (document) => {
