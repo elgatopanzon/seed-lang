@@ -457,6 +457,53 @@ describe('seed cli', () => {
     });
   });
 
+  test('verify pending lists pending and expired items', () => {
+    withTempDir((cwd) => {
+      writeSeedFromTemplate(cwd, (document) => {
+        document.behavior.counts = 'Count every character exactly.';
+        document.verifications = [
+          {
+            id: 'manual-counts',
+            title: 'Manual counts',
+            description: 'Verify @behavior.counts manually.',
+            method: 'Inspect implementation.',
+            evidence_required: ['Manual evidence.'],
+          },
+        ];
+      });
+      const seedPath = path.join(cwd, DEFAULT_SEED_PATH);
+      const seedText = fs.readFileSync(seedPath, 'utf8');
+
+      assert.equal(runCli(['verify', 'start'], cwd).code, 0);
+      const initialPending = runCli(['verify', 'pending'], cwd);
+      assert.equal(initialPending.code, 0);
+      assert.ok(initialPending.stdout.includes('Pending verification items'));
+      assert.ok(initialPending.stdout.includes('- pending manual-counts @verifications.manual-counts'));
+
+      assert.equal(runCli(['verify', 'next'], cwd).code, 0);
+      assert.equal(runCli(['verify', 'confirm', 'manual-counts', '--owner', 'seed-cli', '--file', 'implementation.js', '--evidence', 'ok'], cwd).code, 0);
+      let next = runCli(['verify', 'next'], cwd);
+      while (next.stdout.includes('Claimed verification') && !next.stdout.includes('implicit-behavior-counts')) {
+        const id = next.stdout.match(/Claimed verification ([^\n]+)/)[1];
+        assert.equal(runCli(['verify', 'confirm', id, '--owner', 'seed-cli', '--file', 'implementation.js', '--evidence', 'ok'], cwd).code, 0);
+        next = runCli(['verify', 'next'], cwd);
+      }
+      assert.ok(next.stdout.includes('Claimed verification implicit-behavior-counts'));
+      assert.equal(runCli(['verify', 'confirm', 'implicit-behavior-counts', '--owner', 'seed-cli', '--file', 'implementation.js', '--evidence', 'ok'], cwd).code, 0);
+
+      fs.writeFileSync(seedPath, seedText.replace('Count every character exactly.', 'Count every printable character exactly.'), 'utf8');
+      const expiredPending = runCli(['verify', 'pending'], cwd);
+      assert.equal(expiredPending.code, 0);
+      assert.ok(expiredPending.stdout.includes('- expired manual-counts @verifications.manual-counts previous=confirmed'));
+      assert.ok(expiredPending.stdout.includes('- expired implicit-behavior-counts @behavior.counts previous=confirmed'));
+      assert.ok(expiredPending.stdout.includes('modified addresses: @behavior.counts'));
+
+      const status = JSON.parse(runCli(['verify', 'status'], cwd).stdout);
+      assert.equal(status.expired, 2);
+      assert.equal(status.completed, false);
+    });
+  });
+
   test('confirm, fail, and status report completion and transitions', () => {
     withTempDir((cwd) => {
       writeSeedFromTemplate(cwd, (document) => {

@@ -25,6 +25,7 @@ const {
   claimNext,
   confirmItem,
   failItem,
+  getPendingItems,
   getStatus,
   resetSession,
   startSession,
@@ -47,6 +48,7 @@ function usage() {
     'seed verify reset',
     'seed verify sync',
     'seed verify next [--owner OWNER]',
+    'seed verify pending',
     'seed verify confirm <constraint-id> --owner OWNER --file PATH [--file PATH...] [--evidence TEXT]',
     'seed verify fail <constraint-id> --owner OWNER --file PATH [--file PATH...] [--reason TEXT]',
     'seed verify status',
@@ -663,6 +665,31 @@ function handleVerifyStatus(cwd) {
   return 0;
 }
 
+function handleVerifyPending(cwd) {
+  const items = getPendingItems({ cwd });
+
+  if (items.length === 0) {
+    console.log('No pending verification items.');
+    return 0;
+  }
+
+  console.log('Pending verification items (' + items.length + '):');
+  items.forEach((item) => {
+    const address = item.address ? ' @' + item.address : '';
+    const previousStatus = item.previousStatus ? ' previous=' + item.previousStatus : '';
+    console.log('- ' + item.status + ' ' + item.id + address + previousStatus);
+
+    if (item.expiration?.modifiedAddresses?.length > 0) {
+      console.log('  modified addresses: ' + item.expiration.modifiedAddresses.map((entry) => '@' + entry).join(', '));
+    }
+
+    if (item.expiration?.files?.length > 0) {
+      console.log('  evidence files: ' + item.expiration.files.map((entry) => entry.path + ':' + entry.status).join(', '));
+    }
+  });
+  return 0;
+}
+
 function handleVerifyReset(cwd) {
   try {
     const result = resetSession({ cwd });
@@ -770,6 +797,18 @@ function run(argv = process.argv.slice(2)) {
       }
 
       return handleVerifySync(process.cwd());
+    }
+
+    if (subcommand === 'pending') {
+      if (!ensureNoExtraArgs(subRest, 0)) {
+        return exitWithError('seed verify pending does not take arguments.');
+      }
+
+      try {
+        return handleVerifyPending(process.cwd());
+      } catch (error) {
+        return exitWithError(error.message);
+      }
     }
 
     if (subcommand === 'next') {

@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
+const { parse } = require('yaml');
 const assert = require('node:assert/strict');
 const { test, describe } = require('node:test');
 
@@ -9,6 +10,7 @@ const {
   claimNext,
   confirmItem,
   failItem,
+  getPendingItems,
   getStatus,
   startSession,
   syncSession,
@@ -782,6 +784,71 @@ describe('verification store', () => {
       assert.equal(expiredNext.item.id, 'verify-begin');
     });
   });
+  test('modified Seed addresses expire verified items that reference them', () => {
+    withTempDir((cwd) => {
+      fs.mkdirSync(path.join(cwd, 'seed'), { recursive: true });
+      const seedPath = path.join(cwd, 'seed', 'seed.yml');
+      const seedText = [
+        'behavior:',
+        '  counts: Count every character exactly.',
+        'verifications:',
+        '  - id: manual-counts',
+        '    title: Manual counts',
+        '    description: Verify @behavior.counts manually.',
+        '    method: Inspect implementation.',
+        '    evidence_required:',
+        '      - Manual evidence.',
+        '',
+      ].join('\n');
+      fs.writeFileSync(seedPath, seedText, 'utf8');
+      startSession({
+        cwd,
+        seedDocument: parse(seedText),
+        seedText,
+      });
+
+      claimNext({ cwd, owner: 'worker-A', now: () => 1_000 });
+      confirmItem({
+        cwd,
+        itemId: 'manual-counts',
+        owner: 'worker-A',
+        files: ['implementation.js'],
+        evidence: 'ok',
+        now: () => 2_000,
+      });
+      claimNext({ cwd, owner: 'worker-A', now: () => 3_000 });
+      confirmItem({
+        cwd,
+        itemId: 'implicit-behavior-counts',
+        owner: 'worker-A',
+        files: ['implementation.js'],
+        evidence: 'ok',
+        now: () => 4_000,
+      });
+
+      fs.writeFileSync(seedPath, seedText.replace('Count every character exactly.', 'Count every printable character exactly.'), 'utf8');
+
+      const status = getStatus({ cwd });
+      assert.equal(status.expired, 2);
+      assert.deepEqual(status.expiredIds, ['manual-counts', 'implicit-behavior-counts']);
+      assert.deepEqual(status.expiredEvidence.map((entry) => entry.kind), ['seed-address', 'seed-address']);
+      assert.deepEqual(status.expiredEvidence[0].modifiedAddresses, ['behavior.counts']);
+      assert.deepEqual(status.modifiedSeedAddresses, ['behavior.counts']);
+      assert.equal(status.verified, 0);
+      assert.equal(status.pending, 2);
+      assert.equal(status.completed, false);
+      assert.equal(status.satisfied, false);
+
+      const pending = getPendingItems({ cwd });
+      assert.deepEqual(pending.map((entry) => entry.id), ['manual-counts', 'implicit-behavior-counts']);
+      assert.equal(pending.every((entry) => entry.status === 'expired'), true);
+      assert.equal(pending[0].previousStatus, 'confirmed');
+
+      const next = claimNext({ cwd, owner: 'worker-B', now: () => 5_000 });
+      assert.equal(next.item.id, 'manual-counts');
+    });
+  });
+
   test('failItem and confirmItem reject non-string evidence/reason values', () => {
     withTempDir((cwd) => {
       startSession({

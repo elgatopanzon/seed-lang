@@ -627,9 +627,13 @@ function nextPendingItem(items) {
   return items.find((item) => item.status === 'pending');
 }
 
+function terminalStatus(item) {
+  return ['confirmed', 'failed'].includes(item.status);
+}
+
 function currentEvidenceExpiration(cwd, item) {
   const files = Array.isArray(item.evidence_files) ? item.evidence_files : [];
-  if (!['confirmed', 'failed'].includes(item.status) || files.length === 0) {
+  if (!terminalStatus(item) || files.length === 0) {
     return null;
   }
 
@@ -673,6 +677,7 @@ function currentEvidenceExpiration(cwd, item) {
   }
 
   return {
+    kind: 'evidence-file',
     id: item.id,
     address: item.address ?? null,
     status: item.status,
@@ -680,14 +685,53 @@ function currentEvidenceExpiration(cwd, item) {
   };
 }
 
-function collectExpiredEvidence(cwd, items) {
+function currentSeedAddressExpiration(cwd, item, changedAddresses) {
+  if (!terminalStatus(item) || changedAddresses.size === 0) {
+    return null;
+  }
+
+  const references = verificationReferences(cwd, item);
+  const referencedAddresses = references.addresses.map((entry) => entry.address);
+  const modifiedAddresses = referencedAddresses.filter((address) => changedAddresses.has(address));
+  if (modifiedAddresses.length === 0) {
+    return null;
+  }
+
+  return {
+    kind: 'seed-address',
+    id: item.id,
+    address: item.address ?? null,
+    status: item.status,
+    modifiedAddresses,
+  };
+}
+
+function currentItemExpiration(cwd, item, changedAddresses = new Set()) {
+  const evidence = currentEvidenceExpiration(cwd, item);
+  const seedAddress = currentSeedAddressExpiration(cwd, item, changedAddresses);
+
+  if (!evidence && !seedAddress) {
+    return null;
+  }
+
+  return {
+    kind: [evidence?.kind, seedAddress?.kind].filter(Boolean).join('+'),
+    id: item.id,
+    address: item.address ?? null,
+    status: item.status,
+    files: evidence?.files ?? [],
+    modifiedAddresses: seedAddress?.modifiedAddresses ?? [],
+  };
+}
+
+function collectExpiredEvidence(cwd, items, changedAddresses = new Set()) {
   return items
-    .map((item) => currentEvidenceExpiration(cwd, item))
+    .map((item) => currentItemExpiration(cwd, item, changedAddresses))
     .filter(Boolean);
 }
 
-function nextExpiredEvidenceItem(cwd, items) {
-  return items.find((item) => currentEvidenceExpiration(cwd, item));
+function nextExpiredEvidenceItem(cwd, items, changedAddresses = new Set()) {
+  return items.find((item) => currentItemExpiration(cwd, item, changedAddresses));
 }
 
 function itemSummary(item, references = { addresses: [], artifacts: [], unresolved: [] }) {
@@ -769,7 +813,13 @@ function claimNext({
     const state = readSessionState(cwd, sessionId, label);
     const recovered = recoverStaleClaims(state.items, nowValue);
 
-    const next = nextPendingItem(state.items) ?? nextExpiredEvidenceItem(cwd, state.items);
+    let seedChanges = new Set();
+    try {
+      seedChanges = new Set(modifiedSeedAddresses(cwd));
+    } catch (error) {
+      seedChanges = new Set();
+    }
+    const next = nextPendingItem(state.items) ?? nextExpiredEvidenceItem(cwd, state.items, seedChanges);
     if (next) {
       next.status = 'claimed';
       next.claim = {
@@ -943,23 +993,27 @@ function modifiedSeedAddresses(cwd) {
 }
 
 function summarizeStatus(cwd, state) {
-  const expiredEvidence = collectExpiredEvidence(cwd, state.items);
-  const expiredIds = expiredEvidence.map((entry) => entry.id);
   let seedChanges = [];
   try {
     seedChanges = modifiedSeedAddresses(cwd);
   } catch (error) {
     seedChanges = [{ error: error.message }];
   }
+  const changedAddresses = new Set(seedChanges.filter((entry) => typeof entry === 'string'));
+  const expiredEvidence = collectExpiredEvidence(cwd, state.items, changedAddresses);
+  const expiredIds = expiredEvidence.map((entry) => entry.id);
+  const expiredIdSet = new Set(expiredIds);
 
   const total = state.items.length;
-  const pending = state.items.filter((entry) => entry.status === 'pending').length;
+  const pending = state.items.filter((entry) => entry.status === 'pending').length + expiredIdSet.size;
   const claimed = state.items.filter((entry) => entry.status === 'claimed').length;
-  const confirmed = state.items.filter((entry) => entry.status === 'confirmed').length;
-  const failed = state.items.filter((entry) => entry.status === 'failed').length;
+  const confirmed = state.items.filter((entry) => entry.status === 'confirmed' && !expiredIdSet.has(entry.id)).length;
+  const failed = state.items.filter((entry) => entry.status === 'failed' && !expiredIdSet.has(entry.id)).length;
   const blocked = state.items.filter((entry) => entry.status === 'blocked').length;
   const needsReview = state.items.filter((entry) => entry.status === 'needs_review').length;
-  const failedIds = state.items.filter((entry) => entry.status === 'failed').map((entry) => entry.id);
+  const failedIds = state.items
+    .filter((entry) => entry.status === 'failed' && !expiredIdSet.has(entry.id))
+    .map((entry) => entry.id);
 
   const verified = confirmed + failed;
   const passed = confirmed;
@@ -988,6 +1042,37 @@ function summarizeStatus(cwd, state) {
     completed,
     satisfied,
   };
+}
+
+function getPendingItems({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
+  assertSessionId(sessionId);
+
+  const path = sessionPath(cwd, sessionId);
+  const label = 'session state ' + path;
+  const state = readSessionState(cwd, sessionId, label);
+  const seedChanges = new Set(modifiedSeedAddresses(cwd));
+  const expirations = collectExpiredEvidence(cwd, state.items, seedChanges);
+  const expirationById = new Map(expirations.map((entry) => [entry.id, entry]));
+
+  return state.items
+    .map((item) => {
+      const expiration = expirationById.get(item.id);
+      if (expiration) {
+        return {
+          ...itemSummary(item, verificationReferences(cwd, item)),
+          status: 'expired',
+          previousStatus: item.status,
+          expiration,
+        };
+      }
+
+      if (item.status === 'pending') {
+        return itemSummary(item, verificationReferences(cwd, item));
+      }
+
+      return null;
+    })
+    .filter(Boolean);
 }
 
 function syncSession({
@@ -1020,7 +1105,7 @@ function syncSession({
         && old.address === item.address
         && ['confirmed', 'failed'].includes(old.status)
         && !changedAddresses.has(item.address)
-        && !currentEvidenceExpiration(cwd, old)
+        && !currentItemExpiration(cwd, old, changedAddresses)
       ) {
         return {
           ...item,
@@ -1068,4 +1153,5 @@ module.exports = {
   resetSession,
   syncSession,
   getStatus,
+  getPendingItems,
 };
