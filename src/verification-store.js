@@ -371,6 +371,7 @@ function buildManualSessionItems(seedDocument) {
       evidence: null,
       reason: null,
       evidence_files: [],
+      seed_evidence: null,
     };
   });
 }
@@ -417,6 +418,7 @@ function buildImplicitSessionItems(seedDocument) {
       evidence: null,
       reason: null,
       evidence_files: [],
+      seed_evidence: null,
     };
   });
 }
@@ -523,9 +525,7 @@ function artifactLocation(value) {
   return value.path ?? value.url ?? null;
 }
 
-function verificationReferences(cwd, item) {
-  const snapshotText = readFileSync(snapshotPath(cwd), 'utf8');
-  const document = parse(snapshotText);
+function verificationReferencesFromDocument(document, item) {
   const errors = [];
   const entries = collectPresentAddressableItems(document, errors);
   const byAddress = new Map(entries.map((entry) => [entry.address, entry]));
@@ -594,6 +594,45 @@ function verificationReferences(cwd, item) {
       }),
     unresolved: [...unresolved].sort(),
   };
+}
+
+function verificationReferences(cwd, item) {
+  const snapshotText = readFileSync(snapshotPath(cwd), 'utf8');
+  const document = parse(snapshotText);
+  return verificationReferencesFromDocument(document, item);
+}
+
+function currentSeedEvidence(cwd, item) {
+  const seed = loadSeed({ cwd });
+  const references = verificationReferencesFromDocument(seed.document, item);
+  const fingerprints = addressFingerprints(seed.document);
+  const referencedAddresses = [
+    ...references.addresses.map((entry) => entry.address),
+    ...references.artifacts.map((entry) => entry.address),
+  ];
+
+  return {
+    seedHash: seedHash(seed.text),
+    addresses: [...new Set(referencedAddresses)]
+      .filter((address) => fingerprints.has(address))
+      .sort()
+      .map((address) => ({
+        address,
+        fingerprint: fingerprints.get(address),
+      })),
+  };
+}
+
+function storedSeedEvidenceFingerprint(item, address) {
+  if (!item.seed_evidence || !Array.isArray(item.seed_evidence.addresses)) {
+    return null;
+  }
+
+  const entry = item.seed_evidence.addresses.find((candidate) => candidate.address === address);
+  if (!entry || typeof entry.fingerprint !== 'string') {
+    return null;
+  }
+  return entry.fingerprint;
 }
 
 function recoverStaleClaims(items, now) {
@@ -691,8 +730,15 @@ function currentSeedAddressExpiration(cwd, item, changedAddresses) {
   }
 
   const references = verificationReferences(cwd, item);
-  const referencedAddresses = references.addresses.map((entry) => entry.address);
-  const modifiedAddresses = referencedAddresses.filter((address) => changedAddresses.has(address));
+  const referencedAddresses = [
+    ...references.addresses.map((entry) => entry.address),
+    ...references.artifacts.map((entry) => entry.address),
+  ];
+  const currentSeed = loadSeed({ cwd });
+  const currentFingerprints = addressFingerprints(currentSeed.document);
+  const modifiedAddresses = referencedAddresses
+    .filter((address) => changedAddresses.has(address))
+    .filter((address) => storedSeedEvidenceFingerprint(item, address) !== currentFingerprints.get(address));
   if (modifiedAddresses.length === 0) {
     return null;
   }
@@ -913,6 +959,11 @@ function transitionItem({
     item.status = targetStatus;
     item.claim = null;
     item.evidence_files = evidenceFiles;
+    try {
+      item.seed_evidence = currentSeedEvidence(cwd, item);
+    } catch (error) {
+      item.seed_evidence = null;
+    }
     state.updatedAt = nowValue;
 
     writeJsonAtomically(path, state);
@@ -1104,7 +1155,6 @@ function syncSession({
         old
         && old.address === item.address
         && ['confirmed', 'failed'].includes(old.status)
-        && !changedAddresses.has(item.address)
         && !currentItemExpiration(cwd, old, changedAddresses)
       ) {
         return {
@@ -1114,6 +1164,7 @@ function syncSession({
           evidence: old.evidence ?? null,
           reason: old.reason ?? null,
           evidence_files: structuredClone(old.evidence_files ?? []),
+          seed_evidence: structuredClone(old.seed_evidence ?? null),
         };
       }
       return item;

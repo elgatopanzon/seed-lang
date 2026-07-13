@@ -846,6 +846,40 @@ describe('verification store', () => {
 
       const next = claimNext({ cwd, owner: 'worker-B', now: () => 5_000 });
       assert.equal(next.item.id, 'manual-counts');
+      confirmItem({
+        cwd,
+        itemId: 'manual-counts',
+        owner: 'worker-B',
+        files: ['implementation.js'],
+        evidence: 'ok after Seed change',
+        now: () => 6_000,
+      });
+
+      const implicitNext = claimNext({ cwd, owner: 'worker-B', now: () => 7_000 });
+      assert.equal(implicitNext.item.id, 'implicit-behavior-counts');
+      confirmItem({
+        cwd,
+        itemId: 'implicit-behavior-counts',
+        owner: 'worker-B',
+        files: ['implementation.js'],
+        evidence: 'implicit ok after Seed change',
+        now: () => 8_000,
+      });
+
+      const reverified = getStatus({ cwd });
+      assert.equal(reverified.expired, 0);
+      assert.equal(reverified.completed, true);
+      assert.equal(reverified.satisfied, true);
+      assert.deepEqual(reverified.modifiedSeedAddresses, ['behavior.counts']);
+
+      const synced = syncSession({ cwd, now: () => 9_000 });
+      const syncedStatus = getStatus({ cwd });
+      assert.equal(synced.synced, true);
+      assert.equal(synced.preserved, 2);
+      assert.equal(synced.pending, 0);
+      assert.equal(syncedStatus.satisfied, true);
+      assert.equal(syncedStatus.expired, 0);
+      assert.deepEqual(syncedStatus.modifiedSeedAddresses, []);
     });
   });
 
