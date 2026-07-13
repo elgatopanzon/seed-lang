@@ -8,7 +8,8 @@ const {
 } = require('node:fs');
 const { createHash } = require('node:crypto');
 const { parse } = require('yaml');
-const { dirname, join, resolve } = require('node:path');
+const { dirname, isAbsolute, join, relative, resolve, sep } = require('node:path');
+const { loadSeed } = require('./seed-file');
 const { collectPresentAddressableItems, normalizeAddressableSection } = require('./validation');
 
 const REFERENCE_PATTERN = /@([A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)*)/g;
@@ -180,6 +181,54 @@ function seedHash(seedText) {
   return createHash('sha256').update(seedText, 'utf8').digest('hex');
 }
 
+function fileHash(buffer) {
+  return createHash('sha256').update(buffer).digest('hex');
+}
+
+function safeRelativeFilePath(cwd, filePath) {
+  if (typeof filePath !== 'string' || filePath.trim().length === 0) {
+    throw new Error('evidence file path must be a non-empty string.');
+  }
+
+  if (isAbsolute(filePath)) {
+    throw new Error('evidence file path must be repo-relative: ' + filePath);
+  }
+
+  const root = workspaceRoot(cwd);
+  const absolutePath = resolve(root, filePath);
+  const relativePath = relative(root, absolutePath);
+  if (relativePath === '' || relativePath.startsWith('..') || isAbsolute(relativePath)) {
+    throw new Error('evidence file path must stay inside the repository: ' + filePath);
+  }
+
+  return relativePath.split(sep).join('/');
+}
+
+function hashEvidenceFiles(cwd, files) {
+  if (!Array.isArray(files) || files.length === 0) {
+    throw new Error('at least one evidence file path is required.');
+  }
+
+  const seen = new Set();
+  return files.map((filePath) => {
+    const relativePath = safeRelativeFilePath(cwd, filePath);
+    if (seen.has(relativePath)) {
+      throw new Error('duplicate evidence file path: ' + relativePath);
+    }
+    seen.add(relativePath);
+
+    const absolutePath = join(workspaceRoot(cwd), relativePath);
+    if (!existsSync(absolutePath)) {
+      throw new Error('evidence file missing at ' + relativePath + '.');
+    }
+
+    return {
+      path: relativePath,
+      sha256: fileHash(readFileSync(absolutePath)),
+    };
+  });
+}
+
 function assertSessionShape(session, sourcePath, expectedSessionId, expectedSnapshotPath) {
   if (!session || typeof session !== 'object' || Array.isArray(session)) {
     throw new Error(`Corrupt session state at ${sourcePath}: expected object.`);
@@ -321,6 +370,7 @@ function buildManualSessionItems(seedDocument) {
       attempts: 0,
       evidence: null,
       reason: null,
+      evidence_files: [],
     };
   });
 }
@@ -366,6 +416,7 @@ function buildImplicitSessionItems(seedDocument) {
       attempts: 0,
       evidence: null,
       reason: null,
+      evidence_files: [],
     };
   });
 }
@@ -576,6 +627,69 @@ function nextPendingItem(items) {
   return items.find((item) => item.status === 'pending');
 }
 
+function currentEvidenceExpiration(cwd, item) {
+  const files = Array.isArray(item.evidence_files) ? item.evidence_files : [];
+  if (!['confirmed', 'failed'].includes(item.status) || files.length === 0) {
+    return null;
+  }
+
+  const changedFiles = [];
+  files.forEach((file) => {
+    if (!file || typeof file.path !== 'string' || typeof file.sha256 !== 'string') {
+      changedFiles.push({
+        path: file?.path ?? null,
+        expectedSha256: file?.sha256 ?? null,
+        actualSha256: null,
+        status: 'invalid',
+      });
+      return;
+    }
+
+    const relativePath = safeRelativeFilePath(cwd, file.path);
+    const absolutePath = join(workspaceRoot(cwd), relativePath);
+    if (!existsSync(absolutePath)) {
+      changedFiles.push({
+        path: relativePath,
+        expectedSha256: file.sha256,
+        actualSha256: null,
+        status: 'missing',
+      });
+      return;
+    }
+
+    const actualSha256 = fileHash(readFileSync(absolutePath));
+    if (actualSha256 !== file.sha256) {
+      changedFiles.push({
+        path: relativePath,
+        expectedSha256: file.sha256,
+        actualSha256,
+        status: 'modified',
+      });
+    }
+  });
+
+  if (changedFiles.length === 0) {
+    return null;
+  }
+
+  return {
+    id: item.id,
+    address: item.address ?? null,
+    status: item.status,
+    files: changedFiles,
+  };
+}
+
+function collectExpiredEvidence(cwd, items) {
+  return items
+    .map((item) => currentEvidenceExpiration(cwd, item))
+    .filter(Boolean);
+}
+
+function nextExpiredEvidenceItem(cwd, items) {
+  return items.find((item) => currentEvidenceExpiration(cwd, item));
+}
+
 function itemSummary(item, references = { addresses: [], artifacts: [], unresolved: [] }) {
   return {
     id: item.id,
@@ -655,7 +769,7 @@ function claimNext({
     const state = readSessionState(cwd, sessionId, label);
     const recovered = recoverStaleClaims(state.items, nowValue);
 
-    const next = nextPendingItem(state.items);
+    const next = nextPendingItem(state.items) ?? nextExpiredEvidenceItem(cwd, state.items);
     if (next) {
       next.status = 'claimed';
       next.claim = {
@@ -691,10 +805,12 @@ function transitionItem({
   targetStatus,
   evidence,
   reason,
+  files,
   lockWaitMs = DEFAULT_LOCK_WAIT_MS,
 }) {
   assertSessionId(sessionId);
   assertOwner(owner);
+  const evidenceFiles = hashEvidenceFiles(cwd, files);
 
   if (typeof itemId !== 'string' || !itemId) {
     throw new Error('expected itemId string.');
@@ -746,6 +862,7 @@ function transitionItem({
 
     item.status = targetStatus;
     item.claim = null;
+    item.evidence_files = evidenceFiles;
     state.updatedAt = nowValue;
 
     writeJsonAtomically(path, state);
@@ -798,12 +915,42 @@ function resetSession({
   }, { waitMs: lockWaitMs });
 }
 
-function getStatus({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
-  assertSessionId(sessionId);
+function itemFingerprint(item) {
+  return JSON.stringify(item.value ?? null);
+}
 
-  const path = sessionPath(cwd, sessionId);
-  const label = `session state ${path}`;
-  const state = readSessionState(cwd, sessionId, label);
+function addressFingerprints(document) {
+  const errors = [];
+  const entries = collectPresentAddressableItems(document, errors);
+  if (errors.length > 0) {
+    throw new Error('Failed to collect addressable Seed items: ' + errors.map((entry) => entry.message).join('; '));
+  }
+
+  return new Map(entries.map((entry) => [entry.address, itemFingerprint(entry)]));
+}
+
+function modifiedSeedAddresses(cwd) {
+  const snapshotText = readFileSync(snapshotPath(cwd), 'utf8');
+  const snapshotDocument = parse(snapshotText);
+  const currentSeed = loadSeed({ cwd });
+  const snapshotItems = addressFingerprints(snapshotDocument);
+  const currentItems = addressFingerprints(currentSeed.document);
+  const addresses = new Set([...snapshotItems.keys(), ...currentItems.keys()]);
+
+  return [...addresses]
+    .filter((address) => snapshotItems.get(address) !== currentItems.get(address))
+    .sort();
+}
+
+function summarizeStatus(cwd, state) {
+  const expiredEvidence = collectExpiredEvidence(cwd, state.items);
+  const expiredIds = expiredEvidence.map((entry) => entry.id);
+  let seedChanges = [];
+  try {
+    seedChanges = modifiedSeedAddresses(cwd);
+  } catch (error) {
+    seedChanges = [{ error: error.message }];
+  }
 
   const total = state.items.length;
   const pending = state.items.filter((entry) => entry.status === 'pending').length;
@@ -818,10 +965,11 @@ function getStatus({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
   const passed = confirmed;
   const completion = total === 0 ? 0 : verified / total;
   const completed = total > 0 && verified === total;
-  const satisfied = completed && failed === 0;
+  const expired = expiredEvidence.length;
+  const satisfied = completed && failed === 0 && expired === 0;
 
   return {
-    sessionId,
+    sessionId: state.sessionId,
     total,
     verified,
     passed,
@@ -831,11 +979,85 @@ function getStatus({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
     failed,
     blocked,
     needs_review: needsReview,
+    expired,
+    expiredIds,
+    expiredEvidence,
     failedIds,
+    modifiedSeedAddresses: seedChanges,
     completion,
     completed,
     satisfied,
   };
+}
+
+function syncSession({
+  cwd,
+  sessionId = DEFAULT_SESSION_ID,
+  now,
+  lockWaitMs = DEFAULT_LOCK_WAIT_MS,
+} = {}) {
+  assertSessionId(sessionId);
+
+  const nowValue = normalizeNow(now);
+  const path = sessionPath(cwd, sessionId);
+  const label = 'session state ' + path;
+  const lock = lockPath(cwd, sessionId);
+
+  return withLock(lock, () => {
+    const state = readSessionState(cwd, sessionId, label);
+    const status = summarizeStatus(cwd, state);
+    if (!status.satisfied) {
+      throw new Error('seed verify sync requires the current session to be completed, satisfied, and free of expired evidence.');
+    }
+
+    const seed = loadSeed({ cwd });
+    const changedAddresses = new Set(modifiedSeedAddresses(cwd));
+    const oldById = new Map(state.items.map((item) => [item.id, item]));
+    const nextItems = buildSessionItems(seed.document).map((item) => {
+      const old = oldById.get(item.id);
+      if (
+        old
+        && old.address === item.address
+        && ['confirmed', 'failed'].includes(old.status)
+        && !changedAddresses.has(item.address)
+        && !currentEvidenceExpiration(cwd, old)
+      ) {
+        return {
+          ...item,
+          status: old.status,
+          attempts: old.attempts ?? item.attempts,
+          evidence: old.evidence ?? null,
+          reason: old.reason ?? null,
+          evidence_files: structuredClone(old.evidence_files ?? []),
+        };
+      }
+      return item;
+    });
+
+    writeFileSync(snapshotPath(cwd), seed.text, 'utf8');
+    state.seedHash = seedHash(seed.text);
+    state.updatedAt = nowValue;
+    state.items = nextItems;
+    writeJsonAtomically(path, state);
+
+    return {
+      sessionId,
+      synced: true,
+      preserved: nextItems.filter((item) => ['confirmed', 'failed'].includes(item.status)).length,
+      pending: nextItems.filter((item) => item.status === 'pending').length,
+      modifiedSeedAddresses: [...changedAddresses],
+      session: state,
+    };
+  }, { waitMs: lockWaitMs });
+}
+
+function getStatus({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
+  assertSessionId(sessionId);
+
+  const path = sessionPath(cwd, sessionId);
+  const label = 'session state ' + path;
+  const state = readSessionState(cwd, sessionId, label);
+  return summarizeStatus(cwd, state);
 }
 
 module.exports = {
@@ -844,5 +1066,6 @@ module.exports = {
   confirmItem,
   failItem,
   resetSession,
+  syncSession,
   getStatus,
 };

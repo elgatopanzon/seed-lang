@@ -11,6 +11,7 @@ const {
   failItem,
   getStatus,
   startSession,
+  syncSession,
 } = require('../src/verification-store');
 
 function tempDir() {
@@ -19,6 +20,7 @@ function tempDir() {
 
 function withTempDir(run) {
   const cwd = tempDir();
+  fs.writeFileSync(path.join(cwd, 'implementation.js'), 'module.exports = {};\n', 'utf8');
   try {
     return run(cwd);
   } finally {
@@ -244,6 +246,7 @@ describe('verification store', () => {
         cwd,
         itemId: 'verify-begin',
         owner: 'worker-A',
+        files: ['implementation.js'],
         now: () => 2_000,
         evidence: 'verified manually',
       });
@@ -253,6 +256,7 @@ describe('verification store', () => {
         cwd,
         itemId: 'verify-next',
         owner: 'worker-A',
+        files: ['implementation.js'],
         now: () => 3_500,
         reason: 'environment missing',
       });
@@ -267,6 +271,8 @@ describe('verification store', () => {
       assert.equal(failed.status, 'failed');
       assert.equal(failed.reason, 'environment missing');
       assert.equal(pending.status, 'pending');
+      assert.deepEqual(confirmed.evidence_files.map((entry) => entry.path), ['implementation.js']);
+      assert.match(confirmed.evidence_files[0].sha256, /^[a-f0-9]{64}$/);
     });
   });
 
@@ -283,6 +289,7 @@ describe('verification store', () => {
           cwd,
           itemId: 'missing-id',
           owner: 'worker-A',
+          files: ['implementation.js'],
           evidence: 'works',
         });
       }, /Unknown verification id/);
@@ -302,6 +309,7 @@ describe('verification store', () => {
           cwd,
           itemId: 'verify-next',
           owner: 'worker-A',
+          files: ['implementation.js'],
           evidence: 'works',
         });
       }, /Invalid transition/);
@@ -322,6 +330,7 @@ describe('verification store', () => {
         cwd,
         itemId: 'verify-begin',
         owner: 'worker-A',
+        files: ['implementation.js'],
         now: () => 2_000,
         evidence: 'ok',
       });
@@ -330,6 +339,7 @@ describe('verification store', () => {
         cwd,
         itemId: 'verify-next',
         owner: 'worker-B',
+        files: ['implementation.js'],
         now: () => 3_500,
         reason: 'not available',
       });
@@ -385,6 +395,7 @@ describe('verification store', () => {
           cwd,
           itemId: 'verify-begin',
           owner: 'worker-A',
+          files: ['implementation.js'],
           evidence: 'not claimable',
         });
       }, /Invalid transition/);
@@ -481,6 +492,7 @@ describe('verification store', () => {
           sessionId: invalidSessionId,
           itemId: 'verify-begin',
           owner: 'worker-A',
+          files: ['implementation.js'],
           evidence: 'ok',
         }),
         () => failItem({
@@ -488,6 +500,7 @@ describe('verification store', () => {
           sessionId: invalidSessionId,
           itemId: 'verify-begin',
           owner: 'worker-A',
+          files: ['implementation.js'],
           reason: 'failed',
         }),
         () => getStatus({ cwd, sessionId: invalidSessionId }),
@@ -541,6 +554,7 @@ describe('verification store', () => {
           cwd,
           itemId: 'verify-begin',
           owner: 'worker-B',
+          files: ['implementation.js'],
           evidence: 'ok',
           now: () => 2_000,
         });
@@ -558,6 +572,7 @@ describe('verification store', () => {
           cwd,
           itemId: 'verify-begin',
           owner: 'worker-B',
+          files: ['implementation.js'],
           reason: 'failed',
           now: () => 2_000,
         });
@@ -621,6 +636,7 @@ describe('verification store', () => {
         cwd,
         itemId: 'verify-begin',
         owner: 'worker-A',
+        files: ['implementation.js'],
         now: () => 2_000,
       });
 
@@ -644,6 +660,7 @@ describe('verification store', () => {
         cwd,
         itemId: 'verify-begin',
         owner: 'worker-A',
+        files: ['implementation.js'],
         now: () => 2_000,
       });
 
@@ -654,6 +671,117 @@ describe('verification store', () => {
     });
   });
 
+  test('syncSession promotes the current Seed snapshot after a satisfied session', () => {
+    withTempDir((cwd) => {
+      fs.mkdirSync(path.join(cwd, 'seed'), { recursive: true });
+      const seedText = [
+        'verifications:',
+        '  - id: verify-begin',
+        '    title: first verification',
+        '    description: confirm the first behavior',
+        '    method: manual review',
+        '    evidence_required:',
+        '      - manual-check',
+        '  - id: verify-next',
+        '    title: second verification',
+        '    description: confirm second behavior',
+        '    method: manual review',
+        '    evidence_required:',
+        '      - manual-check',
+        '  - id: verify-final',
+        '    title: third verification',
+        '    description: confirm third behavior',
+        '    method: manual review',
+        '    evidence_required:',
+        '      - manual-check',
+        '',
+      ].join('\n');
+      fs.writeFileSync(path.join(cwd, 'seed', 'seed.yml'), seedText, 'utf8');
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText,
+      });
+
+      ['verify-begin', 'verify-next', 'verify-final'].forEach((id, index) => {
+        claimNext({ cwd, owner: 'worker-A', now: () => 1_000 + index });
+        confirmItem({
+          cwd,
+          itemId: id,
+          owner: 'worker-A',
+          files: ['implementation.js'],
+          evidence: id,
+          now: () => 2_000 + index,
+        });
+      });
+
+      const synced = syncSession({ cwd, now: () => 3_000 });
+      const status = getStatus({ cwd });
+
+      assert.equal(synced.synced, true);
+      assert.equal(synced.preserved, 3);
+      assert.equal(synced.pending, 0);
+      assert.equal(status.satisfied, true);
+      assert.equal(status.expired, 0);
+    });
+  });
+
+  test('confirmItem and failItem require evidence files', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+
+      claimNext({ cwd, owner: 'worker-A', now: () => 1_000 });
+      assert.throws(() => {
+        confirmItem({
+          cwd,
+          itemId: 'verify-begin',
+          owner: 'worker-A',
+          evidence: 'ok',
+          now: () => 1_500,
+        });
+      }, /at least one evidence file path is required/);
+    });
+  });
+
+  test('status reports expired evidence and next reclaims expired items', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+
+      claimNext({ cwd, owner: 'worker-A', now: () => 1_000 });
+      confirmItem({
+        cwd,
+        itemId: 'verify-begin',
+        owner: 'worker-A',
+        files: ['implementation.js'],
+        evidence: 'ok',
+        now: () => 2_000,
+      });
+      fs.writeFileSync(path.join(cwd, 'implementation.js'), 'changed\n', 'utf8');
+
+      const status = getStatus({ cwd });
+      assert.equal(status.expired, 1);
+      assert.deepEqual(status.expiredIds, ['verify-begin']);
+      assert.equal(status.expiredEvidence[0].files[0].status, 'modified');
+      assert.equal(status.satisfied, false);
+
+      const next = claimNext({ cwd, owner: 'worker-B', now: () => 3_000 });
+      assert.equal(next.item.id, 'verify-next');
+
+      const finalPending = claimNext({ cwd, owner: 'worker-B', now: () => 4_000 });
+      assert.equal(finalPending.item.id, 'verify-final');
+
+      const expiredNext = claimNext({ cwd, owner: 'worker-B', now: () => 5_000 });
+      assert.equal(expiredNext.item.id, 'verify-begin');
+    });
+  });
   test('failItem and confirmItem reject non-string evidence/reason values', () => {
     withTempDir((cwd) => {
       startSession({
@@ -668,6 +796,7 @@ describe('verification store', () => {
           cwd,
           itemId: 'verify-begin',
           owner: 'worker-A',
+          files: ['implementation.js'],
           evidence: 12,
           now: () => 1_500,
         });
@@ -679,6 +808,7 @@ describe('verification store', () => {
           cwd,
           itemId: 'verify-next',
           owner: 'worker-A',
+          files: ['implementation.js'],
           reason: 12,
           now: () => 2_500,
         });

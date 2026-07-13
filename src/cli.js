@@ -14,6 +14,7 @@ const {
   pageOutput,
   renderMarkdown,
 } = require('./blueprint');
+const { getSeedDiff } = require('./diff');
 const {
   compileGenomeDocument,
   initRepoGenome,
@@ -27,6 +28,7 @@ const {
   getStatus,
   resetSession,
   startSession,
+  syncSession,
 } = require('./verification-store');
 
 const DEFAULT_OWNER = 'seed-cli';
@@ -35,6 +37,7 @@ function usage() {
   return [
     'seed init [--overwrite] [--genome ID] [--genomes ID[,ID...]]',
     'seed validate',
+    'seed diff [--no-color]',
     'seed genome list [--builtin] [--user] [--repo]',
     'seed genome init <name> [--overwrite]',
     'seed genome validate [--builtin] [--user] [--repo]',
@@ -42,9 +45,10 @@ function usage() {
     'seed blueprint [--json] [--section ID] [--filter @ADDRESS] [--limit N] [--offset N] [--head N] [--tail N] [--pager]',
     'seed verify start',
     'seed verify reset',
+    'seed verify sync',
     'seed verify next [--owner OWNER]',
-    'seed verify confirm <constraint-id> --owner OWNER [--evidence TEXT]',
-    'seed verify fail <constraint-id> --owner OWNER [--reason TEXT]',
+    'seed verify confirm <constraint-id> --owner OWNER --file PATH [--file PATH...] [--evidence TEXT]',
+    'seed verify fail <constraint-id> --owner OWNER --file PATH [--file PATH...] [--reason TEXT]',
     'seed verify status',
     '',
     `seed source defaults to ${DEFAULT_SEED_PATH} and current working directory`,
@@ -167,6 +171,7 @@ function parseConstraintActionArgs(args, command, optionName) {
     constraintId,
     payload: undefined,
     owner: undefined,
+    files: [],
   };
 
   for (let index = 1; index < args.length; index += 1) {
@@ -177,6 +182,13 @@ function parseConstraintActionArgs(args, command, optionName) {
         return value;
       }
       parsed.payload = value.value;
+      index += 1;
+    } else if (arg === '--file') {
+      const value = readOptionValue(args, index, '--file', command);
+      if (value.error) {
+        return value;
+      }
+      parsed.files.push(value.value);
       index += 1;
     } else if (arg === '--owner') {
       const value = readOptionValue(args, index, '--owner', command);
@@ -194,6 +206,10 @@ function parseConstraintActionArgs(args, command, optionName) {
 
   if (!parsed.owner) {
     return { error: `owner invalid: seed verify ${command} requires --owner.` };
+  }
+
+  if (parsed.files.length === 0) {
+    return { error: `seed verify ${command} requires at least one --file path.` };
   }
 
   return parsed;
@@ -217,6 +233,26 @@ function handleValidate(cwd) {
 
   console.log(`Seed contract valid at ${seed.path}`);
   return 0;
+}
+
+function handleDiff(cwd, args) {
+  let noColor = false;
+
+  for (const arg of args) {
+    if (arg === '--no-color') {
+      noColor = true;
+    } else {
+      return exitWithError(`Unknown option for seed diff: ${arg}`);
+    }
+  }
+
+  try {
+    const diff = getSeedDiff({ cwd, noColor });
+    process.stdout.write(diff.text);
+    return 0;
+  } catch (error) {
+    return exitWithError(error.message);
+  }
 }
 
 function parseNonNegativeInteger(value, option) {
@@ -585,13 +621,14 @@ function handleVerifyNext(cwd, owner = DEFAULT_OWNER) {
   return 0;
 }
 
-function handleVerifyConfirm(cwd, constraintId, owner, evidence) {
+function handleVerifyConfirm(cwd, constraintId, owner, evidence, files) {
   try {
     const item = confirmItem({
       cwd,
       itemId: constraintId,
       owner,
       evidence,
+      files,
     });
 
     console.log(`Confirmed verification ${constraintId}`);
@@ -602,13 +639,14 @@ function handleVerifyConfirm(cwd, constraintId, owner, evidence) {
   }
 }
 
-function handleVerifyFail(cwd, constraintId, owner, reason) {
+function handleVerifyFail(cwd, constraintId, owner, reason, files) {
   try {
     const item = failItem({
       cwd,
       itemId: constraintId,
       owner,
       reason,
+      files,
     });
 
     console.log(`Marked verification ${constraintId} as failed`);
@@ -630,6 +668,22 @@ function handleVerifyReset(cwd) {
     const result = resetSession({ cwd });
     console.log(`Reset verification session '${result.sessionId}'.`);
     console.log(`Items reset: ${result.reset}`);
+    return 0;
+  } catch (error) {
+    return exitWithError(error.message);
+  }
+}
+
+function handleVerifySync(cwd) {
+  try {
+    const result = syncSession({ cwd });
+    console.log(`Synced verification session '${result.sessionId}'.`);
+    console.log(`Preserved results: ${result.preserved}`);
+    console.log(`Pending after sync: ${result.pending}`);
+    if (result.modifiedSeedAddresses.length > 0) {
+      console.log('Modified Seed addresses promoted:');
+      result.modifiedSeedAddresses.forEach((address) => console.log(`- @${address}`));
+    }
     return 0;
   } catch (error) {
     return exitWithError(error.message);
@@ -671,6 +725,10 @@ function run(argv = process.argv.slice(2)) {
     return handleValidate(process.cwd());
   }
 
+  if (command === 'diff') {
+    return handleDiff(process.cwd(), rest);
+  }
+
   if (command === 'blueprint') {
     return handleBlueprint(process.cwd(), rest);
   }
@@ -706,6 +764,14 @@ function run(argv = process.argv.slice(2)) {
       return handleVerifyReset(process.cwd());
     }
 
+    if (subcommand === 'sync') {
+      if (!ensureNoExtraArgs(subRest, 0)) {
+        return exitWithError('seed verify sync does not take arguments.');
+      }
+
+      return handleVerifySync(process.cwd());
+    }
+
     if (subcommand === 'next') {
       const parsed = parseVerifyNextArgs(subRest);
       if (parsed.error) {
@@ -725,7 +791,7 @@ function run(argv = process.argv.slice(2)) {
         return exitWithError(parsed.error);
       }
 
-      return handleVerifyConfirm(process.cwd(), parsed.constraintId, parsed.owner, parsed.payload);
+      return handleVerifyConfirm(process.cwd(), parsed.constraintId, parsed.owner, parsed.payload, parsed.files);
     }
 
     if (subcommand === 'fail') {
@@ -734,7 +800,7 @@ function run(argv = process.argv.slice(2)) {
         return exitWithError(parsed.error);
       }
 
-      return handleVerifyFail(process.cwd(), parsed.constraintId, parsed.owner, parsed.payload);
+      return handleVerifyFail(process.cwd(), parsed.constraintId, parsed.owner, parsed.payload, parsed.files);
     }
 
     if (subcommand === 'status') {
