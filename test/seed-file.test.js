@@ -8,6 +8,7 @@ const { parse } = require('yaml');
 const {
   DEFAULT_SEED_PATH,
   renderSeedTemplate,
+  ensureGitignore,
   initSeed,
   loadSeed,
 } = require('../src/seed-file');
@@ -48,6 +49,37 @@ describe('seed file primitives', () => {
     assert.equal(Array.isArray(doc.verifications), true);
     assert.equal(Array.isArray(doc.verifications[0].evidence_required), true);
     assert.equal(doc.verifications[0].evidence_required.length > 0, true);
+  });
+
+  test('initSeed creates idempotent gitignore section for seed locks', () => {
+    withTempDir((cwd) => {
+      initSeed({ cwd });
+      const gitignorePath = path.join(cwd, '.gitignore');
+      const first = fs.readFileSync(gitignorePath, 'utf8');
+
+      assert.ok(first.includes('# seed-lang'));
+      assert.ok(first.includes('.seed/locks/'));
+      assert.equal(first.includes('.seed/sessions/'), false);
+
+      ensureGitignore(cwd);
+      const second = fs.readFileSync(gitignorePath, 'utf8');
+      assert.equal(second, first);
+    });
+  });
+
+  test('initSeed appends seed gitignore section once to existing file', () => {
+    withTempDir((cwd) => {
+      const gitignorePath = path.join(cwd, '.gitignore');
+      fs.writeFileSync(gitignorePath, 'dist/\n', 'utf8');
+
+      initSeed({ cwd });
+      initSeed({ cwd, overwrite: true });
+
+      const content = fs.readFileSync(gitignorePath, 'utf8');
+      assert.ok(content.startsWith('dist/\n'));
+      assert.equal((content.match(/# seed-lang/g) ?? []).length, 1);
+      assert.equal((content.match(/\.seed\/locks\//g) ?? []).length, 1);
+    });
   });
 
   test('initSeed writes seed file and preserves template contract', () => {

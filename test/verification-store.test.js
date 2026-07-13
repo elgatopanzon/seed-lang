@@ -360,7 +360,7 @@ describe('verification store', () => {
       fs.mkdirSync(lockPath(cwd), { recursive: true });
 
       assert.throws(() => {
-        claimNext({ cwd, owner: 'worker-A' });
+        claimNext({ cwd, owner: 'worker-A', lockWaitMs: 0 });
       }, /Could not acquire lock/);
     });
   });

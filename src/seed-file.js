@@ -1,10 +1,12 @@
 const { existsSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
-const { dirname, resolve } = require('node:path');
+const { dirname, join, resolve } = require('node:path');
 const { parse, stringify } = require('yaml');
 const { compileSeedDocument } = require('./genomes');
 
 const DEFAULT_SEED_PATH = 'seed/seed.yml';
 const STABLE_VERIFICATION_ID = 'seed-baseline-visibility';
+const GITIGNORE_SECTION_START = '# seed-lang';
+const GITIGNORE_SECTION = `${GITIGNORE_SECTION_START}\n.seed/locks/\n`;
 
 function renderSeedTemplate(options = {}) {
   return (
@@ -108,6 +110,28 @@ function seedTemplateDocument({ genomes = [] } = {}) {
 }
 
 
+function ensureGitignore(root) {
+  const gitignorePath = join(root, '.gitignore');
+  const existing = existsSync(gitignorePath) ? readFileSync(gitignorePath, 'utf8') : '';
+
+  if (existing.includes(GITIGNORE_SECTION_START)) {
+    return {
+      path: gitignorePath,
+      changed: false,
+    };
+  }
+
+  const prefix = existing.length === 0 || existing.endsWith('\n') ? existing : `${existing}\n`;
+  const separator = prefix.length === 0 || prefix.endsWith('\n\n') ? '' : '\n';
+  writeFileSync(gitignorePath, `${prefix}${separator}${GITIGNORE_SECTION}`, 'utf8');
+
+  return {
+    path: gitignorePath,
+    changed: true,
+  };
+}
+
+
 function initSeed({ cwd, overwrite = false, genomes = [] } = {}) {
   const root = cwd ?? process.cwd();
   const seedPath = resolve(root, DEFAULT_SEED_PATH);
@@ -123,6 +147,7 @@ function initSeed({ cwd, overwrite = false, genomes = [] } = {}) {
 
   const text = renderSeedTemplate({ genomes });
   writeFileSync(seedPath, text, 'utf8');
+  ensureGitignore(root);
 
   return {
     path: seedPath,
@@ -163,6 +188,7 @@ function loadSeed({ cwd } = {}) {
 module.exports = {
   DEFAULT_SEED_PATH,
   renderSeedTemplate,
+  ensureGitignore,
   initSeed,
   loadSeed,
 };

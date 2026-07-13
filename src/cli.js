@@ -42,9 +42,9 @@ function usage() {
     'seed blueprint [--json] [--section ID] [--filter @ADDRESS] [--limit N] [--offset N] [--head N] [--tail N] [--pager]',
     'seed verify start',
     'seed verify reset',
-    'seed verify next',
-    'seed verify confirm <constraint-id> [--evidence TEXT]',
-    'seed verify fail <constraint-id> [--reason TEXT]',
+    'seed verify next [--owner OWNER]',
+    'seed verify confirm <constraint-id> --owner OWNER [--evidence TEXT]',
+    'seed verify fail <constraint-id> --owner OWNER [--reason TEXT]',
     'seed verify status',
     '',
     `seed source defaults to ${DEFAULT_SEED_PATH} and current working directory`,
@@ -126,46 +126,77 @@ function parseInitArgs(args) {
   return { options };
 }
 
+function readOptionValue(args, index, option, command) {
+  const value = args[index + 1];
+  if (value === undefined || value === '' || value.startsWith('--')) {
+    return { error: `seed verify ${command} ${option} requires a value.` };
+  }
+  return { value };
+}
+
+function parseVerifyNextArgs(args) {
+  const options = { owner: DEFAULT_OWNER };
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--owner') {
+      const parsed = readOptionValue(args, index, '--owner', 'next');
+      if (parsed.error) {
+        return parsed;
+      }
+      options.owner = parsed.value;
+      index += 1;
+    } else if (arg.startsWith('-')) {
+      return { error: `Unknown option for seed verify next: ${arg}` };
+    } else {
+      return { error: `seed verify next does not take positional arguments: ${arg}` };
+    }
+  }
+
+  return { options };
+}
+
 function parseConstraintActionArgs(args, command, optionName) {
   if (args.length === 0 || args[0].startsWith('-')) {
     return { error: `seed verify ${command} requires exactly one <constraint-id>.` };
   }
 
   const constraintId = args[0];
-
-  if (args.length === 1) {
-    return { constraintId, payload: undefined };
-  }
-
   const option = `--${optionName}`;
-  if (args.length === 2) {
-    if (args[1] === option) {
-      return { error: `seed verify ${command} ${option} requires a value.` };
-    }
-
-    if (args[1].startsWith('--')) {
-      return { error: `Unknown option for seed verify ${command}: ${args[1]}` };
-    }
-
-    return { error: `seed verify ${command} requires exactly one <constraint-id>.` };
-  }
-
-  if (args.length > 3) {
-    return { error: `Unknown option for seed verify ${command}: ${args[1]}` };
-  }
-
-  if (args[1] !== option) {
-    return { error: `Unknown option for seed verify ${command}: ${args[1]}` };
-  }
-
-  if (args[2] === undefined || args[2].startsWith('--') || args[2] === '') {
-    return { error: `seed verify ${command} ${option} requires a value.` };
-  }
-
-  return {
+  const parsed = {
     constraintId,
-    payload: args[2],
+    payload: undefined,
+    owner: undefined,
   };
+
+  for (let index = 1; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === option) {
+      const value = readOptionValue(args, index, option, command);
+      if (value.error) {
+        return value;
+      }
+      parsed.payload = value.value;
+      index += 1;
+    } else if (arg === '--owner') {
+      const value = readOptionValue(args, index, '--owner', command);
+      if (value.error) {
+        return value;
+      }
+      parsed.owner = value.value;
+      index += 1;
+    } else if (arg.startsWith('-')) {
+      return { error: `Unknown option for seed verify ${command}: ${arg}` };
+    } else {
+      return { error: `seed verify ${command} requires exactly one <constraint-id>.` };
+    }
+  }
+
+  if (!parsed.owner) {
+    return { error: `owner invalid: seed verify ${command} requires --owner.` };
+  }
+
+  return parsed;
 }
 
 function handleValidate(cwd) {
@@ -490,10 +521,10 @@ function handleVerifyStart(cwd) {
   return 0;
 }
 
-function handleVerifyNext(cwd) {
+function handleVerifyNext(cwd, owner = DEFAULT_OWNER) {
   const result = claimNext({
     cwd,
-    owner: DEFAULT_OWNER,
+    owner,
   });
 
   result.warnings.forEach((warning) => {
@@ -522,19 +553,44 @@ function handleVerifyNext(cwd) {
     console.log(`artifacts: ${result.item.artifacts.join(', ')}`);
   }
 
+  if (result.item.method) {
+    console.log(`method: ${result.item.method}`);
+  }
+
   if (Array.isArray(result.item.evidence_required) && result.item.evidence_required.length > 0) {
     console.log(`evidence required: ${result.item.evidence_required.join('; ')}`);
+  }
+
+  if (result.item.references?.addresses?.length > 0) {
+    console.log('referenced addresses:');
+    result.item.references.addresses.forEach((entry) => {
+      const description = entry.description ? ` - ${entry.description}` : '';
+      console.log(`- @${entry.address}${description}`);
+    });
+  }
+
+  if (result.item.references?.artifacts?.length > 0) {
+    console.log('referenced artifacts:');
+    result.item.references.artifacts.forEach((entry) => {
+      const location = entry.path ? ` path=${entry.path}` : '';
+      const description = entry.description ? ` - ${entry.description}` : '';
+      console.log(`- @${entry.id} (${entry.address})${location}${description}`);
+    });
+  }
+
+  if (result.item.references?.unresolved?.length > 0) {
+    console.log(`unresolved references: ${result.item.references.unresolved.map((entry) => `@${entry}`).join(', ')}`);
   }
 
   return 0;
 }
 
-function handleVerifyConfirm(cwd, constraintId, evidence) {
+function handleVerifyConfirm(cwd, constraintId, owner, evidence) {
   try {
     const item = confirmItem({
       cwd,
       itemId: constraintId,
-      owner: DEFAULT_OWNER,
+      owner,
       evidence,
     });
 
@@ -546,12 +602,12 @@ function handleVerifyConfirm(cwd, constraintId, evidence) {
   }
 }
 
-function handleVerifyFail(cwd, constraintId, reason) {
+function handleVerifyFail(cwd, constraintId, owner, reason) {
   try {
     const item = failItem({
       cwd,
       itemId: constraintId,
-      owner: DEFAULT_OWNER,
+      owner,
       reason,
     });
 
@@ -651,12 +707,13 @@ function run(argv = process.argv.slice(2)) {
     }
 
     if (subcommand === 'next') {
-      if (!ensureNoExtraArgs(subRest, 0)) {
-        return exitWithError('seed verify next does not take arguments.');
+      const parsed = parseVerifyNextArgs(subRest);
+      if (parsed.error) {
+        return exitWithError(parsed.error);
       }
 
       try {
-        return handleVerifyNext(process.cwd());
+        return handleVerifyNext(process.cwd(), parsed.options.owner);
       } catch (error) {
         return exitWithError(error.message);
       }
@@ -668,7 +725,7 @@ function run(argv = process.argv.slice(2)) {
         return exitWithError(parsed.error);
       }
 
-      return handleVerifyConfirm(process.cwd(), parsed.constraintId, parsed.payload);
+      return handleVerifyConfirm(process.cwd(), parsed.constraintId, parsed.owner, parsed.payload);
     }
 
     if (subcommand === 'fail') {
@@ -677,7 +734,7 @@ function run(argv = process.argv.slice(2)) {
         return exitWithError(parsed.error);
       }
 
-      return handleVerifyFail(process.cwd(), parsed.constraintId, parsed.payload);
+      return handleVerifyFail(process.cwd(), parsed.constraintId, parsed.owner, parsed.payload);
     }
 
     if (subcommand === 'status') {

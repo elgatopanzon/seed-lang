@@ -9,7 +9,7 @@ const {
 const { createHash } = require('node:crypto');
 const { parse } = require('yaml');
 const { dirname, join, resolve } = require('node:path');
-const { normalizeAddressableSection } = require('./validation');
+const { collectPresentAddressableItems, normalizeAddressableSection } = require('./validation');
 
 const REFERENCE_PATTERN = /@([A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)*)/g;
 const IMPLICIT_VERIFICATION_SECTIONS = [
@@ -27,6 +27,8 @@ const IMPLICIT_VERIFICATION_SECTIONS = [
 
 const DEFAULT_SESSION_ID = 'default';
 const DEFAULT_LEASE_MS = 60_000;
+const DEFAULT_LOCK_WAIT_MS = 60_000;
+const DEFAULT_LOCK_RETRY_MS = 50;
 const SESSION_SCHEMA_VERSION = 1;
 const VALID_STATUSES = [
   'pending',
@@ -102,22 +104,39 @@ function writeJsonAtomically(path, payload) {
   renameSync(tmp, path);
 }
 
-function withLock(path, action) {
+function sleepMs(ms) {
+  if (ms <= 0) {
+    return;
+  }
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function withLock(path, action, { waitMs = DEFAULT_LOCK_WAIT_MS, retryMs = DEFAULT_LOCK_RETRY_MS } = {}) {
   let locked = false;
+  const startedAt = Date.now();
+
   try {
     mkdirSync(dirname(path), { recursive: true });
   } catch (error) {
     throw new Error(`Failed to prepare lock directory for ${path}: ${error.message}`);
   }
 
-  try {
-    mkdirSync(path);
-    locked = true;
-  } catch (error) {
-    if (error.code === 'EEXIST') {
-      throw new Error(`Could not acquire lock at ${path}. Another process holds the session lock.`);
+  while (!locked) {
+    try {
+      mkdirSync(path);
+      locked = true;
+    } catch (error) {
+      if (error.code !== 'EEXIST') {
+        throw new Error(`Failed to acquire lock at ${path}: ${error.message}`);
+      }
+
+      const elapsed = Date.now() - startedAt;
+      if (elapsed >= waitMs) {
+        throw new Error(`Could not acquire lock at ${path} within ${waitMs}ms. Another process holds the session lock.`);
+      }
+
+      sleepMs(Math.min(retryMs, waitMs - elapsed));
     }
-    throw new Error(`Failed to acquire lock at ${path}: ${error.message}`);
   }
 
   try {
@@ -296,6 +315,7 @@ function buildManualSessionItems(seedDocument) {
       claim: null,
       title: verification.value.title ?? null,
       description: verification.value.description ?? null,
+      method: verification.value.method ?? null,
       artifacts: structuredClone(verification.value.artifacts ?? []),
       evidence_required: structuredClone(verification.value.evidence_required),
       attempts: 0,
@@ -336,6 +356,7 @@ function buildImplicitSessionItems(seedDocument) {
       claim: null,
       title: `Implicit verification for ${target.address}`,
       description: `Verify @${target.address} is satisfied.`,
+      method: null,
       artifacts: [...artifacts],
       evidence_required: [
         'Verification approach used.',
@@ -410,6 +431,120 @@ function isClaimStale(claim, now) {
   return claim.leaseUntil <= now;
 }
 
+function textReferences(value) {
+  const refs = new Set();
+  const visit = (entry) => {
+    if (typeof entry === 'string') {
+      for (const match of entry.matchAll(REFERENCE_PATTERN)) {
+        refs.add(match[1]);
+      }
+      return;
+    }
+
+    if (Array.isArray(entry)) {
+      entry.forEach(visit);
+      return;
+    }
+
+    if (entry && typeof entry === 'object') {
+      Object.values(entry).forEach(visit);
+    }
+  };
+
+  visit(value);
+  return refs;
+}
+
+function shortDescription(value) {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (value && typeof value === 'object' && typeof value.description === 'string') {
+    return value.description;
+  }
+  return null;
+}
+
+function artifactLocation(value) {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+  return value.path ?? value.url ?? null;
+}
+
+function verificationReferences(cwd, item) {
+  const snapshotText = readFileSync(snapshotPath(cwd), 'utf8');
+  const document = parse(snapshotText);
+  const errors = [];
+  const entries = collectPresentAddressableItems(document, errors);
+  const byAddress = new Map(entries.map((entry) => [entry.address, entry]));
+  const artifacts = entries.filter((entry) => entry.section === 'artifacts');
+  const artifactsById = new Map(artifacts.map((entry) => [entry.id, entry]));
+  const artifactsByAddress = new Map(artifacts.map((entry) => [entry.address, entry]));
+  const addressRefs = new Set();
+  const artifactRefs = new Set();
+  const unresolved = new Set();
+
+  if (item.address) {
+    addressRefs.add(item.address);
+  }
+
+  textReferences({
+    title: item.title,
+    description: item.description,
+    method: item.method,
+    evidence_required: item.evidence_required,
+  }).forEach((ref) => {
+    if (artifactsById.has(ref)) {
+      artifactRefs.add(ref);
+    } else if (artifactsByAddress.has(ref)) {
+      artifactRefs.add(artifactsByAddress.get(ref).id);
+    } else if (byAddress.has(ref)) {
+      addressRefs.add(ref);
+    } else {
+      unresolved.add(ref);
+    }
+  });
+
+  (item.artifacts ?? []).forEach((artifactId) => {
+    if (artifactsById.has(artifactId)) {
+      artifactRefs.add(artifactId);
+    } else if (artifactsByAddress.has(artifactId)) {
+      artifactRefs.add(artifactsByAddress.get(artifactId).id);
+    } else {
+      unresolved.add(artifactId);
+    }
+  });
+
+  return {
+    addresses: [...addressRefs]
+      .filter((address) => byAddress.has(address))
+      .sort()
+      .map((address) => {
+        const entry = byAddress.get(address);
+        return {
+          address,
+          id: entry.id,
+          section: entry.section,
+          description: shortDescription(entry.value),
+        };
+      }),
+    artifacts: [...artifactRefs]
+      .filter((id) => artifactsById.has(id))
+      .sort()
+      .map((id) => {
+        const entry = artifactsById.get(id);
+        return {
+          id,
+          address: entry.address,
+          path: artifactLocation(entry.value),
+          description: shortDescription(entry.value),
+        };
+      }),
+    unresolved: [...unresolved].sort(),
+  };
+}
+
 function recoverStaleClaims(items, now) {
   const recovered = [];
   let changed = false;
@@ -441,15 +576,17 @@ function nextPendingItem(items) {
   return items.find((item) => item.status === 'pending');
 }
 
-function itemSummary(item) {
+function itemSummary(item, references = { addresses: [], artifacts: [], unresolved: [] }) {
   return {
     id: item.id,
     source: item.source ?? null,
     address: item.address ?? null,
     title: item.title ?? null,
     description: item.description ?? null,
+    method: item.method ?? null,
     artifacts: item.artifacts ?? [],
     evidence_required: item.evidence_required,
+    references,
     status: item.status,
   };
 }
@@ -460,6 +597,7 @@ function startSession({
   seedDocument,
   seedText,
   now,
+  lockWaitMs = DEFAULT_LOCK_WAIT_MS,
 } = {}) {
   assertSessionId(sessionId);
 
@@ -488,7 +626,7 @@ function startSession({
     ensureStateDir(sourceSnapshotPath);
     writeFileSync(sourceSnapshotPath, seedText, 'utf8');
     writeJsonAtomically(sessionPath(cwd, sessionId), session);
-  });
+  }, { waitMs: lockWaitMs });
 
   return { rootPath: root, session };
 }
@@ -499,6 +637,7 @@ function claimNext({
   owner = `seed-${Date.now()}`,
   leaseMs = DEFAULT_LEASE_MS,
   now,
+  lockWaitMs = DEFAULT_LOCK_WAIT_MS,
 } = {}) {
   assertSessionId(sessionId);
   assertOwner(owner);
@@ -533,14 +672,14 @@ function claimNext({
     writeJsonAtomically(path, state);
 
     return {
-      item: next ? itemSummary(next) : null,
+      item: next ? itemSummary(next, verificationReferences(cwd, next)) : null,
       claim: next ? next.claim : null,
       recoveredIds: recovered.recovered,
       warnings: recovered.recovered.length
         ? [{ code: 'recovered-stale-lease', ids: recovered.recovered }]
         : [],
     };
-  });
+  }, { waitMs: lockWaitMs });
 }
 
 function transitionItem({
@@ -552,6 +691,7 @@ function transitionItem({
   targetStatus,
   evidence,
   reason,
+  lockWaitMs = DEFAULT_LOCK_WAIT_MS,
 }) {
   assertSessionId(sessionId);
   assertOwner(owner);
@@ -609,8 +749,8 @@ function transitionItem({
     state.updatedAt = nowValue;
 
     writeJsonAtomically(path, state);
-    return itemSummary(item);
-  });
+    return itemSummary(item, verificationReferences(cwd, item));
+  }, { waitMs: lockWaitMs });
 }
 
 function confirmItem(options = {}) {
@@ -625,6 +765,7 @@ function resetSession({
   cwd,
   sessionId = DEFAULT_SESSION_ID,
   now,
+  lockWaitMs = DEFAULT_LOCK_WAIT_MS,
 } = {}) {
   assertSessionId(sessionId);
 
@@ -654,7 +795,7 @@ function resetSession({
       reset: state.items.length,
       session: state,
     };
-  });
+  }, { waitMs: lockWaitMs });
 }
 
 function getStatus({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {

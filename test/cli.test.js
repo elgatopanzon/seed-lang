@@ -401,6 +401,11 @@ describe('seed cli', () => {
       assert.ok(firstClaim.stdout.includes('Claimed verification verify-first'));
       assert.ok(firstClaim.stdout.includes('source: manual'));
       assert.ok(firstClaim.stdout.includes('artifacts: sample'));
+      assert.ok(firstClaim.stdout.includes('method: manual using @sample'));
+      assert.ok(firstClaim.stdout.includes('referenced addresses:'));
+      assert.ok(firstClaim.stdout.includes('- @verifications.verify-first - check first with @sample'));
+      assert.ok(firstClaim.stdout.includes('referenced artifacts:'));
+      assert.ok(firstClaim.stdout.includes('- @sample (artifacts.sample) path=seed/sample.txt - Sample input file.'));
 
       const secondClaim = runCli(['verify', 'next'], cwd);
       assert.equal(secondClaim.code, 0);
@@ -449,23 +454,23 @@ describe('seed cli', () => {
       const firstNext = runCli(['verify', 'next'], cwd);
       assert.equal(firstNext.code, 0);
       const confirmWithEvidence = runCli(
-        ['verify', 'confirm', 'verify-first', '--evidence', 'manual-check'],
+        ['verify', 'confirm', 'verify-first', '--owner', 'seed-cli', '--evidence', 'manual-check'],
         cwd,
       );
       assert.equal(confirmWithEvidence.code, 0);
 
       assert.equal(runCli(['verify', 'next'], cwd).code, 0);
       const failWithReason = runCli(
-        ['verify', 'fail', 'verify-second', '--reason', 'environment missing'],
+        ['verify', 'fail', 'verify-second', '--owner', 'seed-cli', '--reason', 'environment missing'],
         cwd,
       );
       assert.equal(failWithReason.code, 0);
 
-      const invalidConfirm = runCli(['verify', 'confirm', 'verify-missing'], cwd);
+      const invalidConfirm = runCli(['verify', 'confirm', 'verify-missing', '--owner', 'seed-cli'], cwd);
       assert.equal(invalidConfirm.code, 1);
       assert.ok(invalidConfirm.stderr.includes('Unknown verification id'));
 
-      const transitionFail = runCli(['verify', 'fail', 'verify-first'], cwd);
+      const transitionFail = runCli(['verify', 'fail', 'verify-first', '--owner', 'seed-cli'], cwd);
       assert.equal(transitionFail.code, 1);
       assert.ok(transitionFail.stderr.includes('Invalid transition'));
 
@@ -518,9 +523,9 @@ describe('seed cli', () => {
       const original = JSON.parse(fs.readFileSync(sessionPath(cwd), 'utf8'));
 
       assert.equal(runCli(['verify', 'next'], cwd).code, 0);
-      assert.equal(runCli(['verify', 'confirm', 'verify-first', '--evidence', 'done'], cwd).code, 0);
+      assert.equal(runCli(['verify', 'confirm', 'verify-first', '--owner', 'seed-cli', '--evidence', 'done'], cwd).code, 0);
       assert.equal(runCli(['verify', 'next'], cwd).code, 0);
-      assert.equal(runCli(['verify', 'fail', 'verify-second', '--reason', 'nope'], cwd).code, 0);
+      assert.equal(runCli(['verify', 'fail', 'verify-second', '--owner', 'seed-cli', '--reason', 'nope'], cwd).code, 0);
 
       const beforeReset = JSON.parse(runCli(['verify', 'status'], cwd).stdout);
       assert.equal(beforeReset.verified, 2);
@@ -555,6 +560,37 @@ describe('seed cli', () => {
     });
   });
 
+  test('verify owner option binds claim and confirm/fail operations', () => {
+    withTempDir((cwd) => {
+      runCli(['init'], cwd);
+      runCli(['verify', 'start'], cwd);
+
+      const claimed = runCli(['verify', 'next', '--owner', 'worker-a'], cwd);
+      assert.equal(claimed.code, 0);
+      assert.ok(claimed.stdout.includes('Claimed verification seed-baseline-visibility'));
+
+      const missingOwner = runCli(
+        ['verify', 'confirm', 'seed-baseline-visibility', '--evidence', 'ok'],
+        cwd,
+      );
+      assert.equal(missingOwner.code, 1);
+      assert.ok(missingOwner.stderr.includes('owner invalid'));
+
+      const wrongOwner = runCli(
+        ['verify', 'confirm', 'seed-baseline-visibility', '--owner', 'worker-b', '--evidence', 'ok'],
+        cwd,
+      );
+      assert.equal(wrongOwner.code, 1);
+      assert.ok(wrongOwner.stderr.includes('Invalid owner'));
+
+      const rightOwner = runCli(
+        ['verify', 'confirm', 'seed-baseline-visibility', '--owner', 'worker-a', '--evidence', 'ok'],
+        cwd,
+      );
+      assert.equal(rightOwner.code, 0);
+    });
+  });
+
   test('verify confirm and fail options accept only known flags and require values', () => {
     withTempDir((cwd) => {
       runCli(['init'], cwd);
@@ -562,14 +598,14 @@ describe('seed cli', () => {
       runCli(['verify', 'next'], cwd);
 
       const missingValue = runCli(
-        ['verify', 'confirm', 'seed-baseline-visibility', '--evidence'],
+        ['verify', 'confirm', 'seed-baseline-visibility', '--owner', 'seed-cli', '--evidence'],
         cwd,
       );
       assert.equal(missingValue.code, 1);
       assert.ok(missingValue.stderr.includes('--evidence requires a value'));
 
       const wrongOption = runCli(
-        ['verify', 'confirm', 'seed-baseline-visibility', '--reason', 'nope'],
+        ['verify', 'confirm', 'seed-baseline-visibility', '--owner', 'seed-cli', '--reason', 'nope'],
         cwd,
       );
       assert.equal(wrongOption.code, 1);
@@ -583,7 +619,7 @@ describe('seed cli', () => {
       assert.ok(missingId.stderr.includes('requires exactly one <constraint-id>'));
 
       const failMissingValue = runCli(
-        ['verify', 'fail', 'seed-baseline-visibility', '--reason'],
+        ['verify', 'fail', 'seed-baseline-visibility', '--owner', 'seed-cli', '--reason'],
         cwd,
       );
       assert.equal(failMissingValue.code, 1);
