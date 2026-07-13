@@ -49,6 +49,9 @@ describe('seed genomes', () => {
     assert.equal(compiled.document.interfaces.cli.purpose, 'User invokes the project from a terminal as a Node.js CLI.');
     assert.equal(compiled.document.behavior.outputs['default-json'], 'The CLI interface outputs JSON by default for successful machine-readable results.');
     assert.equal(compiled.document.compatibility['json-field-stability'], 'JSON output fields must not be renamed or removed without a Seed change.');
+    assert.equal(compiled.provenance['interfaces.cli'].origin, 'builtin');
+    assert.equal(compiled.provenance['interfaces.cli'].id, 'cli-nodejs');
+    assert.equal(compiled.provenance['behavior.outputs.default-json'].id, 'cli-json-output');
   });
 
   test('local seed values override the same genome addresses', () => {
@@ -74,6 +77,9 @@ describe('seed genomes', () => {
       'node ./src/cli.js --help',
       '<command> --help',
     ]);
+    assert.equal(compiled.provenance['interfaces.cli'].origin, 'seed');
+    assert.equal(compiled.provenance['constraints.nodejs-cli-runtime'].origin, 'seed');
+    assert.equal(compiled.provenance['freedom.nodejs-cli-structure'].id, 'cli-nodejs');
   });
 
   test('arrays with id fields merge by id and non-id arrays replace', () => {
@@ -129,6 +135,8 @@ describe('seed genomes', () => {
           home,
         });
         assert.equal(compiled.document.interfaces.cli.purpose, 'Repo genome CLI.');
+        assert.equal(compiled.provenance['interfaces.cli'].origin, 'repo');
+        assert.equal(compiled.provenance['interfaces.cli'].path, path.join(cwd, 'seed', 'genomes', 'cli-nodejs.yml'));
       } finally {
         fs.rmSync(home, { recursive: true, force: true });
       }

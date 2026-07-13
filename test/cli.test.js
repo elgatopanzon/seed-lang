@@ -199,6 +199,7 @@ describe('seed cli', () => {
       const markdown = runCli(['blueprint', '--section', 'interfaces'], cwd);
       assert.equal(markdown.code, 0);
       assert.ok(markdown.stdout.includes('Genomes: cli-nodejs [builtin], cli-json-output [builtin]'));
+      assert.ok(markdown.stdout.includes('`interfaces.cli` [builtin:cli-nodejs]'));
       assert.ok(markdown.stdout.includes('User invokes the project from a terminal as a Node.js CLI.'));
 
       const json = runCli(['blueprint', '--section', 'functional-behavior', '--json'], cwd);
@@ -207,6 +208,9 @@ describe('seed cli', () => {
       assert.deepEqual(parsed.source.genomes.map((entry) => entry.id), ['cli-nodejs', 'cli-json-output']);
       const addresses = parsed.sections.flatMap((section) => section.items.map((item) => item.address));
       assert.ok(addresses.includes('behavior.outputs.default-json'));
+      const defaultJson = parsed.sections.flatMap((section) => section.items).find((item) => item.address === 'behavior.outputs.default-json');
+      assert.equal(defaultJson.source.origin, 'builtin');
+      assert.equal(defaultJson.source.id, 'cli-json-output');
     });
   });
 

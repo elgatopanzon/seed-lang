@@ -137,7 +137,7 @@ function loadSeed({ cwd } = {}) {
 
   try {
     const rawDocument = parse(text);
-    const compiled = compileSeedDocument({ document: rawDocument, cwd: root });
+    const compiled = compileSeedDocument({ document: rawDocument, cwd: root, seedPath: DEFAULT_SEED_PATH });
     return {
       path: seedPath,
       text: compiled.text ?? text,
@@ -145,6 +145,7 @@ function loadSeed({ cwd } = {}) {
       document: compiled.document,
       rawDocument,
       genomes: compiled.genomes,
+      provenance: compiled.provenance,
     };
   } catch (err) {
     const parseError = new Error(`Failed to parse Seed YAML at ${seedPath}: ${err.message}`);

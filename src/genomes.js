@@ -1,6 +1,7 @@
 const { existsSync, readFileSync } = require('node:fs');
 const { join, resolve } = require('node:path');
 const { parse, stringify } = require('yaml');
+const { collectAddressableItems } = require('./validation');
 
 const BUILTIN_GENOMES = {
   'cli-nodejs': {
@@ -152,7 +153,23 @@ function resolveGenome({ id, cwd, home = process.env.HOME } = {}) {
   return resolved;
 }
 
-function compileSeedDocument({ document, cwd, home } = {}) {
+function sourceForGenome(genome) {
+  return {
+    type: 'genome',
+    origin: genome.origin,
+    id: genome.id,
+    path: genome.path,
+  };
+}
+
+function applyProvenance(provenance, fragment, source) {
+  const errors = [];
+  collectAddressableItems(fragment, errors).forEach((item) => {
+    provenance[item.address] = source;
+  });
+}
+
+function compileSeedDocument({ document, cwd, home, seedPath = 'seed/seed.yml' } = {}) {
   if (!isObject(document)) {
     return { document, genomes: [] };
   }
@@ -163,6 +180,7 @@ function compileSeedDocument({ document, cwd, home } = {}) {
   }
 
   let compiled = {};
+  const provenance = {};
   const genomes = genomeIds.map((id) => {
     if (typeof id !== 'string' || id.trim() === '') {
       throw new Error('genomes entries must be non-empty strings.');
@@ -170,6 +188,7 @@ function compileSeedDocument({ document, cwd, home } = {}) {
 
     const genome = resolveGenome({ id, cwd, home });
     compiled = mergeSeedFragments(compiled, genome.document);
+    applyProvenance(provenance, genome.document, sourceForGenome(genome));
     return {
       id,
       origin: genome.origin,
@@ -178,11 +197,17 @@ function compileSeedDocument({ document, cwd, home } = {}) {
   });
 
   compiled = mergeSeedFragments(compiled, document);
+  applyProvenance(provenance, document, {
+    type: 'seed',
+    origin: 'seed',
+    path: seedPath,
+  });
 
   return {
     document: compiled,
     text: stringify(compiled).replace(/\n+$/, '').concat('\n'),
     genomes,
+    provenance,
   };
 }
 

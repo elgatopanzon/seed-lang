@@ -209,6 +209,7 @@ function handleBlueprint(cwd, args) {
       document: seed.document,
       seedPath: DEFAULT_SEED_PATH,
       genomes: seed.genomes ?? [],
+      provenance: seed.provenance ?? {},
       filters: parsed.options.filters,
       section: parsed.options.section,
       limit: parsed.options.limit,

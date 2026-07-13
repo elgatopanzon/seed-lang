@@ -51,11 +51,24 @@ function collectReferences(value) {
 function itemSource(seedPath) {
   return {
     type: 'seed',
+    origin: 'seed',
     path: seedPath,
   };
 }
 
-function buildItems(document, seedPath) {
+function sourceLabel(source) {
+  if (!source) {
+    return '';
+  }
+
+  if (source.origin === 'builtin' && source.id) {
+    return `builtin:${source.id}`;
+  }
+
+  return source.path ?? '';
+}
+
+function buildItems(document, seedPath, provenance = {}) {
   const errors = [];
   const normalized = collectAddressableItems(document, errors);
   if (errors.length > 0) {
@@ -68,7 +81,7 @@ function buildItems(document, seedPath) {
     section: item.section,
     value: item.value,
     references: collectReferences(item.value),
-    source: itemSource(seedPath),
+    source: provenance[item.address] ?? itemSource(seedPath),
   }));
 }
 
@@ -131,8 +144,8 @@ function sectionItems(definition, items, selected, options) {
   return entries;
 }
 
-function compileBlueprint({ document, seedPath, genomes = [], filters = [], section, limit, offset } = {}) {
-  const items = buildItems(document, seedPath);
+function compileBlueprint({ document, seedPath, genomes = [], provenance = {}, filters = [], section, limit, offset } = {}) {
+  const items = buildItems(document, seedPath, provenance);
   const selected = resolveFilterAddresses(filters, items);
   const options = { limit, offset };
   const sections = SECTION_DEFINITIONS
@@ -149,7 +162,7 @@ function compileBlueprint({ document, seedPath, genomes = [], filters = [], sect
             section: 'metadata',
             value: document.metadata,
             references: [],
-            source: itemSource(seedPath),
+            source: provenance.metadata ?? itemSource(seedPath),
           }],
         };
       }
@@ -184,9 +197,10 @@ function compactYaml(value) {
 
 function renderItem(item) {
   const lines = [];
-  const sourceLabel = item.source?.path ? ` [${item.source.path}]` : '';
+  const renderedSource = sourceLabel(item.source);
+  const sourceSuffix = renderedSource ? ` [${renderedSource}]` : '';
   const label = item.address ? `\`${item.address}\`` : `\`${item.id}\``;
-  lines.push(`- ${label}${sourceLabel}`);
+  lines.push(`- ${label}${sourceSuffix}`);
 
   const rendered = compactYaml(item.value)
     .split('\n')
