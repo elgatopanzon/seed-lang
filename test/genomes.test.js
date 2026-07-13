@@ -54,6 +54,21 @@ describe('seed genomes', () => {
     assert.equal(compiled.provenance['behavior.outputs.default-json'].id, 'cli-json-output');
   });
 
+  test('human output genome defines human-readable CLI output defaults', () => {
+    const compiled = compileSeedDocument({
+      document: {
+        genomes: ['cli-nodejs', 'cli-human-output'],
+      },
+      cwd: process.cwd(),
+      home: '',
+    });
+
+    assert.equal(compiled.document.behavior.outputs['default-human-output'], 'The CLI interface outputs human-readable text by default for successful interactive use.');
+    assert.equal(compiled.document.behavior.outputs['readable-text'], 'Successful output should be readable in a terminal without requiring a parser.');
+    assert.equal(compiled.document.constraints['human-output-default'], 'The target project CLI emits human-readable text as its default interface output format.');
+    assert.equal(compiled.provenance['behavior.outputs.default-human-output'].id, 'cli-human-output');
+  });
+
   test('local seed values override the same genome addresses', () => {
     const compiled = compileSeedDocument({
       document: {

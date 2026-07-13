@@ -50,6 +50,23 @@ const BUILTIN_GENOMES = {
       'json-errors': 'If errors are emitted as JSON, they must still use nonzero exit codes.',
     },
   },
+  'cli-human-output': {
+    behavior: {
+      outputs: {
+        'default-human-output': 'The CLI interface outputs human-readable text by default for successful interactive use.',
+        'readable-text': 'Successful output should be readable in a terminal without requiring a parser.',
+      },
+    },
+    compatibility: {
+      'human-output-stability': 'Human-readable output wording and layout may evolve, but it must remain understandable without external tooling.',
+    },
+    constraints: {
+      'human-output-default': 'The target project CLI emits human-readable text as its default interface output format.',
+    },
+    observability: {
+      'human-readable-errors': 'User-facing errors should be concise, actionable, and suitable for terminal display.',
+    },
+  },
 };
 
 function isObject(value) {
