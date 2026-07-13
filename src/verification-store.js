@@ -7,6 +7,7 @@ const {
   writeFileSync,
 } = require('node:fs');
 const { createHash } = require('node:crypto');
+const { parse } = require('yaml');
 const { dirname, join, resolve } = require('node:path');
 const { normalizeAddressableSection } = require('./validation');
 
@@ -620,6 +621,42 @@ function failItem(options = {}) {
   return transitionItem({ ...options, targetStatus: 'failed' });
 }
 
+function resetSession({
+  cwd,
+  sessionId = DEFAULT_SESSION_ID,
+  now,
+} = {}) {
+  assertSessionId(sessionId);
+
+  const nowValue = normalizeNow(now);
+  const path = sessionPath(cwd, sessionId);
+  const label = `session state ${path}`;
+  const lock = lockPath(cwd, sessionId);
+
+  return withLock(lock, () => {
+    const state = readSessionState(cwd, sessionId, label);
+    const snapshotText = readFileSync(snapshotPath(cwd), 'utf8');
+    let seedDocument;
+
+    try {
+      seedDocument = parse(snapshotText);
+    } catch (error) {
+      throw new Error(`Failed to parse snapshot for session ${sessionId}: ${error.message}`);
+    }
+
+    assertSeedDocument(seedDocument);
+    state.items = buildSessionItems(seedDocument);
+    state.updatedAt = nowValue;
+
+    writeJsonAtomically(path, state);
+    return {
+      sessionId,
+      reset: state.items.length,
+      session: state,
+    };
+  });
+}
+
 function getStatus({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
   assertSessionId(sessionId);
 
@@ -665,5 +702,6 @@ module.exports = {
   claimNext,
   confirmItem,
   failItem,
+  resetSession,
   getStatus,
 };

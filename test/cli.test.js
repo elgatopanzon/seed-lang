@@ -493,6 +493,68 @@ describe('seed cli', () => {
     });
   });
 
+  test('verify reset clears existing session progress in place', () => {
+    withTempDir((cwd) => {
+      writeSeedFromTemplate(cwd, (document) => {
+        document.verifications = [
+          {
+            id: 'verify-first',
+            title: 'First check',
+            description: 'check first',
+            method: 'manual',
+            evidence_required: ['manual'],
+          },
+          {
+            id: 'verify-second',
+            title: 'Second check',
+            description: 'check second',
+            method: 'manual',
+            evidence_required: ['manual'],
+          },
+        ];
+      });
+
+      assert.equal(runCli(['verify', 'start'], cwd).code, 0);
+      const original = JSON.parse(fs.readFileSync(sessionPath(cwd), 'utf8'));
+
+      assert.equal(runCli(['verify', 'next'], cwd).code, 0);
+      assert.equal(runCli(['verify', 'confirm', 'verify-first', '--evidence', 'done'], cwd).code, 0);
+      assert.equal(runCli(['verify', 'next'], cwd).code, 0);
+      assert.equal(runCli(['verify', 'fail', 'verify-second', '--reason', 'nope'], cwd).code, 0);
+
+      const beforeReset = JSON.parse(runCli(['verify', 'status'], cwd).stdout);
+      assert.equal(beforeReset.verified, 2);
+      assert.equal(beforeReset.failed, 1);
+
+      const reset = runCli(['verify', 'reset'], cwd);
+      assert.equal(reset.code, 0);
+      assert.ok(reset.stdout.includes("Reset verification session 'default'"));
+      assert.ok(reset.stdout.includes('Items reset:'));
+
+      const after = JSON.parse(fs.readFileSync(sessionPath(cwd), 'utf8'));
+      assert.equal(after.sessionId, original.sessionId);
+      assert.equal(after.createdAt, original.createdAt);
+      assert.equal(after.seedHash, original.seedHash);
+      assert.equal(after.snapshotPath, original.snapshotPath);
+      assert.ok(after.updatedAt >= original.updatedAt);
+      assert.deepEqual(after.items.map((entry) => entry.status), original.items.map((entry) => entry.status));
+      assert.deepEqual(after.items.map((entry) => entry.attempts), original.items.map((entry) => entry.attempts));
+      assert.equal(after.items.every((entry) => entry.claim === null), true);
+      assert.equal(after.items.every((entry) => entry.evidence === null), true);
+      assert.equal(after.items.every((entry) => entry.reason === null), true);
+
+      const status = JSON.parse(runCli(['verify', 'status'], cwd).stdout);
+      assert.equal(status.verified, 0);
+      assert.equal(status.failed, 0);
+      assert.equal(status.pending, status.total);
+      assert.equal(status.satisfied, false);
+
+      const next = runCli(['verify', 'next'], cwd);
+      assert.equal(next.code, 0);
+      assert.ok(next.stdout.includes('Claimed verification verify-first'));
+    });
+  });
+
   test('verify confirm and fail options accept only known flags and require values', () => {
     withTempDir((cwd) => {
       runCli(['init'], cwd);

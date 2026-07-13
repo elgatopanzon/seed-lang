@@ -25,6 +25,7 @@ const {
   confirmItem,
   failItem,
   getStatus,
+  resetSession,
   startSession,
 } = require('./verification-store');
 
@@ -40,6 +41,7 @@ function usage() {
     'seed genome blueprint <name> [--json] [--section ID] [--filter @ADDRESS] [--limit N] [--offset N] [--head N] [--tail N] [--pager]',
     'seed blueprint [--json] [--section ID] [--filter @ADDRESS] [--limit N] [--offset N] [--head N] [--tail N] [--pager]',
     'seed verify start',
+    'seed verify reset',
     'seed verify next',
     'seed verify confirm <constraint-id> [--evidence TEXT]',
     'seed verify fail <constraint-id> [--reason TEXT]',
@@ -567,6 +569,17 @@ function handleVerifyStatus(cwd) {
   return 0;
 }
 
+function handleVerifyReset(cwd) {
+  try {
+    const result = resetSession({ cwd });
+    console.log(`Reset verification session '${result.sessionId}'.`);
+    console.log(`Items reset: ${result.reset}`);
+    return 0;
+  } catch (error) {
+    return exitWithError(error.message);
+  }
+}
+
 function run(argv = process.argv.slice(2)) {
   if (argv.length === 0 || argv.includes('--help') || argv.includes('-h')) {
     console.log(usage());
@@ -627,6 +640,14 @@ function run(argv = process.argv.slice(2)) {
       } catch (error) {
         return exitWithError(error.message);
       }
+    }
+
+    if (subcommand === 'reset') {
+      if (!ensureNoExtraArgs(subRest, 0)) {
+        return exitWithError('seed verify reset does not take arguments.');
+      }
+
+      return handleVerifyReset(process.cwd());
     }
 
     if (subcommand === 'next') {
