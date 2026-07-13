@@ -1,6 +1,7 @@
 const { existsSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
 const { dirname, resolve } = require('node:path');
 const { parse, stringify } = require('yaml');
+const { compileSeedDocument } = require('./genomes');
 
 const DEFAULT_SEED_PATH = 'seed/seed.yml';
 const STABLE_VERIFICATION_ID = 'seed-baseline-visibility';
@@ -135,10 +136,15 @@ function loadSeed({ cwd } = {}) {
   const text = readFileSync(seedPath, 'utf8');
 
   try {
+    const rawDocument = parse(text);
+    const compiled = compileSeedDocument({ document: rawDocument, cwd: root });
     return {
       path: seedPath,
-      text,
-      document: parse(text),
+      text: compiled.text ?? text,
+      rawText: text,
+      document: compiled.document,
+      rawDocument,
+      genomes: compiled.genomes,
     };
   } catch (err) {
     const parseError = new Error(`Failed to parse Seed YAML at ${seedPath}: ${err.message}`);

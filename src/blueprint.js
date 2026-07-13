@@ -131,7 +131,7 @@ function sectionItems(definition, items, selected, options) {
   return entries;
 }
 
-function compileBlueprint({ document, seedPath, filters = [], section, limit, offset } = {}) {
+function compileBlueprint({ document, seedPath, genomes = [], filters = [], section, limit, offset } = {}) {
   const items = buildItems(document, seedPath);
   const selected = resolveFilterAddresses(filters, items);
   const options = { limit, offset };
@@ -171,6 +171,7 @@ function compileBlueprint({ document, seedPath, filters = [], section, limit, of
     kind: 'seed-blueprint',
     source: {
       path: seedPath,
+      genomes,
     },
     filters: filters.map(normalizeFilter),
     sections,
@@ -200,6 +201,10 @@ function renderMarkdown(blueprint) {
     '',
     `Source: ${blueprint.source.path}`,
   ];
+
+  if (blueprint.source.genomes?.length > 0) {
+    lines.push(`Genomes: ${blueprint.source.genomes.map((entry) => `${entry.id} [${entry.origin}]`).join(', ')}`);
+  }
 
   if (blueprint.filters.length > 0) {
     lines.push(`Filters: ${blueprint.filters.map((entry) => `@${entry}`).join(', ')}`);

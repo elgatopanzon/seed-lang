@@ -208,6 +208,7 @@ function handleBlueprint(cwd, args) {
     const blueprint = compileBlueprint({
       document: seed.document,
       seedPath: DEFAULT_SEED_PATH,
+      genomes: seed.genomes ?? [],
       filters: parsed.options.filters,
       section: parsed.options.section,
       limit: parsed.options.limit,

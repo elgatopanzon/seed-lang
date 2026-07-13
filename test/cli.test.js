@@ -189,6 +189,27 @@ describe('seed cli', () => {
     });
   });
 
+  test('blueprint uses compiled genome content and reports applied genomes', () => {
+    withTempDir((cwd) => {
+      writeSeedFromTemplate(cwd, (document) => {
+        document.genomes = ['cli-nodejs', 'cli-json-output'];
+        delete document.interfaces;
+      });
+
+      const markdown = runCli(['blueprint', '--section', 'interfaces'], cwd);
+      assert.equal(markdown.code, 0);
+      assert.ok(markdown.stdout.includes('Genomes: cli-nodejs [builtin], cli-json-output [builtin]'));
+      assert.ok(markdown.stdout.includes('User invokes the project from a terminal as a Node.js CLI.'));
+
+      const json = runCli(['blueprint', '--section', 'functional-behavior', '--json'], cwd);
+      assert.equal(json.code, 0);
+      const parsed = JSON.parse(json.stdout);
+      assert.deepEqual(parsed.source.genomes.map((entry) => entry.id), ['cli-nodejs', 'cli-json-output']);
+      const addresses = parsed.sections.flatMap((section) => section.items.map((item) => item.address));
+      assert.ok(addresses.includes('behavior.outputs.default-json'));
+    });
+  });
+
   test('blueprint rejects unknown options and sections clearly', () => {
     withTempDir((cwd) => {
       runCli(['init'], cwd);
