@@ -106,6 +106,64 @@ describe('verification store', () => {
     assert.equal(result, true);
   });
 
+
+  test('startSession adds implicit verification items for addressable contract obligations', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        seedDocument: {
+          artifacts: {
+            sample: {
+              path: 'seed/sample.txt',
+              description: 'Sample input.',
+            },
+          },
+          behavior: {
+            counts: {
+              description: 'Counts characters from @sample.',
+              artifacts: ['sample'],
+            },
+          },
+          security: {
+            'no-network-access': 'Must not make outbound network calls.',
+          },
+          freedom: {
+            'module-layout': 'Implementation may choose module layout.',
+          },
+          verifications: [
+            {
+              id: 'manual-check',
+              title: 'Manual check',
+              description: 'manual verification',
+              method: 'manual',
+              evidence_required: ['manual evidence'],
+            },
+          ],
+        },
+        seedText: 'seed-contract-text',
+      });
+
+      const session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      const ids = session.items.map((entry) => entry.id);
+      const behaviorItem = session.items.find((entry) => entry.id === 'implicit-behavior-counts');
+      const securityItem = session.items.find((entry) => entry.id === 'implicit-security-no-network-access');
+
+      assert.deepEqual(ids, [
+        'manual-check',
+        'implicit-behavior-counts',
+        'implicit-security-no-network-access',
+      ]);
+      assert.equal(session.items[0].source, 'manual');
+      assert.equal(behaviorItem.source, 'implicit');
+      assert.equal(behaviorItem.address, 'behavior.counts');
+      assert.equal(behaviorItem.description, 'Verify @behavior.counts is satisfied.');
+      assert.deepEqual(behaviorItem.artifacts, ['sample']);
+      assert.ok(behaviorItem.evidence_required.some((entry) => entry.includes('@behavior.counts')));
+      assert.equal(securityItem.source, 'implicit');
+      assert.equal(ids.includes('implicit-freedom-module-layout'), false);
+    });
+  });
+
   test('claimNext writes one atomic claim and returns claim metadata', () => {
     withTempDir((cwd) => {
       startSession({

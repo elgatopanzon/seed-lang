@@ -183,6 +183,7 @@ describe('seed cli', () => {
       const firstClaim = runCli(['verify', 'next'], cwd);
       assert.equal(firstClaim.code, 0);
       assert.ok(firstClaim.stdout.includes('Claimed verification verify-first'));
+      assert.ok(firstClaim.stdout.includes('source: manual'));
       assert.ok(firstClaim.stdout.includes('artifacts: sample'));
 
       const secondClaim = runCli(['verify', 'next'], cwd);
@@ -256,15 +257,15 @@ describe('seed cli', () => {
       const parsed = JSON.parse(status.stdout);
 
       assert.equal(status.code, 0);
-      assert.equal(parsed.total, 2);
+      assert.ok(parsed.total > 2);
       assert.equal(parsed.verified, 2);
       assert.equal(parsed.passed, 1);
       assert.equal(parsed.confirmed, 1);
       assert.equal(parsed.failed, 1);
-      assert.equal(parsed.pending, 0);
-      assert.equal(parsed.completed, true);
+      assert.equal(parsed.pending, parsed.total - 2);
+      assert.equal(parsed.completed, false);
       assert.equal(parsed.satisfied, false);
-      assert.equal(parsed.completion, 1);
+      assert.equal(parsed.completion, 2 / parsed.total);
 
       const session = JSON.parse(fs.readFileSync(sessionPath(cwd), 'utf8'));
       const confirmed = session.items.find((entry) => entry.id === 'verify-first');

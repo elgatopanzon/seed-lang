@@ -176,6 +176,10 @@ function handleVerifyNext(cwd) {
   }
 
   console.log(`Claimed verification ${result.item.id}`);
+  if (result.item.source) {
+    console.log(`source: ${result.item.source}`);
+  }
+
   if (result.item.title) {
     console.log(`title: ${result.item.title}`);
   }

@@ -10,6 +10,20 @@ const { createHash } = require('node:crypto');
 const { dirname, join, resolve } = require('node:path');
 const { normalizeAddressableSection } = require('./validation');
 
+const REFERENCE_PATTERN = /@([A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)*)/g;
+const IMPLICIT_VERIFICATION_SECTIONS = [
+  'scope',
+  'interfaces',
+  'behavior',
+  'errors',
+  'state',
+  'constraints',
+  'security',
+  'environment',
+  'observability',
+  'compatibility',
+];
+
 const DEFAULT_SESSION_ID = 'default';
 const DEFAULT_LEASE_MS = 60_000;
 const SESSION_SCHEMA_VERSION = 1;
@@ -222,6 +236,128 @@ function normalizedVerifications(seedDocument) {
   return items;
 }
 
+function normalizedImplicitTargets(seedDocument) {
+  const items = [];
+
+  IMPLICIT_VERIFICATION_SECTIONS.forEach((section) => {
+    if (seedDocument[section] === undefined) {
+      return;
+    }
+
+    const errors = [];
+    const normalized = normalizeAddressableSection(section, seedDocument[section], errors, { allowEmpty: section === 'errors' });
+    if (errors.length > 0) {
+      throw new Error(`startSession requires valid ${section}: ${errors.map((entry) => entry.message).join('; ')}`);
+    }
+
+    items.push(...normalized);
+  });
+
+  return items;
+}
+
+function implicitIdForAddress(address) {
+  return `implicit-${address.replace(/\./g, '-')}`;
+}
+
+function collectMentionedArtifacts(value) {
+  const refs = new Set();
+  const visit = (entry) => {
+    if (typeof entry === 'string') {
+      for (const match of entry.matchAll(REFERENCE_PATTERN)) {
+        refs.add(match[1]);
+      }
+      return;
+    }
+
+    if (Array.isArray(entry)) {
+      entry.forEach(visit);
+      return;
+    }
+
+    if (entry && typeof entry === 'object') {
+      Object.values(entry).forEach(visit);
+    }
+  };
+
+  visit(value);
+  return [...refs];
+}
+
+function buildManualSessionItems(seedDocument) {
+  return normalizedVerifications(seedDocument).map((verification) => {
+    const id = verification.address.replace(/^verifications\./, '');
+    return {
+      id,
+      source: 'manual',
+      address: verification.address,
+      status: 'pending',
+      claim: null,
+      title: verification.value.title ?? null,
+      description: verification.value.description ?? null,
+      artifacts: structuredClone(verification.value.artifacts ?? []),
+      evidence_required: structuredClone(verification.value.evidence_required),
+      attempts: 0,
+      evidence: null,
+      reason: null,
+    };
+  });
+}
+
+function declaredArtifactIds(seedDocument) {
+  if (seedDocument.artifacts === undefined) {
+    return new Set();
+  }
+
+  const errors = [];
+  const artifacts = normalizeAddressableSection('artifacts', seedDocument.artifacts, errors);
+  if (errors.length > 0) {
+    return new Set();
+  }
+
+  return new Set(artifacts.flatMap((artifact) => [artifact.id, artifact.address]));
+}
+
+function buildImplicitSessionItems(seedDocument) {
+  const declaredArtifacts = declaredArtifactIds(seedDocument);
+
+  return normalizedImplicitTargets(seedDocument).map((target) => {
+    const artifacts = new Set((target.value.artifacts ?? []).filter((artifactId) => declaredArtifacts.has(artifactId)));
+    collectMentionedArtifacts(target.value)
+      .filter((artifactId) => declaredArtifacts.has(artifactId))
+      .forEach((artifactId) => artifacts.add(artifactId));
+
+    return {
+      id: implicitIdForAddress(target.address),
+      source: 'implicit',
+      address: target.address,
+      status: 'pending',
+      claim: null,
+      title: `Implicit verification for ${target.address}`,
+      description: `Verify @${target.address} is satisfied.`,
+      artifacts: [...artifacts],
+      evidence_required: [
+        'Verification approach used.',
+        `Relevant command output, code path, or inspection notes for @${target.address}.`,
+        `Pass/fail reason tied to @${target.address}.`,
+      ],
+      attempts: 0,
+      evidence: null,
+      reason: null,
+    };
+  });
+}
+
+function assertUniqueSessionItems(items) {
+  const ids = new Set();
+  items.forEach((item) => {
+    if (ids.has(item.id)) {
+      throw new Error(`startSession requires all verification item ids to be unique. Duplicate id found: ${item.id}`);
+    }
+    ids.add(item.id);
+  });
+}
+
 function assertSeedDocument(seedDocument) {
   if (!seedDocument || typeof seedDocument !== 'object' || Array.isArray(seedDocument)) {
     throw new Error('startSession requires seed document object.');
@@ -261,22 +397,12 @@ function normalizeNow(now) {
 }
 
 function buildSessionItems(seedDocument) {
-  return normalizedVerifications(seedDocument).map((verification) => {
-    const id = verification.address.replace(/^verifications\./, '');
-    return {
-      id,
-      address: verification.address,
-      status: 'pending',
-      claim: null,
-      title: verification.value.title ?? null,
-      description: verification.value.description ?? null,
-      artifacts: structuredClone(verification.value.artifacts ?? []),
-      evidence_required: structuredClone(verification.value.evidence_required),
-      attempts: 0,
-      evidence: null,
-      reason: null,
-    };
-  });
+  const items = [
+    ...buildManualSessionItems(seedDocument),
+    ...buildImplicitSessionItems(seedDocument),
+  ];
+  assertUniqueSessionItems(items);
+  return items;
 }
 
 function isClaimStale(claim, now) {
@@ -317,6 +443,7 @@ function nextPendingItem(items) {
 function itemSummary(item) {
   return {
     id: item.id,
+    source: item.source ?? null,
     address: item.address ?? null,
     title: item.title ?? null,
     description: item.description ?? null,
