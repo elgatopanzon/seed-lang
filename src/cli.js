@@ -188,8 +188,8 @@ function handleVerifyNext(cwd) {
     console.log(`artifacts: ${result.item.artifacts.join(', ')}`);
   }
 
-  if (Array.isArray(result.item.evidenceGuidance) && result.item.evidenceGuidance.length > 0) {
-    console.log(`evidence guidance: ${result.item.evidenceGuidance.join('; ')}`);
+  if (Array.isArray(result.item.evidence_required) && result.item.evidence_required.length > 0) {
+    console.log(`evidence required: ${result.item.evidence_required.join('; ')}`);
   }
 
   return 0;

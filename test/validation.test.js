@@ -109,7 +109,7 @@ describe('validation', () => {
     assert.ok(codes(result.errors).includes('invalid-addressable-item'));
   });
 
-  test('requires verification description/method/evidenceGuidance and rejects manual traceability', () => {
+  test('requires verification description/method/evidence_required and rejects manual traceability', () => {
     const invalid = parse(renderSeedTemplate());
     invalid.verifications = [
       {
@@ -122,13 +122,13 @@ describe('validation', () => {
     const missingMethod = parse(renderSeedTemplate());
     delete missingMethod.verifications[0].method;
     const missingEvidenceGuidance = parse(renderSeedTemplate());
-    delete missingEvidenceGuidance.verifications[0].evidenceGuidance;
+    delete missingEvidenceGuidance.verifications[0].evidence_required;
     const manualTraceability = parse(renderSeedTemplate());
     manualTraceability.verifications[0].traceability = ['metadata.name', 'scope.included'];
 
     assert.equal(validateSeedDocument(invalid).errors.some((entry) => entry.path === '/verifications/0/description'), true);
     assert.equal(validateSeedDocument(missingMethod).errors.some((entry) => entry.path === '/verifications/0/method'), true);
-    assert.equal(validateSeedDocument(missingEvidenceGuidance).errors.some((entry) => entry.path === '/verifications/0/evidenceGuidance'), true);
+    assert.equal(validateSeedDocument(missingEvidenceGuidance).errors.some((entry) => entry.path === '/verifications/0/evidence_required'), true);
     assert.ok(codes(validateSeedDocument(manualTraceability).errors).includes('manual-traceability'));
   });
 
@@ -140,21 +140,21 @@ describe('validation', () => {
         title: 'One',
         description: 'desc',
         method: 'method',
-        evidenceGuidance: ['evidence'],
+        evidence_required: ['evidence'],
       },
       {
         id: 'seed-baseline-visibility',
         title: 'Two',
         description: 'desc',
         method: 'method',
-        evidenceGuidance: ['evidence'],
+        evidence_required: ['evidence'],
       },
       {
         id: 'Invalid ID',
         title: 'Three',
         description: 'desc',
         method: 'method',
-        evidenceGuidance: ['evidence'],
+        evidence_required: ['evidence'],
       },
     ];
 
@@ -197,7 +197,7 @@ describe('validation', () => {
       description: 'Given @file-with-aba, the CLI reports expected counts.',
       artifacts: ['file-with-aba'],
       method: 'Run the CLI using @file-with-aba as input.',
-      evidenceGuidance: ['Command used.', 'Observed output.'],
+      evidence_required: ['Command used.', 'Observed output.'],
     };
 
     const result = validateSeedDocument(document);
@@ -220,7 +220,7 @@ describe('validation', () => {
       description: 'Given @file-with-aba and @missing-artifact, the CLI reports expected counts.',
       artifacts: ['missing-artifact'],
       method: 'Run the CLI using @file-with-aba as input.',
-      evidenceGuidance: ['Observed output.'],
+      evidence_required: ['Observed output.'],
     };
 
     const result = validateSeedDocument(document);

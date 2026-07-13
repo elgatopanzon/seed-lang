@@ -81,7 +81,7 @@ function seedTemplateDocument() {
           'baseline-seed',
         ],
         method: 'Run seed init, then seed validate, then check for zero structural errors using @baseline-seed.',
-        evidenceGuidance: [
+        evidence_required: [
           'Initialize and load seed/seed.yml successfully.',
           'Fail loudly if YAML cannot be parsed.',
           'Reject overwrite unless requested explicitly.',

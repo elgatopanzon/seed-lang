@@ -23,7 +23,7 @@ const PROPERTY_FIELDS = new Set([
   'code',
   'command',
   'description',
-  'evidenceGuidance',
+  'evidence_required',
   'examples',
   'expected',
   'inputs',
@@ -466,12 +466,12 @@ function validateVerifications(items, errors) {
       pushError(errors, 'missing-required-field', joinPointer(item.path, 'method'), 'verification method is required and must be a non-empty string');
     }
 
-    if (!Array.isArray(item.value.evidenceGuidance)) {
-      pushError(errors, 'missing-required-field', joinPointer(item.path, 'evidenceGuidance'), 'verification evidenceGuidance is required and must be an array');
-    } else if (!item.value.evidenceGuidance.length) {
-      pushError(errors, 'invalid-verification', joinPointer(item.path, 'evidenceGuidance'), 'verification evidenceGuidance is required and must be non-empty');
-    } else if (!item.value.evidenceGuidance.every(isString)) {
-      pushError(errors, 'invalid-verification', joinPointer(item.path, 'evidenceGuidance'), 'verification evidenceGuidance entries must be non-empty strings');
+    if (!Array.isArray(item.value.evidence_required)) {
+      pushError(errors, 'missing-required-field', joinPointer(item.path, 'evidence_required'), 'verification evidence_required is required and must be an array');
+    } else if (!item.value.evidence_required.length) {
+      pushError(errors, 'invalid-verification', joinPointer(item.path, 'evidence_required'), 'verification evidence_required is required and must be non-empty');
+    } else if (!item.value.evidence_required.every(isString)) {
+      pushError(errors, 'invalid-verification', joinPointer(item.path, 'evidence_required'), 'verification evidence_required entries must be non-empty strings');
     }
 
     if (item.value.traceability !== undefined) {

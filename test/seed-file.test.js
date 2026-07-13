@@ -42,8 +42,8 @@ describe('seed file primitives', () => {
     assert.equal(typeof doc.interfaces, 'object');
     assert.equal(typeof doc.artifacts, 'object');
     assert.equal(Array.isArray(doc.verifications), true);
-    assert.equal(Array.isArray(doc.verifications[0].evidenceGuidance), true);
-    assert.equal(doc.verifications[0].evidenceGuidance.length > 0, true);
+    assert.equal(Array.isArray(doc.verifications[0].evidence_required), true);
+    assert.equal(doc.verifications[0].evidence_required.length > 0, true);
   });
 
   test('initSeed writes seed file and preserves template contract', () => {

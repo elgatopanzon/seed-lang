@@ -271,7 +271,7 @@ function buildSessionItems(seedDocument) {
       title: verification.value.title ?? null,
       description: verification.value.description ?? null,
       artifacts: structuredClone(verification.value.artifacts ?? []),
-      evidenceGuidance: structuredClone(verification.value.evidenceGuidance),
+      evidence_required: structuredClone(verification.value.evidence_required),
       attempts: 0,
       evidence: null,
       reason: null,
@@ -321,7 +321,7 @@ function itemSummary(item) {
     title: item.title ?? null,
     description: item.description ?? null,
     artifacts: item.artifacts ?? [],
-    evidenceGuidance: item.evidenceGuidance,
+    evidence_required: item.evidence_required,
     status: item.status,
   };
 }

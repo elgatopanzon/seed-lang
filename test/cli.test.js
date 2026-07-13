@@ -166,14 +166,14 @@ describe('seed cli', () => {
             description: 'check first with @sample',
             artifacts: ['sample'],
             method: 'manual using @sample',
-            evidenceGuidance: ['manual'],
+            evidence_required: ['manual'],
           },
           {
             id: 'verify-second',
             title: 'Second check',
             description: 'check second',
             method: 'manual',
-            evidenceGuidance: ['manual'],
+            evidence_required: ['manual'],
           },
         ];
       });
@@ -215,14 +215,14 @@ describe('seed cli', () => {
             title: 'First check',
             description: 'check first',
             method: 'manual',
-            evidenceGuidance: ['manual'],
+            evidence_required: ['manual'],
           },
           {
             id: 'verify-second',
             title: 'Second check',
             description: 'check second',
             method: 'manual',
-            evidenceGuidance: ['manual'],
+            evidence_required: ['manual'],
           },
         ];
       });

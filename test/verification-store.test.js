@@ -35,21 +35,21 @@ function sampleDocument() {
         description: 'confirm the first behavior',
         method: 'manual review',
         artifacts: ['sample-input'],
-        evidenceGuidance: ['manual-check'],
+        evidence_required: ['manual-check'],
       },
       {
         id: 'verify-next',
         title: 'second verification',
         description: 'confirm second behavior',
         method: 'manual review',
-        evidenceGuidance: ['manual-check'],
+        evidence_required: ['manual-check'],
       },
       {
         id: 'verify-final',
         title: 'third verification',
         description: 'confirm third behavior',
         method: 'manual review',
-        evidenceGuidance: ['manual-check'],
+        evidence_required: ['manual-check'],
       },
     ],
   };
@@ -99,7 +99,7 @@ describe('verification store', () => {
       assert.equal(session.items[0].description, 'confirm the first behavior');
       assert.equal(session.items[0].address, 'verifications.verify-begin');
       assert.deepEqual(session.items[0].artifacts, ['sample-input']);
-      assert.deepEqual(session.items[0].evidenceGuidance, ['manual-check']);
+      assert.deepEqual(session.items[0].evidence_required, ['manual-check']);
       return true;
     });
 
