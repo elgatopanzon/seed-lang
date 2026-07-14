@@ -1433,6 +1433,65 @@ function verificationAudit({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
   };
 }
 
+function verificationReport({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
+  assertSessionId(sessionId);
+
+  const path = sessionPath(cwd, sessionId);
+  const label = 'session state ' + path;
+  const state = readSessionState(cwd, sessionId, label);
+  const status = summarizeStatus(cwd, state);
+  const audit = verificationAudit({ cwd, sessionId });
+  const expirationsById = new Map((status.expiredEvidence ?? []).map((entry) => [entry.id, entry]));
+  const auditErrorsById = new Map();
+  const auditWarningsById = new Map();
+  const globalErrors = [];
+  const globalWarnings = [];
+
+  const collectIssue = (map, globals, issue) => {
+    if (!issue.id) {
+      globals.push(issue);
+      return;
+    }
+
+    const issues = map.get(issue.id) ?? [];
+    issues.push(issue);
+    map.set(issue.id, issues);
+  };
+
+  audit.errors.forEach((issue) => collectIssue(auditErrorsById, globalErrors, issue));
+  audit.warnings.forEach((issue) => collectIssue(auditWarningsById, globalWarnings, issue));
+
+  const items = state.items.map((item) => ({
+    id: item.id,
+    address: item.address ?? null,
+    source: item.source ?? null,
+    status: item.status,
+    previousStatus: expirationsById.has(item.id) ? item.status : null,
+    title: item.title ?? null,
+    description: item.description ?? null,
+    method: item.method ?? null,
+    evidence_required: structuredClone(item.evidence_required ?? []),
+    evidence: item.evidence ?? null,
+    reason: item.reason ?? null,
+    attempts: item.attempts ?? 0,
+    references: itemSummary(item, verificationReferences(cwd, item)).references,
+    evidence_files: structuredClone(item.evidence_files ?? []),
+    test_commands: structuredClone(item.test_commands ?? []),
+    expiration: expirationsById.get(item.id) ?? null,
+    audit_errors: auditErrorsById.get(item.id) ?? [],
+    audit_warnings: auditWarningsById.get(item.id) ?? [],
+  }));
+
+  return {
+    sessionId: state.sessionId,
+    status,
+    audit,
+    global_errors: globalErrors,
+    global_warnings: globalWarnings,
+    items,
+  };
+}
+
 function checkSession({ cwd, sessionId = DEFAULT_SESSION_ID, now } = {}) {
   assertSessionId(sessionId);
 
@@ -1503,4 +1562,5 @@ module.exports = {
   getPendingItems,
   checkSession,
   verificationAudit,
+  verificationReport,
 };

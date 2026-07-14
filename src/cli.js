@@ -24,6 +24,7 @@ const {
 const {
   checkSession,
   verificationAudit,
+  verificationReport,
   claimNext,
   confirmItem,
   failItem,
@@ -53,6 +54,7 @@ function usage() {
     'seed verify pending',
     'seed verify check',
     'seed verify audit',
+    'seed verify report',
     'seed verify confirm <constraint-id> --owner OWNER --file PATH [--file PATH...] --test-cmd CMD [--test-cmd CMD...] [--evidence TEXT]',
     'seed verify fail <constraint-id> --owner OWNER --file PATH [--file PATH...] --test-cmd CMD [--test-cmd CMD...] [--reason TEXT]',
     'seed verify status',
@@ -698,6 +700,19 @@ function handleVerifyCheck(cwd) {
   }
 }
 
+function formatIssueCodes(issues) {
+  if (!Array.isArray(issues) || issues.length === 0) {
+    return '';
+  }
+  return issues.map((issue) => issue.code).join(', ');
+}
+
+function formatCommandResult(command) {
+  const state = command.passed ? 'ok' : 'failed';
+  const exit = command.exitCode === null || command.exitCode === undefined ? 'null' : command.exitCode;
+  return '[' + state + '] exit=' + exit + ' cmd=' + command.command;
+}
+
 function handleVerifyAudit(cwd) {
   try {
     const result = verificationAudit({ cwd });
@@ -729,6 +744,68 @@ function handleVerifyAudit(cwd) {
     }
 
     return result.ok ? 0 : 1;
+  } catch (error) {
+    return exitWithError(error.message);
+  }
+}
+
+function handleVerifyReport(cwd) {
+  try {
+    const report = verificationReport({ cwd });
+    const status = report.status;
+    const audit = report.audit;
+
+    console.log('Seed verification report');
+    console.log('Session: ' + report.sessionId);
+    console.log('Status: total=' + status.total + ' verified=' + status.verified + ' passed=' + status.passed + ' failed=' + status.failed + ' pending=' + status.pending + ' expired=' + status.expired);
+    console.log('Completed: ' + status.completed + ' satisfied=' + status.satisfied);
+    console.log('Audit: ' + audit.errors.length + ' errors, ' + audit.warnings.length + ' warnings');
+
+    if (report.global_errors.length > 0) {
+      console.log('Global errors: ' + formatIssueCodes(report.global_errors));
+    }
+    if (report.global_warnings.length > 0) {
+      console.log('Global warnings: ' + formatIssueCodes(report.global_warnings));
+    }
+
+    console.log('Items:');
+    report.items.forEach((item) => {
+      const address = item.address ? ' @' + item.address : '';
+      const source = item.source ? ' source=' + item.source : '';
+      console.log('- ' + item.status + ' ' + item.id + address + source);
+
+      if (item.audit_errors.length > 0) {
+        console.log('  audit errors: ' + formatIssueCodes(item.audit_errors));
+      }
+      if (item.audit_warnings.length > 0) {
+        console.log('  audit warnings: ' + formatIssueCodes(item.audit_warnings));
+      }
+      if (item.expiration) {
+        console.log('  expired: ' + item.expiration.kind);
+      }
+      if (item.evidence) {
+        console.log('  evidence: ' + item.evidence);
+      }
+      if (item.reason) {
+        console.log('  reason: ' + item.reason);
+      }
+
+      if (item.references?.addresses?.length > 0) {
+        console.log('  addresses: ' + item.references.addresses.map((entry) => '@' + entry.address).join(', '));
+      }
+      if (item.references?.artifacts?.length > 0) {
+        console.log('  artifacts: ' + item.references.artifacts.map((entry) => entry.id + (entry.path ? '(' + entry.path + ')' : '')).join(', '));
+      }
+      if (item.evidence_files.length > 0) {
+        console.log('  files: ' + item.evidence_files.map((file) => file.path).join(', '));
+      }
+      if (item.test_commands.length > 0) {
+        console.log('  commands:');
+        item.test_commands.forEach((command) => console.log('    ' + formatCommandResult(command)));
+      }
+    });
+
+    return 0;
   } catch (error) {
     return exitWithError(error.message);
   }
@@ -900,6 +977,14 @@ function run(argv = process.argv.slice(2)) {
       }
 
       return handleVerifyAudit(process.cwd());
+    }
+
+    if (subcommand === 'report') {
+      if (!ensureNoExtraArgs(subRest, 0)) {
+        return exitWithError('seed verify report does not take arguments.');
+      }
+
+      return handleVerifyReport(process.cwd());
     }
 
     if (subcommand === 'next') {

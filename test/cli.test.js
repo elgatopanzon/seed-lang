@@ -677,6 +677,25 @@ describe('seed cli', () => {
     });
   });
 
+  test('verify report renders status, audit, files, and commands', () => {
+    withTempDir((cwd) => {
+      runCli(['init'], cwd);
+      runCli(['verify', 'start'], cwd);
+      runCli(['verify', 'next'], cwd);
+      assert.equal(runCli(['verify', 'confirm', 'seed-baseline-visibility', '--owner', 'seed-cli', '--file', 'implementation.js', '--test-cmd', PASS_CMD, '--evidence', 'seed-baseline-visibility checked with npm test'], cwd).code, 0);
+
+      const report = runCli(['verify', 'report'], cwd);
+      assert.equal(report.code, 0);
+      assert.ok(report.stdout.includes('Seed verification report'));
+      assert.ok(report.stdout.includes('Status: total='));
+      assert.ok(report.stdout.includes('Audit:'));
+      assert.ok(report.stdout.includes('- confirmed seed-baseline-visibility'));
+      assert.ok(report.stdout.includes('files: implementation.js'));
+      assert.ok(report.stdout.includes('commands:'));
+      assert.ok(report.stdout.includes(PASS_CMD));
+    });
+  });
+
   test('verify audit reports incomplete sessions and weak evidence warnings', () => {
     withTempDir((cwd) => {
       runCli(['init'], cwd);

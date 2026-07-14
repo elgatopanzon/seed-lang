@@ -19,6 +19,7 @@ const {
   startSession,
   syncSession,
   verificationAudit,
+  verificationReport,
 } = require('../src/verification-store');
 
 function tempDir() {
@@ -943,6 +944,40 @@ describe('verification store', () => {
       assert.equal(check.ok, false);
       assert.equal(check.items[0].error, 'missing test commands');
       assert.equal(check.items[1].commands[0].passed, true);
+    });
+  });
+
+  test('verificationReport returns status, audit, and per-item evidence details', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+
+      claimNext({ cwd, owner: 'worker-A', now: () => 1_000 });
+      confirmItem({
+        cwd,
+        itemId: 'verify-begin',
+        owner: 'worker-A',
+        files: ['implementation.js'],
+        testCommands: [passCommand('verify-begin')],
+        evidence: 'verify-begin checked with item-specific command',
+        now: () => 1_500,
+      });
+
+      const report = verificationReport({ cwd });
+      assert.equal(report.sessionId, 'default');
+      assert.equal(report.status.total, 3);
+      assert.equal(report.status.verified, 1);
+      assert.equal(report.audit.ok, false);
+      assert.equal(report.items.length, 3);
+
+      const first = report.items.find((item) => item.id === 'verify-begin');
+      assert.equal(first.status, 'confirmed');
+      assert.equal(first.evidence_files[0].path, 'implementation.js');
+      assert.equal(first.test_commands[0].command, passCommand('verify-begin'));
+      assert.deepEqual(first.references.unresolved, ['sample-input']);
     });
   });
 
