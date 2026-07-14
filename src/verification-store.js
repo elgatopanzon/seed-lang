@@ -11,7 +11,7 @@ const { spawnSync } = require('node:child_process');
 const { parse } = require('yaml');
 const { dirname, isAbsolute, join, relative, resolve, sep } = require('node:path');
 const { loadSeed } = require('./seed-file');
-const { collectPresentAddressableItems, normalizeAddressableSection } = require('./validation');
+const { collectGlobalPolicyItems, collectPresentAddressableItems, normalizeAddressableSection } = require('./validation');
 
 const REFERENCE_PATTERN = /@([A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)*)/g;
 const IMPLICIT_VERIFICATION_SECTIONS = [
@@ -678,6 +678,27 @@ function verificationReferencesFromDocument(document, item) {
   };
 }
 
+function globalPoliciesFromDocument(document) {
+  const errors = [];
+  const policies = collectGlobalPolicyItems(document, errors);
+  if (errors.length > 0) {
+    throw new Error('Failed to collect global policies: ' + errors.map((entry) => entry.message).join('; '));
+  }
+
+  return policies.map((policy) => ({
+    id: policy.id,
+    address: policy.address,
+    section: policy.section,
+    description: shortDescription(policy.value),
+  }));
+}
+
+function globalPolicies(cwd) {
+  const snapshotText = readFileSync(snapshotPath(cwd), 'utf8');
+  const document = parse(snapshotText);
+  return globalPoliciesFromDocument(document);
+}
+
 function verificationReferences(cwd, item) {
   const snapshotText = readFileSync(snapshotPath(cwd), 'utf8');
   const document = parse(snapshotText);
@@ -882,7 +903,7 @@ function nextExpiredEvidenceItem(cwd, items, changedAddresses = new Set()) {
   return items.find((item) => currentItemExpiration(cwd, item, changedAddresses));
 }
 
-function itemSummary(item, references = { addresses: [], artifacts: [], unresolved: [] }) {
+function itemSummary(item, references = { addresses: [], artifacts: [], unresolved: [] }, policies = []) {
   return {
     id: item.id,
     source: item.source ?? null,
@@ -893,6 +914,7 @@ function itemSummary(item, references = { addresses: [], artifacts: [], unresolv
     artifacts: item.artifacts ?? [],
     evidence_required: item.evidence_required,
     references,
+    globalPolicies: policies,
     status: item.status,
   };
 }
@@ -984,7 +1006,7 @@ function claimNext({
     writeJsonAtomically(path, state);
 
     return {
-      item: next ? itemSummary(next, verificationReferences(cwd, next)) : null,
+      item: next ? itemSummary(next, verificationReferences(cwd, next), globalPolicies(cwd)) : null,
       claim: next ? next.claim : null,
       recoveredIds: recovered.recovered,
       warnings: recovered.recovered.length
@@ -1074,7 +1096,7 @@ function transitionItem({
     state.updatedAt = nowValue;
 
     writeJsonAtomically(path, state);
-    return itemSummary(item, verificationReferences(cwd, item));
+    return itemSummary(item, verificationReferences(cwd, item), globalPolicies(cwd));
   }, { waitMs: lockWaitMs });
 }
 
@@ -1217,7 +1239,7 @@ function getPendingItems({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
       const expiration = expirationById.get(item.id);
       if (expiration) {
         return {
-          ...itemSummary(item, verificationReferences(cwd, item)),
+          ...itemSummary(item, verificationReferences(cwd, item), globalPolicies(cwd)),
           status: 'expired',
           previousStatus: item.status,
           expiration,
@@ -1225,7 +1247,7 @@ function getPendingItems({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
       }
 
       if (item.status === 'pending') {
-        return itemSummary(item, verificationReferences(cwd, item));
+        return itemSummary(item, verificationReferences(cwd, item), globalPolicies(cwd));
       }
 
       return null;
@@ -1305,6 +1327,8 @@ function verificationAudit({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
   const errors = [];
   const warnings = [];
   const commandUsage = new Map();
+  const policies = globalPolicies(cwd);
+  const byAddress = new Map(state.items.map((item) => [item.address, item]));
 
   function addIssue(target, code, item, message, extra = {}) {
     target.push({
@@ -1338,6 +1362,39 @@ function verificationAudit({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
       failedIds: status.failedIds,
     });
   }
+
+  policies.forEach((policy) => {
+    const item = byAddress.get(policy.address);
+    if (!item) {
+      errors.push({
+        code: 'missing-global-policy-verification',
+        id: null,
+        address: policy.address,
+        message: 'global policy has no verification item',
+      });
+      return;
+    }
+
+    if (!terminalStatus(item)) {
+      addIssue(errors, 'global-policy-not-terminal', item, 'global policy verification is not terminal', { policyAddress: policy.address });
+      return;
+    }
+
+    if (item.status !== 'confirmed') {
+      addIssue(errors, 'global-policy-not-confirmed', item, 'global policy verification is not confirmed', { policyAddress: policy.address });
+    }
+
+    const text = [
+      item.evidence,
+      item.reason,
+      ...(item.test_commands ?? []).map((entry) => entry?.command),
+    ].filter(Boolean).join(' ').toLowerCase();
+    const addressToken = policy.address.toLowerCase();
+    const idToken = policy.id.toLowerCase();
+    if (!text.includes(addressToken) && !text.includes(idToken) && !text.includes('global') && !text.includes('policy')) {
+      addIssue(warnings, 'weak-global-policy-evidence', item, 'global policy evidence should explicitly mention the policy address or global policy intent', { policyAddress: policy.address });
+    }
+  });
 
   state.items.forEach((item) => {
     if (!terminalStatus(item)) {
@@ -1485,6 +1542,7 @@ function verificationReport({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
   return {
     sessionId: state.sessionId,
     status,
+    global_policies: globalPolicies(cwd),
     audit,
     global_errors: globalErrors,
     global_warnings: globalWarnings,

@@ -617,6 +617,14 @@ function handleVerifyNext(cwd, owner = DEFAULT_OWNER) {
     console.log(`evidence required: ${result.item.evidence_required.join('; ')}`);
   }
 
+  if (Array.isArray(result.item.globalPolicies) && result.item.globalPolicies.length > 0) {
+    console.log('global policies:');
+    result.item.globalPolicies.forEach((entry) => {
+      const description = entry.description ? ' - ' + entry.description : '';
+      console.log('- @' + entry.address + description);
+    });
+  }
+
   if (result.item.references?.addresses?.length > 0) {
     console.log('referenced addresses:');
     result.item.references.addresses.forEach((entry) => {
@@ -760,6 +768,14 @@ function handleVerifyReport(cwd) {
     console.log('Status: total=' + status.total + ' verified=' + status.verified + ' passed=' + status.passed + ' failed=' + status.failed + ' pending=' + status.pending + ' expired=' + status.expired);
     console.log('Completed: ' + status.completed + ' satisfied=' + status.satisfied);
     console.log('Audit: ' + audit.errors.length + ' errors, ' + audit.warnings.length + ' warnings');
+
+    if (report.global_policies?.length > 0) {
+      console.log('Global policies:');
+      report.global_policies.forEach((policy) => {
+        const description = policy.description ? ' - ' + policy.description : '';
+        console.log('- @' + policy.address + description);
+      });
+    }
 
     if (report.global_errors.length > 0) {
       console.log('Global errors: ' + formatIssueCodes(report.global_errors));

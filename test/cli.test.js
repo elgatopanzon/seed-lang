@@ -216,6 +216,8 @@ describe('seed cli', () => {
       const markdown = runCli(['blueprint'], cwd);
       assert.equal(markdown.code, 0);
       assert.ok(markdown.stdout.includes('# Seed Blueprint'));
+      assert.ok(markdown.stdout.includes('## Global Policies'));
+      assert.ok(markdown.stdout.includes('`security.repo-local-boundary`'));
       assert.ok(markdown.stdout.includes('## Interfaces'));
       assert.ok(markdown.stdout.includes('`interfaces.cli`'));
 
@@ -224,6 +226,7 @@ describe('seed cli', () => {
       const parsed = JSON.parse(json.stdout);
       assert.equal(parsed.kind, 'seed-blueprint');
       assert.equal(parsed.source.path, DEFAULT_SEED_PATH);
+      assert.ok(parsed.sections.some((section) => section.id === 'global-policies'));
       assert.ok(parsed.sections.some((section) => section.id === 'interfaces'));
     });
   });
@@ -434,6 +437,8 @@ describe('seed cli', () => {
       assert.ok(firstClaim.stdout.includes('source: manual'));
       assert.ok(firstClaim.stdout.includes('artifacts: sample'));
       assert.ok(firstClaim.stdout.includes('method: manual using @sample'));
+      assert.ok(firstClaim.stdout.includes('global policies:'));
+      assert.ok(firstClaim.stdout.includes('- @security.repo-local-boundary'));
       assert.ok(firstClaim.stdout.includes('referenced addresses:'));
       assert.ok(firstClaim.stdout.includes('- @verifications.verify-first - check first with @sample'));
       assert.ok(firstClaim.stdout.includes('referenced artifacts:'));
@@ -689,6 +694,8 @@ describe('seed cli', () => {
       assert.ok(report.stdout.includes('Seed verification report'));
       assert.ok(report.stdout.includes('Status: total='));
       assert.ok(report.stdout.includes('Audit:'));
+      assert.ok(report.stdout.includes('Global policies:'));
+      assert.ok(report.stdout.includes('- @security.repo-local-boundary'));
       assert.ok(report.stdout.includes('- confirmed seed-baseline-visibility'));
       assert.ok(report.stdout.includes('files: implementation.js'));
       assert.ok(report.stdout.includes('commands:'));

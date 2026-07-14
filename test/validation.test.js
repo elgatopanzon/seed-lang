@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { parse } = require('yaml');
 
 const { renderSeedTemplate } = require('../src/seed-file');
-const { normalizeAddressableSection, validateSeedDocument } = require('../src/validation');
+const { collectGlobalPolicyItems, normalizeAddressableSection, validateSeedDocument } = require('../src/validation');
 
 describe('validation', () => {
   function codes(list) {
@@ -106,6 +106,26 @@ describe('validation', () => {
     assert.ok(items.some((item) => item.address === 'behavior.counting'));
     assert.ok(items.some((item) => item.address === 'behavior.counting.whitespace'));
     assert.ok(items.some((item) => item.address === 'security.no-network-access'));
+  });
+
+
+  test('validates policy values and treats security as global by default', () => {
+    const document = parse(renderSeedTemplate());
+    document.constraints['offline-only'] = {
+      description: 'No network access is allowed.',
+      policy: 'global',
+    };
+    document.security['repo-local-boundary'] = 'Only read and write inside the repository.';
+
+    let result = validateSeedDocument(document);
+    assert.deepEqual(result.errors, []);
+    const policyAddresses = collectGlobalPolicyItems(document).map((item) => item.address);
+    assert.ok(policyAddresses.includes('constraints.offline-only'));
+    assert.ok(policyAddresses.includes('security.repo-local-boundary'));
+
+    document.constraints['offline-only'].policy = 'project-wide';
+    result = validateSeedDocument(document);
+    assert.ok(codes(result.errors).includes('invalid-policy'));
   });
 
   test('rejects anonymous strings in list-based addressable sections', () => {

@@ -42,12 +42,15 @@ const PROPERTY_FIELDS = new Set([
   'outputs',
   'path',
   'persistence',
+  'policy',
   'purpose',
   'remediation',
   'semantics',
   'title',
   'when',
 ]);
+
+const POLICY_VALUES = new Set(['local', 'global']);
 
 function issue(code, path, message) {
   return { code, path, message };
@@ -302,6 +305,50 @@ function validateDuplicateAddresses(items, errors) {
   });
 }
 
+
+function itemPolicy(item) {
+  const explicit = item.value?.policy;
+  if (explicit !== undefined) {
+    return explicit;
+  }
+
+  return item.section === 'security' ? 'global' : 'local';
+}
+
+function validatePolicies(items, errors) {
+  items.forEach((item) => {
+    if (!isObject(item.value) || item.value.policy === undefined) {
+      return;
+    }
+
+    if (!POLICY_VALUES.has(item.value.policy)) {
+      pushError(errors, 'invalid-policy', joinPointer(item.path, 'policy'), item.address + ' policy must be local or global');
+    }
+  });
+}
+
+function collectGlobalPolicyItems(document, errors = []) {
+  const items = collectPresentAddressableItems(document, errors);
+  if (errors.length > 0) {
+    return [];
+  }
+
+  return items
+    .filter((item) => item.section !== 'metadata')
+    .filter((item) => item.section !== 'artifacts')
+    .filter((item) => item.section !== 'verifications')
+    .filter((item) => itemPolicy(item) === 'global')
+    .map((item) => ({
+      id: item.id,
+      address: item.address,
+      section: item.section,
+      path: item.path,
+      value: item.value,
+      policy: 'global',
+      description: isString(item.value?.description) ? item.value.description : null,
+    }));
+}
+
 function validateArtifacts(document, artifactItems, errors) {
   artifactItems.forEach((item) => {
     const artifact = item.value;
@@ -514,6 +561,7 @@ function validateGenomeDocument(document) {
 
   const items = collectPresentAddressableItems(document, errors);
   validateDuplicateAddresses(items, errors);
+  validatePolicies(items, errors);
   validateArtifacts(document, items.filter((item) => item.section === 'artifacts'), errors);
   validateInterfaces(items, warnings);
   validateBehavior(document, warnings);
@@ -539,6 +587,7 @@ function validateSeedDocument(document) {
 
   const items = collectAddressableItems(document, errors);
   validateDuplicateAddresses(items, errors);
+  validatePolicies(items, errors);
   validateArtifacts(document, items.filter((item) => item.section === 'artifacts'), errors);
   validateInterfaces(items, warnings);
   validateBehavior(document, warnings);
@@ -551,7 +600,9 @@ function validateSeedDocument(document) {
 
 module.exports = {
   collectAddressableItems,
+  collectGlobalPolicyItems,
   collectPresentAddressableItems,
+  itemPolicy,
   normalizeAddressableSection,
   validateGenomeDocument,
   validateSeedDocument,

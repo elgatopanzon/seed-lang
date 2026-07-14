@@ -1,11 +1,12 @@
 const { spawnSync } = require('node:child_process');
 const { stringify } = require('yaml');
-const { collectAddressableItems, collectPresentAddressableItems } = require('./validation');
+const { collectAddressableItems, collectGlobalPolicyItems, collectPresentAddressableItems } = require('./validation');
 
 const REFERENCE_PATTERN = /@([A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)*)/g;
 
 const SECTION_DEFINITIONS = [
   { id: 'project-summary', title: 'Project Summary', source: 'metadata', singleton: true },
+  { id: 'global-policies', title: 'Global Policies', source: 'global-policies', virtual: true },
   { id: 'interfaces', title: 'Interfaces', source: 'interfaces' },
   { id: 'functional-behavior', title: 'Functional Behavior', source: 'behavior' },
   { id: 'error-semantics', title: 'Error Semantics', source: 'errors' },
@@ -128,6 +129,25 @@ function itemMatchesSelection(item, selected) {
   return selected.has(item.address) || selected.has(item.id);
 }
 
+function buildGlobalPolicyItems(document, seedPath, provenance = {}, selected = null) {
+  const errors = [];
+  const policies = collectGlobalPolicyItems(document, errors);
+  if (errors.length > 0) {
+    throw new Error('Cannot build global policies from invalid addressable sections: ' + errors.map((entry) => entry.message).join('; '));
+  }
+
+  return policies
+    .filter((item) => itemMatchesSelection(item, selected))
+    .map((item) => ({
+      id: item.id,
+      address: item.address,
+      section: 'global-policies',
+      value: item.value,
+      references: collectReferences(item.value),
+      source: provenance[item.address] ?? itemSource(seedPath),
+    }));
+}
+
 function sectionItems(definition, items, selected, options) {
   if (definition.singleton) {
     return [];
@@ -166,6 +186,15 @@ function compileBlueprint({ document, seedPath, genomes = [], provenance = {}, f
             references: [],
             source: provenance.metadata ?? itemSource(seedPath),
           }],
+        };
+      }
+
+      if (definition.virtual && definition.id === 'global-policies') {
+        return {
+          id: definition.id,
+          title: definition.title,
+          sourceSection: definition.source,
+          items: buildGlobalPolicyItems(document, seedPath, provenance, selected),
         };
       }
 
