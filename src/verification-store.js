@@ -1295,6 +1295,144 @@ function syncSession({
   }, { waitMs: lockWaitMs });
 }
 
+function verificationAudit({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
+  assertSessionId(sessionId);
+
+  const path = sessionPath(cwd, sessionId);
+  const label = 'session state ' + path;
+  const state = readSessionState(cwd, sessionId, label);
+  const status = summarizeStatus(cwd, state);
+  const errors = [];
+  const warnings = [];
+  const commandUsage = new Map();
+
+  function addIssue(target, code, item, message, extra = {}) {
+    target.push({
+      code,
+      id: item?.id ?? null,
+      address: item?.address ?? null,
+      message,
+      ...extra,
+    });
+  }
+
+  if (!status.completed) {
+    addIssue(errors, 'session-incomplete', null, 'verification session is not complete', {
+      pending: status.pending,
+      claimed: status.claimed,
+      total: status.total,
+      verified: status.verified,
+    });
+  }
+
+  if (status.expired > 0) {
+    addIssue(errors, 'expired-evidence', null, 'verification session contains expired evidence', {
+      expired: status.expired,
+      expiredIds: status.expiredIds,
+    });
+  }
+
+  if (status.failed > 0) {
+    addIssue(errors, 'failed-verifications', null, 'verification session contains failed items', {
+      failed: status.failed,
+      failedIds: status.failedIds,
+    });
+  }
+
+  state.items.forEach((item) => {
+    if (!terminalStatus(item)) {
+      addIssue(errors, 'item-not-terminal', item, 'item is not confirmed or failed', { status: item.status });
+      return;
+    }
+
+    const files = Array.isArray(item.evidence_files) ? item.evidence_files : [];
+    if (files.length === 0) {
+      addIssue(errors, 'missing-evidence-files', item, 'terminal item has no evidence files');
+    }
+
+    const commands = Array.isArray(item.test_commands) ? item.test_commands : [];
+    if (commands.length === 0) {
+      addIssue(errors, 'missing-test-commands', item, 'terminal item has no test commands');
+    }
+
+    const supportText = item.status === 'confirmed' ? item.evidence : item.reason;
+    if (typeof supportText !== 'string' || supportText.trim().length < 12) {
+      addIssue(warnings, 'weak-evidence-text', item, 'evidence or reason text is short or missing');
+    } else if (/^(ok|done|works|verified|manual-check|pass|passed)$/i.test(supportText.trim())) {
+      addIssue(warnings, 'generic-evidence-text', item, 'evidence or reason text is generic');
+    }
+
+    commands.forEach((commandResult, index) => {
+      if (!commandResult || typeof commandResult !== 'object') {
+        addIssue(errors, 'invalid-test-command-record', item, 'test command record is not an object', { index });
+        return;
+      }
+
+      if (typeof commandResult.command !== 'string' || commandResult.command.trim().length === 0) {
+        addIssue(errors, 'invalid-test-command', item, 'test command is missing command text', { index });
+        return;
+      }
+
+      const command = commandResult.command.trim();
+      const usage = commandUsage.get(command) ?? [];
+      usage.push({ id: item.id, address: item.address ?? null });
+      commandUsage.set(command, usage);
+
+      if (item.status === 'confirmed' && commandResult.passed !== true) {
+        addIssue(errors, 'confirmed-command-not-passing', item, 'confirmed item stores a non-passing test command', {
+          command,
+          exitCode: commandResult.exitCode ?? null,
+        });
+      }
+
+      if (item.status === 'failed' && commandResult.passed === true) {
+        addIssue(errors, 'failed-command-passing', item, 'failed item stores a passing test command', {
+          command,
+          exitCode: commandResult.exitCode ?? null,
+        });
+      }
+
+      if (/^\.\/seed\/scripts\//.test(command) && command.trim().split(/\s+/).length < 2) {
+        addIssue(warnings, 'script-command-without-case', item, 'Seed verification script command has no named case argument', { command });
+      }
+    });
+
+    if (item.status === 'failed' && commands.length > 0 && commands.every((entry) => entry?.passed === true)) {
+      addIssue(errors, 'failed-item-has-no-failing-command', item, 'failed item has no failing stored command');
+    }
+  });
+
+  commandUsage.forEach((usage, command) => {
+    if (usage.length <= 1) {
+      return;
+    }
+
+    const addresses = [...new Set(usage.map((entry) => entry.address).filter(Boolean))];
+    const ids = usage.map((entry) => entry.id);
+    const code = usage.length > 5 ? 'broad-command-reuse' : 'command-reuse';
+    warnings.push({
+      code,
+      id: null,
+      address: null,
+      message: 'same test command is reused across multiple verification items',
+      command,
+      count: usage.length,
+      ids,
+      addresses,
+    });
+  });
+
+  return {
+    sessionId: state.sessionId,
+    total: state.items.length,
+    audited: state.items.filter((item) => terminalStatus(item)).length,
+    ok: errors.length === 0,
+    errors,
+    warnings,
+    status,
+  };
+}
+
 function checkSession({ cwd, sessionId = DEFAULT_SESSION_ID, now } = {}) {
   assertSessionId(sessionId);
 
@@ -1364,4 +1502,5 @@ module.exports = {
   getStatus,
   getPendingItems,
   checkSession,
+  verificationAudit,
 };

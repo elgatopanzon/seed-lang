@@ -677,6 +677,25 @@ describe('seed cli', () => {
     });
   });
 
+  test('verify audit reports incomplete sessions and weak evidence warnings', () => {
+    withTempDir((cwd) => {
+      runCli(['init'], cwd);
+      runCli(['verify', 'start'], cwd);
+
+      const initialAudit = runCli(['verify', 'audit'], cwd);
+      assert.equal(initialAudit.code, 1);
+      assert.ok(initialAudit.stdout.includes('Seed verification audit:'));
+      assert.ok(initialAudit.stdout.includes('session-incomplete'));
+
+      assert.equal(runCli(['verify', 'next'], cwd).code, 0);
+      assert.equal(runCli(['verify', 'confirm', 'seed-baseline-visibility', '--owner', 'seed-cli', '--file', 'implementation.js', '--test-cmd', PASS_CMD, '--evidence', 'ok'], cwd).code, 0);
+
+      const weakAudit = runCli(['verify', 'audit'], cwd);
+      assert.equal(weakAudit.code, 1);
+      assert.ok(weakAudit.stdout.includes('weak-evidence-text') || weakAudit.stdout.includes('generic-evidence-text'));
+    });
+  });
+
   test('verify confirm and fail options accept only known flags and require values', () => {
     withTempDir((cwd) => {
       runCli(['init'], cwd);

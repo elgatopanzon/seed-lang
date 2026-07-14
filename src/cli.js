@@ -23,6 +23,7 @@ const {
 } = require('./genomes');
 const {
   checkSession,
+  verificationAudit,
   claimNext,
   confirmItem,
   failItem,
@@ -51,6 +52,7 @@ function usage() {
     'seed verify next [--owner OWNER]',
     'seed verify pending',
     'seed verify check',
+    'seed verify audit',
     'seed verify confirm <constraint-id> --owner OWNER --file PATH [--file PATH...] --test-cmd CMD [--test-cmd CMD...] [--evidence TEXT]',
     'seed verify fail <constraint-id> --owner OWNER --file PATH [--file PATH...] --test-cmd CMD [--test-cmd CMD...] [--reason TEXT]',
     'seed verify status',
@@ -696,6 +698,42 @@ function handleVerifyCheck(cwd) {
   }
 }
 
+function handleVerifyAudit(cwd) {
+  try {
+    const result = verificationAudit({ cwd });
+    console.log('Seed verification audit: ' + result.errors.length + ' errors, ' + result.warnings.length + ' warnings');
+    console.log('Audited items: ' + result.audited + '/' + result.total);
+
+    if (result.errors.length > 0) {
+      console.log('Errors:');
+      result.errors.forEach((issue) => {
+        const id = issue.id ? ' ' + issue.id : '';
+        const address = issue.address ? ' @' + issue.address : '';
+        console.log('- ' + issue.code + id + address + ': ' + issue.message);
+      });
+    }
+
+    if (result.warnings.length > 0) {
+      console.log('Warnings:');
+      result.warnings.forEach((issue) => {
+        const id = issue.id ? ' ' + issue.id : '';
+        const address = issue.address ? ' @' + issue.address : '';
+        console.log('- ' + issue.code + id + address + ': ' + issue.message);
+        if (issue.command) {
+          console.log('  command: ' + issue.command);
+        }
+        if (Array.isArray(issue.ids) && issue.ids.length > 0) {
+          console.log('  ids: ' + issue.ids.join(', '));
+        }
+      });
+    }
+
+    return result.ok ? 0 : 1;
+  } catch (error) {
+    return exitWithError(error.message);
+  }
+}
+
 function handleVerifyStatus(cwd) {
   const status = getStatus({ cwd });
   console.log(JSON.stringify(status, null, 2));
@@ -854,6 +892,14 @@ function run(argv = process.argv.slice(2)) {
       }
 
       return handleVerifyCheck(process.cwd());
+    }
+
+    if (subcommand === 'audit') {
+      if (!ensureNoExtraArgs(subRest, 0)) {
+        return exitWithError('seed verify audit does not take arguments.');
+      }
+
+      return handleVerifyAudit(process.cwd());
     }
 
     if (subcommand === 'next') {

@@ -18,6 +18,7 @@ const {
   getStatus,
   startSession,
   syncSession,
+  verificationAudit,
 } = require('../src/verification-store');
 
 function tempDir() {
@@ -77,6 +78,10 @@ function lockPath(cwd, sessionId = 'default') {
 
 function testFileHash(buffer) {
   return createHash('sha256').update(buffer).digest('hex');
+}
+
+function passCommand(label) {
+  return `${process.execPath} -e "process.exit(0)" ${label}`;
 }
 
 describe('verification store', () => {
@@ -938,6 +943,44 @@ describe('verification store', () => {
       assert.equal(check.ok, false);
       assert.equal(check.items[0].error, 'missing test commands');
       assert.equal(check.items[1].commands[0].passed, true);
+    });
+  });
+
+  test('verificationAudit passes complete executable evidence and flags missing command evidence', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+
+      ['verify-begin', 'verify-next', 'verify-final'].forEach((id, index) => {
+        claimNext({ cwd, owner: 'worker-A', now: () => 1_000 + index * 1_000 });
+        confirmItem({
+          cwd,
+          itemId: id,
+          owner: 'worker-A',
+          files: ['implementation.js'],
+          testCommands: [passCommand(id)],
+          evidence: id + ' checked with item-specific command',
+          now: () => 1_500 + index * 1_000,
+        });
+      });
+
+      const audit = verificationAudit({ cwd });
+      assert.equal(audit.ok, true);
+      assert.equal(audit.errors.length, 0);
+      assert.equal(audit.audited, 3);
+      assert.equal(audit.total, 3);
+
+      const session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      delete session.items[0].test_commands;
+      fs.writeFileSync(sessionFile(cwd), JSON.stringify(session, null, 2), 'utf8');
+
+      const failedAudit = verificationAudit({ cwd });
+      assert.equal(failedAudit.ok, false);
+      assert.ok(failedAudit.errors.some((issue) => issue.code === 'expired-evidence'));
+      assert.ok(failedAudit.errors.some((issue) => issue.code === 'missing-test-commands'));
     });
   });
 
