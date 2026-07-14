@@ -8,6 +8,9 @@ const { parse, stringify } = require('yaml');
 const { DEFAULT_SEED_PATH, renderSeedTemplate } = require('../src/seed-file');
 const { run } = require('../src/cli');
 
+const PASS_CMD = process.execPath + ' -e "process.exit(0)"';
+const FAIL_CMD = process.execPath + ' -e "process.exit(1)"';
+
 function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'seed-cli-test-'));
 }
@@ -481,15 +484,15 @@ describe('seed cli', () => {
       assert.ok(initialPending.stdout.includes('- pending manual-counts @verifications.manual-counts'));
 
       assert.equal(runCli(['verify', 'next'], cwd).code, 0);
-      assert.equal(runCli(['verify', 'confirm', 'manual-counts', '--owner', 'seed-cli', '--file', 'implementation.js', '--evidence', 'ok'], cwd).code, 0);
+      assert.equal(runCli(['verify', 'confirm', 'manual-counts', '--owner', 'seed-cli', '--file', 'implementation.js', '--test-cmd', PASS_CMD, '--evidence', 'ok'], cwd).code, 0);
       let next = runCli(['verify', 'next'], cwd);
       while (next.stdout.includes('Claimed verification') && !next.stdout.includes('implicit-behavior-counts')) {
         const id = next.stdout.match(/Claimed verification ([^\n]+)/)[1];
-        assert.equal(runCli(['verify', 'confirm', id, '--owner', 'seed-cli', '--file', 'implementation.js', '--evidence', 'ok'], cwd).code, 0);
+        assert.equal(runCli(['verify', 'confirm', id, '--owner', 'seed-cli', '--file', 'implementation.js', '--test-cmd', PASS_CMD, '--evidence', 'ok'], cwd).code, 0);
         next = runCli(['verify', 'next'], cwd);
       }
       assert.ok(next.stdout.includes('Claimed verification implicit-behavior-counts'));
-      assert.equal(runCli(['verify', 'confirm', 'implicit-behavior-counts', '--owner', 'seed-cli', '--file', 'implementation.js', '--evidence', 'ok'], cwd).code, 0);
+      assert.equal(runCli(['verify', 'confirm', 'implicit-behavior-counts', '--owner', 'seed-cli', '--file', 'implementation.js', '--test-cmd', PASS_CMD, '--evidence', 'ok'], cwd).code, 0);
 
       fs.writeFileSync(seedPath, seedText.replace('Count every character exactly.', 'Count every printable character exactly.'), 'utf8');
       const expiredPending = runCli(['verify', 'pending'], cwd);
@@ -530,23 +533,23 @@ describe('seed cli', () => {
       const firstNext = runCli(['verify', 'next'], cwd);
       assert.equal(firstNext.code, 0);
       const confirmWithEvidence = runCli(
-        ['verify', 'confirm', 'verify-first', '--owner', 'seed-cli', '--file', 'implementation.js', '--evidence', 'manual-check'],
+        ['verify', 'confirm', 'verify-first', '--owner', 'seed-cli', '--file', 'implementation.js', '--test-cmd', PASS_CMD, '--evidence', 'manual-check'],
         cwd,
       );
       assert.equal(confirmWithEvidence.code, 0);
 
       assert.equal(runCli(['verify', 'next'], cwd).code, 0);
       const failWithReason = runCli(
-        ['verify', 'fail', 'verify-second', '--owner', 'seed-cli', '--file', 'implementation.js', '--reason', 'environment missing'],
+        ['verify', 'fail', 'verify-second', '--owner', 'seed-cli', '--file', 'implementation.js', '--test-cmd', FAIL_CMD, '--reason', 'environment missing'],
         cwd,
       );
       assert.equal(failWithReason.code, 0);
 
-      const invalidConfirm = runCli(['verify', 'confirm', 'verify-missing', '--owner', 'seed-cli', '--file', 'implementation.js'], cwd);
+      const invalidConfirm = runCli(['verify', 'confirm', 'verify-missing', '--owner', 'seed-cli', '--file', 'implementation.js', '--test-cmd', PASS_CMD], cwd);
       assert.equal(invalidConfirm.code, 1);
       assert.ok(invalidConfirm.stderr.includes('Unknown verification id'));
 
-      const transitionFail = runCli(['verify', 'fail', 'verify-first', '--owner', 'seed-cli', '--file', 'implementation.js'], cwd);
+      const transitionFail = runCli(['verify', 'fail', 'verify-first', '--owner', 'seed-cli', '--file', 'implementation.js', '--test-cmd', PASS_CMD], cwd);
       assert.equal(transitionFail.code, 1);
       assert.ok(transitionFail.stderr.includes('Invalid transition'));
 
@@ -571,6 +574,12 @@ describe('seed cli', () => {
       assert.equal(confirmed.reason, null);
       assert.equal(failed.reason, 'environment missing');
       assert.equal(failed.evidence, null);
+
+      const check = runCli(["verify", "check"], cwd);
+      assert.equal(check.code, 1);
+      assert.ok(check.stdout.includes("Seed verification check: 1/2 passed"));
+      assert.ok(check.stdout.includes("- ok verify-first"));
+      assert.ok(check.stdout.includes("- failed verify-second"));
     });
   });
 
@@ -599,9 +608,9 @@ describe('seed cli', () => {
       const original = JSON.parse(fs.readFileSync(sessionPath(cwd), 'utf8'));
 
       assert.equal(runCli(['verify', 'next'], cwd).code, 0);
-      assert.equal(runCli(['verify', 'confirm', 'verify-first', '--owner', 'seed-cli', '--file', 'implementation.js', '--evidence', 'done'], cwd).code, 0);
+      assert.equal(runCli(['verify', 'confirm', 'verify-first', '--owner', 'seed-cli', '--file', 'implementation.js', '--test-cmd', PASS_CMD, '--evidence', 'done'], cwd).code, 0);
       assert.equal(runCli(['verify', 'next'], cwd).code, 0);
-      assert.equal(runCli(['verify', 'fail', 'verify-second', '--owner', 'seed-cli', '--file', 'implementation.js', '--reason', 'nope'], cwd).code, 0);
+      assert.equal(runCli(['verify', 'fail', 'verify-second', '--owner', 'seed-cli', '--file', 'implementation.js', '--test-cmd', FAIL_CMD, '--reason', 'nope'], cwd).code, 0);
 
       const beforeReset = JSON.parse(runCli(['verify', 'status'], cwd).stdout);
       assert.equal(beforeReset.verified, 2);
@@ -647,21 +656,21 @@ describe('seed cli', () => {
       assert.ok(claimed.stdout.includes('Claimed verification seed-baseline-visibility'));
 
       const missingOwner = runCli(
-        ['verify', 'confirm', 'seed-baseline-visibility', '--file', 'implementation.js', '--evidence', 'ok'],
+        ['verify', 'confirm', 'seed-baseline-visibility', '--file', 'implementation.js', '--test-cmd', PASS_CMD, '--evidence', 'ok'],
         cwd,
       );
       assert.equal(missingOwner.code, 1);
       assert.ok(missingOwner.stderr.includes('owner invalid'));
 
       const wrongOwner = runCli(
-        ['verify', 'confirm', 'seed-baseline-visibility', '--owner', 'worker-b', '--file', 'implementation.js', '--evidence', 'ok'],
+        ['verify', 'confirm', 'seed-baseline-visibility', '--owner', 'worker-b', '--file', 'implementation.js', '--test-cmd', PASS_CMD, '--evidence', 'ok'],
         cwd,
       );
       assert.equal(wrongOwner.code, 1);
       assert.ok(wrongOwner.stderr.includes('Invalid owner'));
 
       const rightOwner = runCli(
-        ['verify', 'confirm', 'seed-baseline-visibility', '--owner', 'worker-a', '--file', 'implementation.js', '--evidence', 'ok'],
+        ['verify', 'confirm', 'seed-baseline-visibility', '--owner', 'worker-a', '--file', 'implementation.js', '--test-cmd', PASS_CMD, '--evidence', 'ok'],
         cwd,
       );
       assert.equal(rightOwner.code, 0);
@@ -682,7 +691,7 @@ describe('seed cli', () => {
       assert.ok(missingValue.stderr.includes('--evidence requires a value'));
 
       const wrongOption = runCli(
-        ['verify', 'confirm', 'seed-baseline-visibility', '--owner', 'seed-cli', '--file', 'implementation.js', '--reason', 'nope'],
+        ['verify', 'confirm', 'seed-baseline-visibility', '--owner', 'seed-cli', '--file', 'implementation.js', '--test-cmd', FAIL_CMD, '--reason', 'nope'],
         cwd,
       );
       assert.equal(wrongOption.code, 1);
@@ -700,6 +709,26 @@ describe('seed cli', () => {
         cwd,
       );
       assert.equal(failMissingValue.code, 1);
+      const missingTestCommand = runCli(
+        ["verify", "confirm", "seed-baseline-visibility", "--owner", "seed-cli", "--file", "implementation.js", "--evidence", "ok"],
+        cwd,
+      );
+      assert.equal(missingTestCommand.code, 1);
+      assert.ok(missingTestCommand.stderr.includes("requires at least one --test-cmd command"));
+
+      const confirmWithFailingCommand = runCli(
+        ["verify", "confirm", "seed-baseline-visibility", "--owner", "seed-cli", "--file", "implementation.js", "--test-cmd", FAIL_CMD, "--evidence", "ok"],
+        cwd,
+      );
+      assert.equal(confirmWithFailingCommand.code, 1);
+      assert.ok(confirmWithFailingCommand.stderr.includes("Cannot confirm item"));
+
+      const failWithPassingCommand = runCli(
+        ["verify", "fail", "seed-baseline-visibility", "--owner", "seed-cli", "--file", "implementation.js", "--test-cmd", PASS_CMD, "--reason", "nope"],
+        cwd,
+      );
+      assert.equal(failWithPassingCommand.code, 1);
+      assert.ok(failWithPassingCommand.stderr.includes("Cannot fail item"));
       assert.ok(failMissingValue.stderr.includes('--reason requires a value'));
     });
   });

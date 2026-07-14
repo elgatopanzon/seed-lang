@@ -7,6 +7,7 @@ const { parse } = require('yaml');
 
 const {
   DEFAULT_SEED_PATH,
+  DEFAULT_SEED_SCRIPTS_PATH,
   renderSeedTemplate,
   ensureGitignore,
   initSeed,
@@ -89,6 +90,7 @@ describe('seed file primitives', () => {
     assert.equal(result.path, path.join(cwd, DEFAULT_SEED_PATH));
     assert.equal(result.document.metadata.version, undefined);
     assert.equal(fs.existsSync(result.path), true);
+    assert.equal(fs.existsSync(path.join(cwd, DEFAULT_SEED_SCRIPTS_PATH)), true);
 
     fs.rmSync(cwd, { recursive: true, force: true });
   });

@@ -22,6 +22,7 @@ const {
   validateGenomeDefinitions,
 } = require('./genomes');
 const {
+  checkSession,
   claimNext,
   confirmItem,
   failItem,
@@ -49,8 +50,9 @@ function usage() {
     'seed verify sync',
     'seed verify next [--owner OWNER]',
     'seed verify pending',
-    'seed verify confirm <constraint-id> --owner OWNER --file PATH [--file PATH...] [--evidence TEXT]',
-    'seed verify fail <constraint-id> --owner OWNER --file PATH [--file PATH...] [--reason TEXT]',
+    'seed verify check',
+    'seed verify confirm <constraint-id> --owner OWNER --file PATH [--file PATH...] --test-cmd CMD [--test-cmd CMD...] [--evidence TEXT]',
+    'seed verify fail <constraint-id> --owner OWNER --file PATH [--file PATH...] --test-cmd CMD [--test-cmd CMD...] [--reason TEXT]',
     'seed verify status',
     '',
     `seed source defaults to ${DEFAULT_SEED_PATH} and current working directory`,
@@ -174,6 +176,7 @@ function parseConstraintActionArgs(args, command, optionName) {
     payload: undefined,
     owner: undefined,
     files: [],
+    testCommands: [],
   };
 
   for (let index = 1; index < args.length; index += 1) {
@@ -191,6 +194,13 @@ function parseConstraintActionArgs(args, command, optionName) {
         return value;
       }
       parsed.files.push(value.value);
+      index += 1;
+    } else if (arg === '--test-cmd') {
+      const value = readOptionValue(args, index, '--test-cmd', command);
+      if (value.error) {
+        return value;
+      }
+      parsed.testCommands.push(value.value);
       index += 1;
     } else if (arg === '--owner') {
       const value = readOptionValue(args, index, '--owner', command);
@@ -212,6 +222,10 @@ function parseConstraintActionArgs(args, command, optionName) {
 
   if (parsed.files.length === 0) {
     return { error: `seed verify ${command} requires at least one --file path.` };
+  }
+
+  if (parsed.testCommands.length === 0) {
+    return { error: `seed verify ${command} requires at least one --test-cmd command.` };
   }
 
   return parsed;
@@ -623,7 +637,7 @@ function handleVerifyNext(cwd, owner = DEFAULT_OWNER) {
   return 0;
 }
 
-function handleVerifyConfirm(cwd, constraintId, owner, evidence, files) {
+function handleVerifyConfirm(cwd, constraintId, owner, evidence, files, testCommands) {
   try {
     const item = confirmItem({
       cwd,
@@ -631,6 +645,7 @@ function handleVerifyConfirm(cwd, constraintId, owner, evidence, files) {
       owner,
       evidence,
       files,
+      testCommands,
     });
 
     console.log(`Confirmed verification ${constraintId}`);
@@ -641,7 +656,7 @@ function handleVerifyConfirm(cwd, constraintId, owner, evidence, files) {
   }
 }
 
-function handleVerifyFail(cwd, constraintId, owner, reason, files) {
+function handleVerifyFail(cwd, constraintId, owner, reason, files, testCommands) {
   try {
     const item = failItem({
       cwd,
@@ -649,11 +664,33 @@ function handleVerifyFail(cwd, constraintId, owner, reason, files) {
       owner,
       reason,
       files,
+      testCommands,
     });
 
     console.log(`Marked verification ${constraintId} as failed`);
     console.log(`status: ${item.status}`);
     return 0;
+  } catch (error) {
+    return exitWithError(error.message);
+  }
+}
+
+function handleVerifyCheck(cwd) {
+  try {
+    const result = checkSession({ cwd });
+    console.log('Seed verification check: ' + result.passed + '/' + result.total + ' passed');
+    result.items.forEach((item) => {
+      const address = item.address ? ' @' + item.address : '';
+      const state = item.ok ? 'ok' : 'failed';
+      console.log('- ' + state + ' ' + item.id + address + ' status=' + item.status);
+      if (item.error) {
+        console.log('  error: ' + item.error);
+      }
+      item.commands.forEach((command) => {
+        console.log('  [' + (command.passed ? 'ok' : 'failed') + '] exit=' + command.exitCode + ' cmd=' + command.command);
+      });
+    });
+    return result.ok ? 0 : 1;
   } catch (error) {
     return exitWithError(error.message);
   }
@@ -811,6 +848,14 @@ function run(argv = process.argv.slice(2)) {
       }
     }
 
+    if (subcommand === 'check') {
+      if (!ensureNoExtraArgs(subRest, 0)) {
+        return exitWithError('seed verify check does not take arguments.');
+      }
+
+      return handleVerifyCheck(process.cwd());
+    }
+
     if (subcommand === 'next') {
       const parsed = parseVerifyNextArgs(subRest);
       if (parsed.error) {
@@ -830,7 +875,7 @@ function run(argv = process.argv.slice(2)) {
         return exitWithError(parsed.error);
       }
 
-      return handleVerifyConfirm(process.cwd(), parsed.constraintId, parsed.owner, parsed.payload, parsed.files);
+      return handleVerifyConfirm(process.cwd(), parsed.constraintId, parsed.owner, parsed.payload, parsed.files, parsed.testCommands);
     }
 
     if (subcommand === 'fail') {
@@ -839,7 +884,7 @@ function run(argv = process.argv.slice(2)) {
         return exitWithError(parsed.error);
       }
 
-      return handleVerifyFail(process.cwd(), parsed.constraintId, parsed.owner, parsed.payload, parsed.files);
+      return handleVerifyFail(process.cwd(), parsed.constraintId, parsed.owner, parsed.payload, parsed.files, parsed.testCommands);
     }
 
     if (subcommand === 'status') {

@@ -4,6 +4,7 @@ const { parse, stringify } = require('yaml');
 const { compileSeedDocument } = require('./genomes');
 
 const DEFAULT_SEED_PATH = 'seed/seed.yml';
+const DEFAULT_SEED_SCRIPTS_PATH = 'seed/scripts';
 const STABLE_VERIFICATION_ID = 'seed-baseline-visibility';
 const GITIGNORE_SECTION_START = '# seed-lang';
 const GITIGNORE_SECTION = `${GITIGNORE_SECTION_START}\n.seed/locks/\n`;
@@ -144,6 +145,7 @@ function initSeed({ cwd, overwrite = false, genomes = [] } = {}) {
   compileSeedDocument({ document: { genomes }, cwd: root, seedPath: DEFAULT_SEED_PATH });
 
   mkdirSync(seedDir, { recursive: true });
+  mkdirSync(resolve(root, DEFAULT_SEED_SCRIPTS_PATH), { recursive: true });
 
   const text = renderSeedTemplate({ genomes });
   writeFileSync(seedPath, text, 'utf8');
@@ -187,6 +189,7 @@ function loadSeed({ cwd } = {}) {
 
 module.exports = {
   DEFAULT_SEED_PATH,
+  DEFAULT_SEED_SCRIPTS_PATH,
   renderSeedTemplate,
   ensureGitignore,
   initSeed,

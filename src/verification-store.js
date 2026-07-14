@@ -7,6 +7,7 @@ const {
   writeFileSync,
 } = require('node:fs');
 const { createHash } = require('node:crypto');
+const { spawnSync } = require('node:child_process');
 const { parse } = require('yaml');
 const { dirname, isAbsolute, join, relative, resolve, sep } = require('node:path');
 const { loadSeed } = require('./seed-file');
@@ -30,6 +31,8 @@ const DEFAULT_SESSION_ID = 'default';
 const DEFAULT_LEASE_MS = 60_000;
 const DEFAULT_LOCK_WAIT_MS = 60_000;
 const DEFAULT_LOCK_RETRY_MS = 50;
+const DEFAULT_TEST_COMMAND_TIMEOUT_MS = 30_000;
+const MAX_TEST_COMMAND_OUTPUT_CHARS = 4_000;
 const SESSION_SCHEMA_VERSION = 1;
 const VALID_STATUSES = [
   'pending',
@@ -204,6 +207,83 @@ function safeRelativeFilePath(cwd, filePath) {
   return relativePath.split(sep).join('/');
 }
 
+function truncateOutput(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  if (value.length <= MAX_TEST_COMMAND_OUTPUT_CHARS) {
+    return value;
+  }
+
+  return value.slice(0, MAX_TEST_COMMAND_OUTPUT_CHARS) + '\n[truncated]';
+}
+
+function normalizeTestCommands(commands) {
+  if (!Array.isArray(commands) || commands.length === 0) {
+    throw new Error('at least one test command is required.');
+  }
+
+  return commands.map((command, index) => {
+    if (typeof command !== 'string' || command.trim().length === 0) {
+      throw new Error('test command ' + (index + 1) + ' must be a non-empty string.');
+    }
+    return command;
+  });
+}
+
+function runTestCommands(cwd, commands, { now } = {}) {
+  const normalized = normalizeTestCommands(commands);
+  return normalized.map((command) => {
+    const startedAt = resolveNow(now);
+    const started = Date.now();
+    const result = spawnSync(command, {
+      cwd: workspaceRoot(cwd),
+      shell: true,
+      encoding: 'utf8',
+      timeout: DEFAULT_TEST_COMMAND_TIMEOUT_MS,
+      maxBuffer: 1024 * 1024,
+    });
+    const durationMs = Date.now() - started;
+    const exitCode = typeof result.status === 'number' ? result.status : null;
+    const timedOut = result.error?.code === 'ETIMEDOUT';
+
+    return {
+      command,
+      cwd: workspaceRoot(cwd),
+      shell: true,
+      timeoutMs: DEFAULT_TEST_COMMAND_TIMEOUT_MS,
+      exitCode,
+      signal: result.signal ?? null,
+      timedOut,
+      passed: exitCode === 0 && !timedOut,
+      stdout: truncateOutput(result.stdout),
+      stderr: truncateOutput(result.stderr ?? result.error?.message ?? ''),
+      durationMs,
+      executedAt: startedAt,
+    };
+  });
+}
+
+function assertTransitionCommandResults(itemId, targetStatus, results) {
+  if (targetStatus === 'confirmed') {
+    const failed = results.filter((entry) => !entry.passed);
+    if (failed.length > 0) {
+      throw new Error('Cannot confirm item ' + itemId + ': test command failed: ' + failed[0].command);
+    }
+    return;
+  }
+
+  if (targetStatus === 'failed') {
+    if (results.every((entry) => entry.passed)) {
+      throw new Error('Cannot fail item ' + itemId + ': all test commands exited 0.');
+    }
+    return;
+  }
+
+  throw new Error('Unknown transition status ' + targetStatus + '.');
+}
+
 function hashEvidenceFiles(cwd, files) {
   if (!Array.isArray(files) || files.length === 0) {
     throw new Error('at least one evidence file path is required.');
@@ -371,6 +451,7 @@ function buildManualSessionItems(seedDocument) {
       evidence: null,
       reason: null,
       evidence_files: [],
+      test_commands: [],
       seed_evidence: null,
     };
   });
@@ -418,6 +499,7 @@ function buildImplicitSessionItems(seedDocument) {
       evidence: null,
       reason: null,
       evidence_files: [],
+      test_commands: [],
       seed_evidence: null,
     };
   });
@@ -724,6 +806,24 @@ function currentEvidenceExpiration(cwd, item) {
   };
 }
 
+function currentTestCommandExpiration(item) {
+  if (!terminalStatus(item)) {
+    return null;
+  }
+
+  if (Array.isArray(item.test_commands) && item.test_commands.length > 0) {
+    return null;
+  }
+
+  return {
+    kind: 'test-command-missing',
+    id: item.id,
+    address: item.address ?? null,
+    status: item.status,
+    reason: 'terminal verification evidence is missing test_commands',
+  };
+}
+
 function currentSeedAddressExpiration(cwd, item, changedAddresses) {
   if (!terminalStatus(item) || changedAddresses.size === 0) {
     return null;
@@ -754,18 +854,20 @@ function currentSeedAddressExpiration(cwd, item, changedAddresses) {
 
 function currentItemExpiration(cwd, item, changedAddresses = new Set()) {
   const evidence = currentEvidenceExpiration(cwd, item);
+  const testCommand = currentTestCommandExpiration(item);
   const seedAddress = currentSeedAddressExpiration(cwd, item, changedAddresses);
 
-  if (!evidence && !seedAddress) {
+  if (!evidence && !testCommand && !seedAddress) {
     return null;
   }
 
   return {
-    kind: [evidence?.kind, seedAddress?.kind].filter(Boolean).join('+'),
+    kind: [evidence?.kind, testCommand?.kind, seedAddress?.kind].filter(Boolean).join('+'),
     id: item.id,
     address: item.address ?? null,
     status: item.status,
     files: evidence?.files ?? [],
+    missingTestCommands: Boolean(testCommand),
     modifiedAddresses: seedAddress?.modifiedAddresses ?? [],
   };
 }
@@ -902,6 +1004,7 @@ function transitionItem({
   evidence,
   reason,
   files,
+  testCommands,
   lockWaitMs = DEFAULT_LOCK_WAIT_MS,
 }) {
   assertSessionId(sessionId);
@@ -940,6 +1043,9 @@ function transitionItem({
       throw new Error(`Invalid owner for item ${itemId}: expected ${item.claim.owner}, received ${owner}.`);
     }
 
+    const testCommandResults = runTestCommands(cwd, testCommands, { now });
+    assertTransitionCommandResults(itemId, targetStatus, testCommandResults);
+
     if (targetStatus === 'confirmed') {
       if (evidence !== undefined && typeof evidence !== 'string') {
         throw new Error(`confirmItem requires evidence to be a string for item ${itemId}.`);
@@ -959,6 +1065,7 @@ function transitionItem({
     item.status = targetStatus;
     item.claim = null;
     item.evidence_files = evidenceFiles;
+    item.test_commands = testCommandResults;
     try {
       item.seed_evidence = currentSeedEvidence(cwd, item);
     } catch (error) {
@@ -1164,6 +1271,7 @@ function syncSession({
           evidence: old.evidence ?? null,
           reason: old.reason ?? null,
           evidence_files: structuredClone(old.evidence_files ?? []),
+          test_commands: structuredClone(old.test_commands ?? []),
           seed_evidence: structuredClone(old.seed_evidence ?? null),
         };
       }
@@ -1187,6 +1295,56 @@ function syncSession({
   }, { waitMs: lockWaitMs });
 }
 
+function checkSession({ cwd, sessionId = DEFAULT_SESSION_ID, now } = {}) {
+  assertSessionId(sessionId);
+
+  const path = sessionPath(cwd, sessionId);
+  const label = 'session state ' + path;
+  const state = readSessionState(cwd, sessionId, label);
+  const checkedAt = resolveNow(now);
+  const items = state.items
+    .filter((item) => terminalStatus(item))
+    .map((item) => {
+      if (!Array.isArray(item.test_commands) || item.test_commands.length === 0) {
+        return {
+          id: item.id,
+          address: item.address ?? null,
+          status: item.status,
+          ok: false,
+          error: 'missing test commands',
+          commands: [],
+        };
+      }
+
+      const commands = runTestCommands(cwd, item.test_commands.map((entry) => entry.command), { now });
+      const commandsMatchStatus = item.status === 'confirmed'
+        ? commands.every((entry) => entry.passed)
+        : commands.some((entry) => !entry.passed);
+      return {
+        id: item.id,
+        address: item.address ?? null,
+        status: item.status,
+        ok: item.status === 'confirmed' ? commandsMatchStatus : false,
+        commandsMatchStatus,
+        commands,
+      };
+    });
+  const missing = items.filter((item) => item.error === 'missing test commands').length;
+  const passed = items.filter((item) => item.ok).length;
+  const failed = items.length - passed;
+
+  return {
+    sessionId: state.sessionId,
+    checkedAt,
+    total: items.length,
+    passed,
+    failed,
+    missing,
+    ok: failed === 0,
+    items,
+  };
+}
+
 function getStatus({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
   assertSessionId(sessionId);
 
@@ -1205,4 +1363,5 @@ module.exports = {
   syncSession,
   getStatus,
   getPendingItems,
+  checkSession,
 };

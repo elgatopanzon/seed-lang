@@ -6,7 +6,11 @@ const { parse } = require('yaml');
 const assert = require('node:assert/strict');
 const { test, describe } = require('node:test');
 
+const PASS_CMD = process.execPath + ' -e "process.exit(0)"';
+const FAIL_CMD = process.execPath + ' -e "process.exit(1)"';
+
 const {
+  checkSession,
   claimNext,
   confirmItem,
   failItem,
@@ -69,6 +73,10 @@ function snapshotFile(cwd) {
 
 function lockPath(cwd, sessionId = 'default') {
   return path.join(cwd, '.seed', 'locks', `${sessionId}.lock`);
+}
+
+function testFileHash(buffer) {
+  return createHash('sha256').update(buffer).digest('hex');
 }
 
 describe('verification store', () => {
@@ -249,6 +257,7 @@ describe('verification store', () => {
         itemId: 'verify-begin',
         owner: 'worker-A',
         files: ['implementation.js'],
+          testCommands: [PASS_CMD],
         now: () => 2_000,
         evidence: 'verified manually',
       });
@@ -259,6 +268,7 @@ describe('verification store', () => {
         itemId: 'verify-next',
         owner: 'worker-A',
         files: ['implementation.js'],
+          testCommands: [FAIL_CMD],
         now: () => 3_500,
         reason: 'environment missing',
       });
@@ -292,6 +302,7 @@ describe('verification store', () => {
           itemId: 'missing-id',
           owner: 'worker-A',
           files: ['implementation.js'],
+          testCommands: [PASS_CMD],
           evidence: 'works',
         });
       }, /Unknown verification id/);
@@ -312,6 +323,7 @@ describe('verification store', () => {
           itemId: 'verify-next',
           owner: 'worker-A',
           files: ['implementation.js'],
+          testCommands: [PASS_CMD],
           evidence: 'works',
         });
       }, /Invalid transition/);
@@ -333,6 +345,7 @@ describe('verification store', () => {
         itemId: 'verify-begin',
         owner: 'worker-A',
         files: ['implementation.js'],
+          testCommands: [PASS_CMD],
         now: () => 2_000,
         evidence: 'ok',
       });
@@ -342,6 +355,7 @@ describe('verification store', () => {
         itemId: 'verify-next',
         owner: 'worker-B',
         files: ['implementation.js'],
+          testCommands: [FAIL_CMD],
         now: () => 3_500,
         reason: 'not available',
       });
@@ -398,6 +412,7 @@ describe('verification store', () => {
           itemId: 'verify-begin',
           owner: 'worker-A',
           files: ['implementation.js'],
+          testCommands: [PASS_CMD],
           evidence: 'not claimable',
         });
       }, /Invalid transition/);
@@ -495,6 +510,7 @@ describe('verification store', () => {
           itemId: 'verify-begin',
           owner: 'worker-A',
           files: ['implementation.js'],
+          testCommands: [PASS_CMD],
           evidence: 'ok',
         }),
         () => failItem({
@@ -503,6 +519,7 @@ describe('verification store', () => {
           itemId: 'verify-begin',
           owner: 'worker-A',
           files: ['implementation.js'],
+          testCommands: [FAIL_CMD],
           reason: 'failed',
         }),
         () => getStatus({ cwd, sessionId: invalidSessionId }),
@@ -557,6 +574,7 @@ describe('verification store', () => {
           itemId: 'verify-begin',
           owner: 'worker-B',
           files: ['implementation.js'],
+          testCommands: [PASS_CMD],
           evidence: 'ok',
           now: () => 2_000,
         });
@@ -575,6 +593,7 @@ describe('verification store', () => {
           itemId: 'verify-begin',
           owner: 'worker-B',
           files: ['implementation.js'],
+          testCommands: [FAIL_CMD],
           reason: 'failed',
           now: () => 2_000,
         });
@@ -639,6 +658,7 @@ describe('verification store', () => {
         itemId: 'verify-begin',
         owner: 'worker-A',
         files: ['implementation.js'],
+          testCommands: [PASS_CMD],
         now: () => 2_000,
       });
 
@@ -663,6 +683,7 @@ describe('verification store', () => {
         itemId: 'verify-begin',
         owner: 'worker-A',
         files: ['implementation.js'],
+          testCommands: [FAIL_CMD],
         now: () => 2_000,
       });
 
@@ -712,6 +733,7 @@ describe('verification store', () => {
           itemId: id,
           owner: 'worker-A',
           files: ['implementation.js'],
+          testCommands: [PASS_CMD],
           evidence: id,
           now: () => 2_000 + index,
         });
@@ -763,6 +785,7 @@ describe('verification store', () => {
         itemId: 'verify-begin',
         owner: 'worker-A',
         files: ['implementation.js'],
+          testCommands: [PASS_CMD],
         evidence: 'ok',
         now: () => 2_000,
       });
@@ -813,6 +836,7 @@ describe('verification store', () => {
         itemId: 'manual-counts',
         owner: 'worker-A',
         files: ['implementation.js'],
+          testCommands: [PASS_CMD],
         evidence: 'ok',
         now: () => 2_000,
       });
@@ -822,6 +846,7 @@ describe('verification store', () => {
         itemId: 'implicit-behavior-counts',
         owner: 'worker-A',
         files: ['implementation.js'],
+          testCommands: [PASS_CMD],
         evidence: 'ok',
         now: () => 4_000,
       });
@@ -851,6 +876,7 @@ describe('verification store', () => {
         itemId: 'manual-counts',
         owner: 'worker-B',
         files: ['implementation.js'],
+          testCommands: [PASS_CMD],
         evidence: 'ok after Seed change',
         now: () => 6_000,
       });
@@ -862,6 +888,7 @@ describe('verification store', () => {
         itemId: 'implicit-behavior-counts',
         owner: 'worker-B',
         files: ['implementation.js'],
+          testCommands: [PASS_CMD],
         evidence: 'implicit ok after Seed change',
         now: () => 8_000,
       });
@@ -883,6 +910,37 @@ describe('verification store', () => {
     });
   });
 
+  test('legacy terminal evidence without test commands expires and check reruns stored commands', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+
+      const session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      session.items[0].status = 'confirmed';
+      session.items[0].evidence_files = [{ path: 'implementation.js', sha256: testFileHash(fs.readFileSync(path.join(cwd, 'implementation.js'))) }];
+      session.items[1].status = 'confirmed';
+      session.items[1].evidence_files = [{ path: 'implementation.js', sha256: testFileHash(fs.readFileSync(path.join(cwd, 'implementation.js'))) }];
+      session.items[1].test_commands = [{ command: PASS_CMD }];
+      fs.writeFileSync(sessionFile(cwd), JSON.stringify(session, null, 2), 'utf8');
+
+      const status = getStatus({ cwd });
+      assert.equal(status.expired, 1);
+      assert.deepEqual(status.expiredIds, ['verify-begin']);
+      assert.equal(status.expiredEvidence[0].missingTestCommands, true);
+
+      const check = checkSession({ cwd });
+      assert.equal(check.total, 2);
+      assert.equal(check.passed, 1);
+      assert.equal(check.failed, 1);
+      assert.equal(check.ok, false);
+      assert.equal(check.items[0].error, 'missing test commands');
+      assert.equal(check.items[1].commands[0].passed, true);
+    });
+  });
+
   test('failItem and confirmItem reject non-string evidence/reason values', () => {
     withTempDir((cwd) => {
       startSession({
@@ -898,6 +956,7 @@ describe('verification store', () => {
           itemId: 'verify-begin',
           owner: 'worker-A',
           files: ['implementation.js'],
+          testCommands: [PASS_CMD],
           evidence: 12,
           now: () => 1_500,
         });
@@ -910,6 +969,7 @@ describe('verification store', () => {
           itemId: 'verify-next',
           owner: 'worker-A',
           files: ['implementation.js'],
+          testCommands: [FAIL_CMD],
           reason: 12,
           now: () => 2_500,
         });
