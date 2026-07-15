@@ -1,0 +1,10 @@
+metadata:
+  name: policy-no-external-dependencies
+  summary: No external dependencies policy contract.
+  description: Forbids adding external runtime dependencies unless the Seed allows them.
+security:
+  no-external-dependencies:
+    description: The implementation must not add external runtime dependencies unless another Seed section explicitly allows them.
+    policy: global
+constraints:
+  no-new-external-runtime-deps: Runtime behavior should rely on project code, standard libraries, or explicitly allowed dependencies only.

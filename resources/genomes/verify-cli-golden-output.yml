@@ -1,5 +1,5 @@
 metadata:
-  name: verify-gli-golden-output
+  name: verify-cli-golden-output
   summary: Golden output verification contract.
   description: Requires golden output checks for stable command or interface output.
 verifications:

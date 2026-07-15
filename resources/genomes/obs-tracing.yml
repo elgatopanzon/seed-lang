@@ -1,0 +1,8 @@
+metadata:
+  name: obs-tracing
+  summary: Tracing observability contract.
+  description: Requires trace context for multi-step or distributed workflows.
+observability:
+  tracing: Seed-critical multi-step operations carry trace or correlation identifiers through relevant logs and calls.
+constraints:
+  trace-context-propagation: Trace or correlation IDs should be preserved across workflow boundaries where practical.

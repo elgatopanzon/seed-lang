@@ -1,0 +1,10 @@
+metadata:
+  name: obs-clear-errors
+  summary: Clear error observability contract.
+  description: Requires actionable local error messages.
+observability:
+  clear-errors: Errors should be clear enough for a user or agent to identify the failed operation and next debugging step.
+errors:
+  actionable-errors: Failure responses include concise, actionable error information without hiding the failure.
+constraints:
+  clear-error-reporting: Seed-critical failures must fail loudly with useful diagnostics.

@@ -1,0 +1,10 @@
+metadata:
+  name: policy-repo-local-files
+  summary: Repository-local file policy contract.
+  description: Restricts project file operations to repository-local paths unless the Seed allows otherwise.
+security:
+  repo-local-files:
+    description: File reads and writes must stay inside the repository or documented project-local state paths.
+    policy: global
+constraints:
+  repo-local-file-boundary: Implementation must not read or write arbitrary external filesystem paths.

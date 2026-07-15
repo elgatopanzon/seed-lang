@@ -1,0 +1,12 @@
+metadata:
+  name: policy-traceability-logs
+  summary: Traceability log policy contract.
+  description: Requires logs that connect operations to inputs, outputs, and decisions where relevant.
+security:
+  traceability-logs:
+    description: Important operations must produce traceability logs that make decisions and outcomes explainable without exposing secrets.
+    policy: global
+observability:
+  traceability-logs: Logs should connect operation identity, input references, result, and relevant decision path.
+constraints:
+  traceability-log-policy: Seed-critical workflows should remain traceable through implementation logs or records.

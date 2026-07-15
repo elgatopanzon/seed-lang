@@ -1,0 +1,10 @@
+metadata:
+  name: policy-no-network
+  summary: No network policy contract.
+  description: Declares a global policy forbidding network access unless the Seed allows it.
+security:
+  no-network:
+    description: Project behavior must not connect to the network unless another Seed section explicitly allows it.
+    policy: global
+constraints:
+  no-network-policy: Network access is forbidden by default for Seed-critical workflows.

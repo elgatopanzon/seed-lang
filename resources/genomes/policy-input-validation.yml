@@ -1,0 +1,10 @@
+metadata:
+  name: policy-input-validation
+  summary: Input validation policy contract.
+  description: Requires validation of external inputs before semantic processing.
+security:
+  input-validation:
+    description: External inputs must be validated before they affect state, commands, paths, queries, or output contracts.
+    policy: global
+constraints:
+  validate-external-inputs: Invalid input must fail clearly without unsafe side effects.

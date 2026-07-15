@@ -1,0 +1,8 @@
+metadata:
+  name: obs-structured-logs
+  summary: Structured log observability contract.
+  description: Requires logs to use stable structured fields when logs are emitted.
+observability:
+  structured-logs: Logs use stable structured fields for operation, level, message, timestamp, and relevant context.
+constraints:
+  structured-log-fields: Seed-critical logs should be machine-readable or consistently parseable.

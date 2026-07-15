@@ -1,0 +1,10 @@
+metadata:
+  name: policy-safe-paths
+  summary: Safe path handling policy contract.
+  description: Requires path traversal and unsafe path handling protections.
+security:
+  safe-paths:
+    description: User-controlled paths must be normalized, bounded, and checked before filesystem access.
+    policy: global
+constraints:
+  safe-path-handling: Path traversal, absolute-path escapes, and unsafe symlink-sensitive paths must be rejected or contained.

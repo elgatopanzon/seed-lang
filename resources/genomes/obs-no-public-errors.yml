@@ -1,0 +1,12 @@
+metadata:
+  name: obs-no-public-errors
+  summary: No public internals error contract.
+  description: Prevents public error output from exposing internals or secrets.
+observability:
+  no-public-internals: Public-facing errors must not expose stack traces, secrets, credentials, or sensitive implementation internals.
+errors:
+  public-error-safety: User-visible errors are safe to expose to their intended audience.
+security:
+  public-error-redaction:
+    description: Sensitive diagnostic details must be redacted from public errors.
+    policy: global

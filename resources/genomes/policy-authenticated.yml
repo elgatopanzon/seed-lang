@@ -1,0 +1,10 @@
+metadata:
+  name: policy-authenticated
+  summary: Authentication policy contract.
+  description: Requires authenticated access for protected behavior.
+security:
+  authenticated:
+    description: Protected actions require authenticated identity before execution.
+    policy: global
+constraints:
+  authenticated-access: Authentication must be enforced wherever the Seed marks behavior as protected.

@@ -1,0 +1,13 @@
+metadata:
+  name: obs-metrics-prometheus
+  summary: Prometheus metrics observability contract.
+  description: Requires Prometheus-compatible metrics for operational visibility.
+observability:
+  prometheus-metrics: Metrics are exposed in a Prometheus-compatible format when runtime metrics are required.
+interfaces:
+  metrics:
+    purpose: Operators or monitoring systems scrape runtime metrics.
+    examples:
+      - GET /metrics
+constraints:
+  prometheus-metrics-format: Metrics output must be Prometheus-compatible when metrics are enabled.

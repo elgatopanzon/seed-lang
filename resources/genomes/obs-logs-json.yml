@@ -1,0 +1,12 @@
+metadata:
+  name: obs-logs-json
+  summary: JSON log observability contract.
+  description: Requires structured logs to be emitted as JSON objects.
+genomes:
+  - obs-structured-logs
+observability:
+  json-logs: Structured logs are emitted as JSON objects when machine-readable logs are required.
+compatibility:
+  json-log-field-stability: JSON log fields must not be renamed or removed without a Seed change.
+constraints:
+  json-log-output: Machine-readable logs use JSON object format.

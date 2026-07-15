@@ -1,0 +1,12 @@
+metadata:
+  name: obs-error-codes
+  summary: Error code observability contract.
+  description: Requires stable error codes for machine-readable failure handling.
+errors:
+  stable-error-codes: Seed-critical errors expose stable error codes or identifiers.
+compatibility:
+  error-code-stability: Error codes must not be renamed or removed without a Seed change.
+observability:
+  error-code-diagnostics: Error codes are documented or discoverable enough to guide debugging.
+constraints:
+  stable-machine-error-codes: Machine-readable errors should include stable codes when clients or agents need to react programmatically.

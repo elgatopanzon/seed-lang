@@ -365,7 +365,7 @@ describe('seed cli', () => {
         assert.match(builtin.stdout, /^Origin\s+Genome\s+Source\s+Desc(?:ription)?/m);
         assert.match(builtin.stdout, /builtin\s+cli-nodejs\s+builtin:cli-nodejs/);
         assert.match(builtin.stdout, /Node\.js/);
-        assert.match(builtin.stdout, /\n\s+expectati\n\s+ons/);
+        assert.match(builtin.stdout, /expectations/);
         assert.equal(builtin.stdout.split('\n').every((line) => line.length <= 78), true);
         assert.equal(builtin.stdout.includes('user-demo'), false);
         assert.equal(builtin.stdout.includes('repo-demo'), false);

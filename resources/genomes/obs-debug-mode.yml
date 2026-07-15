@@ -1,0 +1,12 @@
+metadata:
+  name: obs-debug-mode
+  summary: Debug mode observability contract.
+  description: Adds explicit debug mode expectations.
+observability:
+  debug-mode: The project exposes a documented debug mode that increases diagnostics without exposing secrets.
+security:
+  debug-secret-safety:
+    description: Debug output must not disclose secrets or private credentials.
+    policy: global
+constraints:
+  documented-debug-mode: Debug mode must be explicit, discoverable, and safe for the declared environment.

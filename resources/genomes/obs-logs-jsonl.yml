@@ -1,0 +1,12 @@
+metadata:
+  name: obs-logs-jsonl
+  summary: JSONL log observability contract.
+  description: Requires structured logs to be emitted as newline-delimited JSON.
+genomes:
+  - obs-structured-logs
+observability:
+  jsonl-logs: Structured logs are emitted as one JSON object per line when streaming machine-readable logs are required.
+compatibility:
+  jsonl-log-field-stability: JSONL log fields must not be renamed or removed without a Seed change.
+constraints:
+  jsonl-log-output: Machine-readable streaming logs use JSONL format.

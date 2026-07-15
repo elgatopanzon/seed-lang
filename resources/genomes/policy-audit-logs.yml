@@ -1,0 +1,12 @@
+metadata:
+  name: policy-audit-logs
+  summary: Audit log policy contract.
+  description: Requires audit records for security-relevant or state-changing actions.
+security:
+  audit-logs:
+    description: Security-relevant or important state-changing actions must emit audit records with enough context for review.
+    policy: global
+observability:
+  security-audit-logs: Audit logs include actor, action, target, result, and timestamp when that information exists.
+constraints:
+  audit-log-policy: Audit logging must be preserved for protected or state-changing workflows declared by the Seed.

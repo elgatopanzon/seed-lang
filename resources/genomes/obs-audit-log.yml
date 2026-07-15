@@ -1,0 +1,8 @@
+metadata:
+  name: obs-audit-log
+  summary: Audit log observability contract.
+  description: Adds audit log observability expectations.
+observability:
+  audit-log: The project records audit events for important state-changing or security-relevant operations.
+constraints:
+  audit-log-events: Audit events include enough context to identify what happened and whether it succeeded.

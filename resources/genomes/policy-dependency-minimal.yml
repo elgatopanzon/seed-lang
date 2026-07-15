@@ -1,0 +1,10 @@
+metadata:
+  name: policy-dependency-minimal
+  summary: Minimal dependency policy contract.
+  description: Encourages small dependency surfaces for Seed implementations.
+security:
+  dependency-minimal:
+    description: Dependencies should be limited to those needed to satisfy the Seed and maintained enough for the project risk profile.
+    policy: global
+constraints:
+  minimal-dependency-surface: Avoid unnecessary runtime dependencies when standard library or existing project dependencies are sufficient.

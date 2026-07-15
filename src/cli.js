@@ -408,36 +408,52 @@ function formatGenomeList(entries, columns = terminalWidth()) {
     source: 'Source',
     description: 'Description',
   };
+  const originWidth = Math.max(headers.origin.length, ...rows.map((row) => row.origin.length));
+  const available = Math.max(20, columns - originWidth - 6);
+  const idWidth = Math.min(
+    Math.max(headers.id.length, ...rows.map((row) => row.id.length)),
+    Math.max(12, Math.floor(available * 0.32)),
+  );
+  const sourceWidth = Math.min(
+    Math.max(headers.source.length, ...rows.map((row) => row.source.length)),
+    Math.max(18, Math.floor(available * 0.38)),
+  );
+  const descriptionWidth = Math.max(1, columns - originWidth - idWidth - sourceWidth - 6);
   const widths = {
-    origin: Math.max(headers.origin.length, ...rows.map((row) => row.origin.length)),
-    id: Math.max(headers.id.length, ...rows.map((row) => row.id.length)),
-    source: Math.max(headers.source.length, ...rows.map((row) => row.source.length)),
+    origin: originWidth,
+    id: idWidth,
+    source: sourceWidth,
+    description: descriptionWidth,
   };
-  const prefixWidth = widths.origin + widths.id + widths.source + 6;
-  const descriptionWidth = Math.max(1, columns - prefixWidth);
-  const descriptionHeader = descriptionWidth < headers.description.length ? 'Desc'.slice(0, descriptionWidth) : headers.description;
-  const rowPrefix = (row) => [
-    padRight(row.origin, widths.origin),
-    padRight(row.id, widths.id),
-    padRight(row.source, widths.source),
-  ].join('  ');
+  const cellsForRow = (row) => ({
+    origin: wrapText(row.origin, widths.origin),
+    id: wrapText(row.id, widths.id),
+    source: wrapText(row.source, widths.source),
+    description: wrapText(row.description, widths.description),
+  });
   const formatWrappedRow = (row) => {
-    const lines = wrapText(row.description, descriptionWidth);
-    const continuationPrefix = ' '.repeat(prefixWidth);
-    return lines.map((line, index) => {
-      const prefix = index === 0 ? rowPrefix(row) + '  ' : continuationPrefix;
-      return (prefix + line).replace(/\s+$/, '');
-    });
+    const cells = cellsForRow(row);
+    const count = Math.max(cells.origin.length, cells.id.length, cells.source.length, cells.description.length);
+    const lines = [];
+    for (let index = 0; index < count; index += 1) {
+      lines.push([
+        padRight(cells.origin[index] ?? '', widths.origin),
+        padRight(cells.id[index] ?? '', widths.id),
+        padRight(cells.source[index] ?? '', widths.source),
+        cells.description[index] ?? '',
+      ].join('  ').replace(/\s+$/, ''));
+    }
+    return lines;
   };
   const separator = [
     '-'.repeat(widths.origin),
     '-'.repeat(widths.id),
     '-'.repeat(widths.source),
-    '-'.repeat(descriptionWidth),
+    '-'.repeat(widths.description),
   ].join('  ');
 
   return [
-    rowPrefix(headers) + '  ' + descriptionHeader,
+    ...formatWrappedRow(headers),
     separator,
     ...rows.flatMap(formatWrappedRow),
   ].join('\n');

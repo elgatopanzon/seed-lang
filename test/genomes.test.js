@@ -60,6 +60,29 @@ describe('seed genomes', () => {
       'tui-python-textual',
       'tui-rust-cursive',
       'tui-rust-ratatui',
+      'obs-audit-log',
+      'obs-clear-errors',
+      'obs-debug-mode',
+      'obs-error-codes',
+      'obs-health-check',
+      'obs-logs-json',
+      'obs-logs-jsonl',
+      'obs-metrics-prometheus',
+      'obs-no-public-errors',
+      'obs-structured-logs',
+      'obs-tracing',
+      'policy-audit-logs',
+      'policy-authenticated',
+      'policy-dependency-minimal',
+      'policy-input-validation',
+      'policy-no-external-dependencies',
+      'policy-no-network',
+      'policy-no-secrets-output',
+      'policy-no-shell-injection',
+      'policy-rbac',
+      'policy-repo-local-files',
+      'policy-safe-paths',
+      'policy-traceability-logs',
       'state-event-log',
       'state-filesystem',
       'state-idempotent',
@@ -74,7 +97,7 @@ describe('seed genomes', () => {
       'state-stateless',
       'state-versioned',
       'verify-api-contract',
-      'verify-gli-golden-output',
+      'verify-cli-golden-output',
       'verify-integration-tests',
       'verify-live-tests',
       'verify-no-network',
@@ -220,6 +243,18 @@ describe('seed genomes', () => {
     const seedScripts = compileGenomeDocument({ id: 'verify-seed-scripts', cwd: process.cwd(), home: '' });
     assert.equal(seedScripts.provenance['verifications.seed-scripts'].path, 'builtin:verify-seed-scripts');
     assert.equal(seedScripts.provenance['constraints.seed-scripts-location'].path, 'builtin:verify-seed-scripts');
+
+    const policyNoNetwork = compileGenomeDocument({ id: 'policy-no-network', cwd: process.cwd(), home: '' });
+    assert.equal(policyNoNetwork.provenance['security.no-network'].path, 'builtin:policy-no-network');
+    assert.equal(policyNoNetwork.provenance['constraints.no-network-policy'].path, 'builtin:policy-no-network');
+
+    const logsJson = compileGenomeDocument({ id: 'obs-logs-json', cwd: process.cwd(), home: '' });
+    assert.equal(logsJson.provenance['observability.structured-logs'].path, 'builtin:obs-structured-logs');
+    assert.equal(logsJson.provenance['observability.json-logs'].path, 'builtin:obs-logs-json');
+
+    const health = compileGenomeDocument({ id: 'obs-health-check', cwd: process.cwd(), home: '' });
+    assert.equal(health.provenance['interfaces.health'].path, 'builtin:obs-health-check');
+    assert.equal(health.provenance['observability.health-check'].path, 'builtin:obs-health-check');
   });
 
   test('builtin genomes recursively compose into a compiled seed document', () => {

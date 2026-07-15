@@ -1,0 +1,14 @@
+metadata:
+  name: obs-health-check
+  summary: Health check observability contract.
+  description: Requires a health check surface for service-like projects.
+observability:
+  health-check: The project exposes a health check that reports whether the primary runtime is able to serve Seed-critical behavior.
+interfaces:
+  health:
+    purpose: Operators or agents check basic runtime health.
+    examples:
+      - GET /health
+      - <command> health
+constraints:
+  health-check-available: Service-like projects should provide a fast health check.

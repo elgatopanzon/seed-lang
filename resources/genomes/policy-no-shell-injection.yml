@@ -1,0 +1,10 @@
+metadata:
+  name: policy-no-shell-injection
+  summary: Shell injection prevention policy contract.
+  description: Requires safe command execution behavior for shell-facing projects.
+security:
+  no-shell-injection:
+    description: User-controlled input must not be interpolated into shell commands in a way that can execute unintended commands.
+    policy: global
+constraints:
+  shell-command-safety: Command execution must use safe argument passing, escaping, or avoid shell evaluation.

@@ -1,0 +1,10 @@
+metadata:
+  name: policy-rbac
+  summary: Role-based access policy contract.
+  description: Requires role-based authorization for protected behavior.
+security:
+  rbac:
+    description: Protected actions require authorization based on role, capability, or equivalent permission checks.
+    policy: global
+constraints:
+  role-based-access-control: Authorization decisions must enforce the roles or permissions declared by the Seed.
