@@ -17,5 +17,10 @@
   ],
   "dependencies": {
     "yaml": "^2.5.1"
-  }
+  },
+  "files": [
+    "src",
+    "resources",
+    "README.md"
+  ]
 }

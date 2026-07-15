@@ -1,0 +1,16 @@
+metadata:
+  name: cli-json-output
+  summary: JSON CLI output contract.
+  description: Makes successful CLI output JSON by default and preserves
+    machine-readable field stability.
+behavior:
+  outputs:
+    default-json: The CLI interface outputs JSON by default for successful
+      machine-readable results.
+    valid-json: Successful output must parse as valid JSON.
+compatibility:
+  json-field-stability: JSON output fields must not be renamed or removed without a Seed change.
+constraints:
+  json-output-default: The target project CLI emits JSON as its default interface output format.
+observability:
+  json-errors: If errors are emitted as JSON, they must still use nonzero exit codes.

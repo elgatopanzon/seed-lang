@@ -7,104 +7,7 @@ const REFERENCE_PATTERN = /@([A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9
 const MAX_GENOME_DEPTH = 64;
 const GENOME_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
-const BUILTIN_GENOMES = {
-  'cli-interface': {
-    metadata: {
-      name: 'cli-interface',
-      summary: 'Baseline command line interface contract.',
-      description: 'Defines a generic terminal CLI interface with help, stderr errors, and exit-code expectations.',
-    },
-    interfaces: {
-      cli: {
-        purpose: 'User invokes the project from a terminal as a CLI.',
-        examples: [
-          '<command> --help',
-        ],
-      },
-    },
-    observability: {
-      'stderr-errors': 'User-facing errors must be written to stderr.',
-      'exit-codes': 'Exit code 0 means success; nonzero means validation, input, or execution failure.',
-    },
-  },
-  'cli-nodejs': {
-    metadata: {
-      name: 'cli-nodejs',
-      summary: 'Node.js command line application contract.',
-      description: 'Adds Node.js runtime, npm dependency, Linux shell, and Node CLI structure expectations.',
-    },
-    genomes: [
-      'cli-interface',
-    ],
-    interfaces: {
-      cli: {
-        purpose: 'User invokes the project from a terminal as a Node.js CLI.',
-        examples: [
-          'node ./src/cli.js --help',
-          '<command> --help',
-        ],
-      },
-    },
-    environment: {
-      'node-runtime': 'Must run on Node.js 20 or newer.',
-      'npm-install': 'Dependencies are installed with npm from package.json and package-lock.json when present.',
-      linux: 'Must run on Linux shells.',
-    },
-    security: {
-      'no-secret-output': 'Must not print environment variables, tokens, or credentials unless explicitly required by the Seed.',
-    },
-    constraints: {
-      'nodejs-cli-runtime': 'The implementation is a Node.js command line application.',
-    },
-    freedom: {
-      'nodejs-cli-structure': 'Implementation may choose any maintainable internal Node.js module structure.',
-    },
-  },
-  'cli-json-output': {
-    metadata: {
-      name: 'cli-json-output',
-      summary: 'JSON CLI output contract.',
-      description: 'Makes successful CLI output JSON by default and preserves machine-readable field stability.',
-    },
-    behavior: {
-      outputs: {
-        'default-json': 'The CLI interface outputs JSON by default for successful machine-readable results.',
-        'valid-json': 'Successful output must parse as valid JSON.',
-      },
-    },
-    compatibility: {
-      'json-field-stability': 'JSON output fields must not be renamed or removed without a Seed change.',
-    },
-    constraints: {
-      'json-output-default': 'The target project CLI emits JSON as its default interface output format.',
-    },
-    observability: {
-      'json-errors': 'If errors are emitted as JSON, they must still use nonzero exit codes.',
-    },
-  },
-  'cli-human-output': {
-    metadata: {
-      name: 'cli-human-output',
-      summary: 'Human-readable CLI output contract.',
-      description: 'Makes successful CLI output readable terminal text with user-facing error expectations.',
-    },
-    behavior: {
-      outputs: {
-        'default-human-output': 'The CLI interface outputs human-readable text by default for successful interactive use.',
-        'readable-text': 'Successful output should be readable in a terminal without requiring a parser.',
-      },
-    },
-    compatibility: {
-      'human-output-stability': 'Human-readable output wording and layout may evolve, but it must remain understandable without external tooling.',
-    },
-    constraints: {
-      'human-output-default': 'The target project CLI emits human-readable text as its default interface output format.',
-    },
-    observability: {
-      'human-readable-errors': 'User-facing errors should be concise, actionable, and suitable for terminal display.',
-    },
-  },
-};
+const BUILTIN_GENOME_DIR = join(__dirname, '..', 'resources', 'genomes');
 
 function isObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -174,7 +77,7 @@ function validateGenomeId(id) {
   }
 }
 
-function listGenomeFiles(root, origin) {
+function listGenomeFiles(root, origin, publicPathFor = (filePath) => filePath) {
   if (!root || !existsSync(root)) {
     return [];
   }
@@ -183,10 +86,10 @@ function listGenomeFiles(root, origin) {
     .filter((entry) => entry.isFile() && /\.ya?ml$/i.test(entry.name))
     .map((entry) => {
       const id = entry.name.replace(/\.ya?ml$/i, '');
-      const path = join(root, entry.name);
+      const filePath = join(root, entry.name);
       let description = '';
       try {
-        const document = parse(readFileSync(path, 'utf8'));
+        const document = parse(readFileSync(filePath, 'utf8'));
         description = document?.metadata?.description ?? document?.metadata?.summary ?? '';
       } catch (error) {
         description = '';
@@ -194,7 +97,8 @@ function listGenomeFiles(root, origin) {
       return {
         id,
         origin,
-        path,
+        path: publicPathFor(filePath, id),
+        filePath,
         description,
       };
     });
@@ -205,12 +109,7 @@ function listGenomeDefinitions({ cwd, home = process.env.HOME, origins } = {}) {
   const entries = [];
 
   if (!selected || selected.has('builtin')) {
-    entries.push(...Object.entries(BUILTIN_GENOMES).map(([id, document]) => ({
-      id,
-      origin: 'builtin',
-      path: `builtin:${id}`,
-      description: document.metadata?.description ?? document.metadata?.summary ?? '',
-    })));
+    entries.push(...listGenomeFiles(BUILTIN_GENOME_DIR, 'builtin', (_filePath, id) => `builtin:${id}`));
   }
 
   if (!selected || selected.has('user')) {
@@ -257,32 +156,28 @@ function initRepoGenome({ cwd, id, overwrite = false } = {}) {
   };
 }
 
-function loadGenomeFile(path, id, origin) {
-  if (!existsSync(path)) {
+function loadGenomeFile(filePath, id, origin, publicPath = filePath) {
+  if (!existsSync(filePath)) {
     return null;
   }
 
   try {
-    const document = parse(readFileSync(path, 'utf8'));
+    const document = parse(readFileSync(filePath, 'utf8'));
     if (!isObject(document)) {
       throw new Error('genome file must contain an object');
     }
-    return { id, origin, path, document };
+    return { id, origin, path: publicPath, filePath, document };
   } catch (error) {
-    throw new Error(`Failed to load genome ${id} from ${path}: ${error.message}`);
+    throw new Error(`Failed to load genome ${id} from ${filePath}: ${error.message}`);
   }
 }
 
 function resolveGenome({ id, cwd, home = process.env.HOME } = {}) {
   let resolved = null;
 
-  if (BUILTIN_GENOMES[id]) {
-    resolved = {
-      id,
-      origin: 'builtin',
-      path: `builtin:${id}`,
-      document: structuredClone(BUILTIN_GENOMES[id]),
-    };
+  const builtinGenome = loadGenomeFile(genomePath(BUILTIN_GENOME_DIR, id), id, 'builtin', `builtin:${id}`);
+  if (builtinGenome) {
+    resolved = builtinGenome;
   }
 
   if (home) {
@@ -698,7 +593,7 @@ function compileSeedDocument({ document, cwd, home, seedPath = 'seed/seed.yml', 
 }
 
 module.exports = {
-  BUILTIN_GENOMES,
+  BUILTIN_GENOME_DIR,
   compileGenomeDocument,
   compileSeedDocument,
   initRepoGenome,

@@ -1,0 +1,25 @@
+metadata:
+  name: cli-nodejs
+  summary: Node.js command line application contract.
+  description: Adds Node.js runtime, npm dependency, Linux shell, and Node CLI
+    structure expectations.
+genomes:
+  - cli-interface
+interfaces:
+  cli:
+    purpose: User invokes the project from a terminal as a Node.js CLI.
+    examples:
+      - node ./src/cli.js --help
+      - <command> --help
+environment:
+  node-runtime: Must run on Node.js 20 or newer.
+  npm-install: Dependencies are installed with npm from package.json and
+    package-lock.json when present.
+  linux: Must run on Linux shells.
+security:
+  no-secret-output: Must not print environment variables, tokens, or credentials
+    unless explicitly required by the Seed.
+constraints:
+  nodejs-cli-runtime: The implementation is a Node.js command line application.
+freedom:
+  nodejs-cli-structure: Implementation may choose any maintainable internal Node.js module structure.
