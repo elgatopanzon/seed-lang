@@ -351,8 +351,10 @@ describe('seed cli', () => {
     withTempDir((cwd) => {
       const home = tempDir();
       const originalHome = process.env.HOME;
+      const originalColumns = process.env.COLUMNS;
       try {
         process.env.HOME = home;
+        process.env.COLUMNS = '78';
         fs.mkdirSync(path.join(home, '.seed', 'genomes'), { recursive: true });
         fs.writeFileSync(path.join(home, '.seed', 'genomes', 'user-demo.yml'), 'constraints:\n  user-demo: User genome.\n', 'utf8');
         fs.mkdirSync(path.join(cwd, 'seed', 'genomes'), { recursive: true });
@@ -361,7 +363,9 @@ describe('seed cli', () => {
         const builtin = runCli(['genome', 'list', '--builtin'], cwd);
         assert.equal(builtin.code, 0);
         assert.match(builtin.stdout, /^Origin\s+Genome\s+Source\s+Description/m);
-        assert.match(builtin.stdout, /builtin\s+cli-nodejs\s+builtin:cli-nodejs\s+Adds Node.js runtime/);
+        assert.match(builtin.stdout, /builtin\s+cli-nodejs\s+builtin:cli-nodejs\s+Adds Node.js/);
+        assert.match(builtin.stdout, /\n\s+error expectations\./);
+        assert.equal(builtin.stdout.split('\n').every((line) => line.length <= 78), true);
         assert.equal(builtin.stdout.includes('user-demo'), false);
         assert.equal(builtin.stdout.includes('repo-demo'), false);
 
@@ -376,6 +380,11 @@ describe('seed cli', () => {
         assert.equal(repo.stdout.includes('user-demo'), false);
       } finally {
         process.env.HOME = originalHome;
+        if (originalColumns === undefined) {
+          delete process.env.COLUMNS;
+        } else {
+          process.env.COLUMNS = originalColumns;
+        }
         fs.rmSync(home, { recursive: true, force: true });
       }
     });

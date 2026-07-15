@@ -344,7 +344,54 @@ function padRight(value, width) {
   return String(value).padEnd(width, ' ');
 }
 
-function formatGenomeList(entries) {
+function terminalWidth() {
+  const envColumns = Number.parseInt(process.env.COLUMNS ?? '', 10);
+  if (Number.isFinite(envColumns) && envColumns > 0) {
+    return envColumns;
+  }
+
+  return process.stdout.columns || 80;
+}
+
+function wrapText(value, width) {
+  const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+  if (text.length === 0) {
+    return [''];
+  }
+
+  const lines = [];
+  let line = '';
+  text.split(' ').forEach((word) => {
+    if (line.length === 0) {
+      while (word.length > width) {
+        lines.push(word.slice(0, width));
+        word = word.slice(width);
+      }
+      line = word;
+      return;
+    }
+
+    if (line.length + 1 + word.length <= width) {
+      line += ' ' + word;
+      return;
+    }
+
+    lines.push(line);
+    while (word.length > width) {
+      lines.push(word.slice(0, width));
+      word = word.slice(width);
+    }
+    line = word;
+  });
+
+  if (line.length > 0) {
+    lines.push(line);
+  }
+
+  return lines;
+}
+
+function formatGenomeList(entries, columns = terminalWidth()) {
   if (entries.length === 0) {
     return 'No genomes found.';
   }
@@ -366,23 +413,32 @@ function formatGenomeList(entries) {
     id: Math.max(headers.id.length, ...rows.map((row) => row.id.length)),
     source: Math.max(headers.source.length, ...rows.map((row) => row.source.length)),
   };
-  const formatRow = (row) => [
+  const prefixWidth = widths.origin + widths.id + widths.source + 6;
+  const descriptionWidth = Math.max(headers.description.length, columns - prefixWidth);
+  const rowPrefix = (row) => [
     padRight(row.origin, widths.origin),
     padRight(row.id, widths.id),
     padRight(row.source, widths.source),
-    row.description,
-  ].join('  ').replace(/\s+$/, '');
+  ].join('  ');
+  const formatWrappedRow = (row) => {
+    const lines = wrapText(row.description, descriptionWidth);
+    const continuationPrefix = ' '.repeat(prefixWidth);
+    return lines.map((line, index) => {
+      const prefix = index === 0 ? rowPrefix(row) + '  ' : continuationPrefix;
+      return (prefix + line).replace(/\s+$/, '');
+    });
+  };
   const separator = [
     '-'.repeat(widths.origin),
     '-'.repeat(widths.id),
     '-'.repeat(widths.source),
-    '-'.repeat(headers.description.length),
+    '-'.repeat(descriptionWidth),
   ].join('  ');
 
   return [
-    formatRow(headers),
+    rowPrefix(headers) + '  ' + headers.description,
     separator,
-    ...rows.map(formatRow),
+    ...rows.flatMap(formatWrappedRow),
   ].join('\n');
 }
 
