@@ -1,0 +1,15 @@
+metadata:
+  name: cli-jsonl-output
+  summary: JSON Lines CLI output contract.
+  description: Makes successful CLI output JSON Lines for streaming or
+    record-oriented results.
+behavior:
+  outputs:
+    default-jsonl: The CLI outputs JSON Lines when record-oriented output is required.
+    valid-jsonl: Each non-empty output line must parse as an independent JSON value.
+compatibility:
+  jsonl-field-stability: JSON object fields in JSON Lines output must not be
+    renamed or removed without a Seed change.
+constraints:
+  jsonl-output-format: The target project CLI emits newline-delimited JSON for
+    streamable machine-readable results.

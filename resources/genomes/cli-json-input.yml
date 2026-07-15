@@ -1,0 +1,14 @@
+metadata:
+  name: cli-json-input
+  summary: JSON CLI input contract.
+  description: Adds JSON input parsing expectations for CLI tools.
+behavior:
+  inputs:
+    json-input: The CLI accepts JSON input through arguments, files, or stdin as
+      defined by the Seed.
+    valid-json-input: JSON input must parse as valid JSON before semantic processing.
+errors:
+  invalid-json-input: Malformed JSON input fails with a nonzero exit code and
+    identifies the parsing problem.
+constraints:
+  json-input-format: The target project CLI accepts JSON input when required by the Seed.

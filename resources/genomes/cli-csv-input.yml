@@ -1,0 +1,14 @@
+metadata:
+  name: cli-csv-input
+  summary: CSV CLI input contract.
+  description: Adds CSV input parsing expectations for CLI tools.
+behavior:
+  inputs:
+    csv-input: The CLI accepts CSV input through files or stdin as defined by the Seed.
+    csv-header-input: CSV input header handling must be documented by the Seed or
+      the implementation output contract.
+errors:
+  invalid-csv-input: Malformed CSV input fails with a nonzero exit code and
+    identifies the parsing problem.
+constraints:
+  csv-input-format: The target project CLI accepts CSV input when required by the Seed.

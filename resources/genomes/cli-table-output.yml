@@ -1,0 +1,14 @@
+metadata:
+  name: cli-table-output
+  summary: Terminal table CLI output contract.
+  description: Makes successful CLI output a human-readable terminal table for
+    tabular results.
+behavior:
+  outputs:
+    default-table: The CLI outputs a readable text table when tabular human output
+      is required.
+    table-readable: Table output must keep rows and columns understandable in a
+      normal terminal.
+constraints:
+  table-output-format: The target project CLI emits terminal table output for
+    human-readable tabular results.

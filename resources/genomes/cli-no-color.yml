@@ -1,0 +1,15 @@
+metadata:
+  name: cli-no-color
+  summary: No-color CLI output contract.
+  description: Adds color suppression expectations for CLI tools.
+interfaces:
+  cli:
+    purpose: User can disable colored output.
+    examples:
+      - NO_COLOR=1 <command>
+      - <command> --no-color
+behavior:
+  no-color-env: NO_COLOR disables ANSI color output when present in the environment.
+  no-color-flag: --no-color disables ANSI color output when the flag is supported.
+constraints:
+  color-disable-support: The CLI can produce output without ANSI color codes.

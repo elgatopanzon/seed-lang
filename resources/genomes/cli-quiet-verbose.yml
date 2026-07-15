@@ -1,0 +1,18 @@
+metadata:
+  name: cli-quiet-verbose
+  summary: CLI verbosity controls contract.
+  description: Adds quiet and verbose output mode expectations for CLI tools.
+interfaces:
+  cli:
+    purpose: User can adjust CLI output verbosity.
+    examples:
+      - <command> --quiet
+      - <command> --verbose
+behavior:
+  quiet-mode: --quiet suppresses non-essential informational output while
+    preserving required results and errors.
+  verbose-mode: --verbose emits additional diagnostic or progress detail without
+    changing primary results.
+constraints:
+  verbosity-controls: The CLI supports quiet and verbose output controls when
+    verbosity is relevant.

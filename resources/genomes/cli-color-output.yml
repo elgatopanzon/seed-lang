@@ -1,0 +1,10 @@
+metadata:
+  name: cli-color-output
+  summary: Colored CLI output contract.
+  description: Adds terminal color output expectations for human-readable CLI output.
+behavior:
+  color-output: The CLI may use ANSI color for human-readable output when writing
+    to an interactive terminal.
+  color-nonessential: Color must not be required to understand output semantics.
+constraints:
+  ansi-color-output: The CLI may emit ANSI color codes for human-facing output when appropriate.

@@ -1,0 +1,12 @@
+metadata:
+  name: cli-progress-output
+  summary: CLI progress output contract.
+  description: Adds progress reporting expectations for long-running CLI operations.
+behavior:
+  progress-output: Long-running operations may emit progress information without
+    corrupting primary stdout results.
+  progress-stream: Progress output goes to stderr or an explicitly documented
+    progress channel unless the Seed specifies otherwise.
+constraints:
+  progress-reporting: The CLI reports progress for long-running operations when
+    useful and allowed by the Seed.

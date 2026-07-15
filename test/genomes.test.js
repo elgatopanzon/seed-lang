@@ -43,6 +43,17 @@ describe('seed genomes', () => {
       'cli-config-env-file',
       'cli-config-file',
       'cli-config-ini',
+      'cli-yaml-output',
+      'cli-table-output',
+      'cli-quiet-verbose',
+      'cli-progress-output',
+      'cli-no-color',
+      'cli-jsonl-output',
+      'cli-json-input',
+      'cli-human-input',
+      'cli-csv-output',
+      'cli-csv-input',
+      'cli-color-output',
       'cli-cpp',
       'cli-csharp',
       'cli-env-vars',
@@ -78,6 +89,12 @@ describe('seed genomes', () => {
     const compiled = compileGenomeDocument({ id: 'cli-human-output', cwd: process.cwd(), home: '' });
     assert.equal(compiled.description, 'Makes successful CLI output readable terminal text with user-facing error expectations.');
     assert.equal(compiled.provenance['behavior.outputs.default-human-output'].path, 'builtin:cli-human-output');
+
+    const jsonl = compileGenomeDocument({ id: 'cli-jsonl-output', cwd: process.cwd(), home: '' });
+    assert.equal(jsonl.provenance['behavior.outputs.default-jsonl'].path, 'builtin:cli-jsonl-output');
+
+    const csvInput = compileGenomeDocument({ id: 'cli-csv-input', cwd: process.cwd(), home: '' });
+    assert.equal(csvInput.provenance['behavior.inputs.csv-input'].path, 'builtin:cli-csv-input');
   });
 
   test('builtin genomes recursively compose into a compiled seed document', () => {

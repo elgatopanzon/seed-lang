@@ -1,0 +1,14 @@
+metadata:
+  name: cli-human-input
+  summary: Human-readable CLI input contract.
+  description: Adds free-form human-readable text input expectations for CLI tools.
+behavior:
+  inputs:
+    human-text-input: The CLI accepts human-readable text input through arguments,
+      files, or stdin as defined by the Seed.
+errors:
+  invalid-human-input: Unreadable or invalid human text input fails with a nonzero
+    exit code and a clear error message.
+constraints:
+  human-input-format: The target project CLI accepts human-readable text input
+    when required by the Seed.

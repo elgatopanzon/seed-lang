@@ -1,0 +1,13 @@
+metadata:
+  name: cli-yaml-output
+  summary: YAML CLI output contract.
+  description: Makes successful CLI output YAML for structured human-readable machine input.
+behavior:
+  outputs:
+    default-yaml: The CLI outputs YAML when YAML output is required.
+    valid-yaml: Successful YAML output must parse as valid YAML.
+compatibility:
+  yaml-field-stability: YAML mapping keys must not be renamed or removed without a Seed change.
+constraints:
+  yaml-output-format: The target project CLI emits YAML for structured output when
+    requested by the Seed.

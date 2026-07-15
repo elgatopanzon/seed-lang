@@ -1,0 +1,14 @@
+metadata:
+  name: cli-csv-output
+  summary: CSV CLI output contract.
+  description: Makes successful CLI output CSV for tabular machine-readable results.
+behavior:
+  outputs:
+    default-csv: The CLI outputs CSV when tabular output is required.
+    csv-header: CSV output includes a stable header row unless the Seed explicitly
+      disables headers.
+compatibility:
+  csv-column-stability: CSV column names and order must not change without a Seed change.
+constraints:
+  csv-output-format: The target project CLI emits CSV for tabular results when
+    requested by the Seed.
