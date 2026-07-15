@@ -1,7 +1,7 @@
 const { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } = require('node:fs');
 const { join, resolve } = require('node:path');
 const { parse, stringify } = require('yaml');
-const { collectAddressableItems, validateGenomeDocument } = require('./validation');
+const { collectAddressableItems, collectPresentAddressableItems, validateGenomeDocument } = require('./validation');
 
 const REFERENCE_PATTERN = /@([A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)*)/g;
 const MAX_GENOME_DEPTH = 64;
@@ -9,6 +9,11 @@ const GENOME_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
 const BUILTIN_GENOMES = {
   'cli-interface': {
+    metadata: {
+      name: 'cli-interface',
+      summary: 'Baseline command line interface contract.',
+      description: 'Defines a generic terminal CLI interface with help, stderr errors, and exit-code expectations.',
+    },
     interfaces: {
       cli: {
         purpose: 'User invokes the project from a terminal as a CLI.',
@@ -23,6 +28,11 @@ const BUILTIN_GENOMES = {
     },
   },
   'cli-nodejs': {
+    metadata: {
+      name: 'cli-nodejs',
+      summary: 'Node.js command line application contract.',
+      description: 'Adds Node.js runtime, npm dependency, Linux shell, and Node CLI structure expectations.',
+    },
     genomes: [
       'cli-interface',
     ],
@@ -51,6 +61,11 @@ const BUILTIN_GENOMES = {
     },
   },
   'cli-json-output': {
+    metadata: {
+      name: 'cli-json-output',
+      summary: 'JSON CLI output contract.',
+      description: 'Makes successful CLI output JSON by default and preserves machine-readable field stability.',
+    },
     behavior: {
       outputs: {
         'default-json': 'The CLI interface outputs JSON by default for successful machine-readable results.',
@@ -68,6 +83,11 @@ const BUILTIN_GENOMES = {
     },
   },
   'cli-human-output': {
+    metadata: {
+      name: 'cli-human-output',
+      summary: 'Human-readable CLI output contract.',
+      description: 'Makes successful CLI output readable terminal text with user-facing error expectations.',
+    },
     behavior: {
       outputs: {
         'default-human-output': 'The CLI interface outputs human-readable text by default for successful interactive use.',
@@ -163,10 +183,19 @@ function listGenomeFiles(root, origin) {
     .filter((entry) => entry.isFile() && /\.ya?ml$/i.test(entry.name))
     .map((entry) => {
       const id = entry.name.replace(/\.ya?ml$/i, '');
+      const path = join(root, entry.name);
+      let description = '';
+      try {
+        const document = parse(readFileSync(path, 'utf8'));
+        description = document?.metadata?.description ?? document?.metadata?.summary ?? '';
+      } catch (error) {
+        description = '';
+      }
       return {
         id,
         origin,
-        path: join(root, entry.name),
+        path,
+        description,
       };
     });
 }
@@ -176,10 +205,11 @@ function listGenomeDefinitions({ cwd, home = process.env.HOME, origins } = {}) {
   const entries = [];
 
   if (!selected || selected.has('builtin')) {
-    entries.push(...Object.keys(BUILTIN_GENOMES).map((id) => ({
+    entries.push(...Object.entries(BUILTIN_GENOMES).map(([id, document]) => ({
       id,
       origin: 'builtin',
       path: `builtin:${id}`,
+      description: document.metadata?.description ?? document.metadata?.summary ?? '',
     })));
   }
 
@@ -293,7 +323,7 @@ function sourceForSeed(seedPath) {
 
 function applyProvenance(provenance, fragment, source) {
   const errors = [];
-  collectAddressableItems(fragment, errors).forEach((item) => {
+  collectPresentAddressableItems(fragment, errors).forEach((item) => {
     provenance[item.address] = source;
   });
 }
@@ -584,6 +614,7 @@ function compileGenomeById(id, context) {
         id,
         origin: genome.origin,
         path: genome.path,
+        description: genome.document?.metadata?.description ?? genome.document?.metadata?.summary ?? '',
       },
     ],
     genome,
@@ -604,6 +635,7 @@ function compileGenomeDocument({ id, cwd, home, maxDepth = MAX_GENOME_DEPTH } = 
     id,
     path: compiled.genome.path,
     origin: compiled.genome.origin,
+    description: compiled.genome.document?.metadata?.description ?? compiled.genome.document?.metadata?.summary ?? '',
     document: compiled.document,
     text: stringify(compiled.document).replace(/\n+$/, '').concat('\n'),
     genomes: compiled.genomes,
@@ -619,6 +651,7 @@ function validateGenomeDefinition({ id, cwd, home } = {}) {
       id,
       origin: compiled.origin,
       path: compiled.path,
+      description: compiled.description ?? '',
       errors: result.errors,
       warnings: result.warnings,
     };

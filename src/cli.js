@@ -341,7 +341,8 @@ function parseOriginFilters(args, command) {
 }
 
 function formatGenomeEntry(entry) {
-  return `${entry.origin}\t${entry.id}\t${entry.path}`;
+  const description = entry.description ? `\t${entry.description}` : '';
+  return `${entry.origin}\t${entry.id}\t${entry.path}${description}`;
 }
 
 function handleGenomeList(cwd, args) {

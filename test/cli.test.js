@@ -360,7 +360,7 @@ describe('seed cli', () => {
 
         const builtin = runCli(['genome', 'list', '--builtin'], cwd);
         assert.equal(builtin.code, 0);
-        assert.ok(builtin.stdout.includes('builtin\tcli-nodejs\tbuiltin:cli-nodejs'));
+        assert.ok(builtin.stdout.includes('builtin\tcli-nodejs\tbuiltin:cli-nodejs\tAdds Node.js runtime'));
         assert.equal(builtin.stdout.includes('user-demo'), false);
         assert.equal(builtin.stdout.includes('repo-demo'), false);
 

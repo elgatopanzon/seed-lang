@@ -6,7 +6,9 @@ const path = require('node:path');
 const { stringify } = require('yaml');
 
 const {
+  compileGenomeDocument,
   compileSeedDocument,
+  listGenomeDefinitions,
   mergeSeedFragments,
   parseGenomeSpec,
   resolveGenome,
@@ -32,6 +34,16 @@ function writeYaml(file, document) {
 }
 
 describe('seed genomes', () => {
+  test('builtin genome definitions expose concise descriptions', () => {
+    const definitions = listGenomeDefinitions({ origins: ['builtin'], home: '' });
+    const nodejs = definitions.find((entry) => entry.id === 'cli-nodejs');
+    assert.equal(nodejs.description, 'Adds Node.js runtime, npm dependency, Linux shell, and Node CLI structure expectations.');
+
+    const compiled = compileGenomeDocument({ id: 'cli-human-output', cwd: process.cwd(), home: '' });
+    assert.equal(compiled.description, 'Makes successful CLI output readable terminal text with user-facing error expectations.');
+    assert.equal(compiled.provenance['behavior.outputs.default-human-output'].path, 'builtin:cli-human-output');
+  });
+
   test('builtin genomes recursively compose into a compiled seed document', () => {
     const compiled = compileSeedDocument({
       document: {
