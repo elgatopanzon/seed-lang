@@ -1,0 +1,17 @@
+metadata:
+  name: monorepo-integration-verification
+  summary: Monorepo integration verification contract.
+  description: Requires integration verification across affected monorepo components.
+verifications:
+  monorepo-integration:
+    title: Monorepo integration passes
+    description: Verify affected monorepo components work together after Seed or code changes.
+    method: Run integration checks that cover changed component boundaries and shared contracts.
+    evidence_required:
+      - Monorepo integration command.
+      - Components exercised.
+      - Passing output or failing diagnostics.
+constraints:
+  monorepo-integration-required: Changes crossing component boundaries require integration verification before the Seed is satisfied.
+observability:
+  monorepo-integration-diagnostics: Integration failures should identify the component boundary or shared contract that failed.

@@ -60,6 +60,21 @@ describe('seed genomes', () => {
       'tui-python-textual',
       'tui-rust-cursive',
       'tui-rust-ratatui',
+      'monorepo-api-mobile',
+      'monorepo-api-web',
+      'monorepo-component-boundaries',
+      'monorepo-integration-verification',
+      'monorepo-shared-api',
+      'monorepo-shared-types',
+      'monorepo-single-seed',
+      'package-cargo',
+      'package-docker',
+      'package-go-install',
+      'package-npm',
+      'package-nuget',
+      'package-pypi',
+      'package-static-binary',
+      'package-systemd-service',
       'obs-audit-log',
       'obs-clear-errors',
       'obs-debug-mode',
@@ -255,6 +270,19 @@ describe('seed genomes', () => {
     const health = compileGenomeDocument({ id: 'obs-health-check', cwd: process.cwd(), home: '' });
     assert.equal(health.provenance['interfaces.health'].path, 'builtin:obs-health-check');
     assert.equal(health.provenance['observability.health-check'].path, 'builtin:obs-health-check');
+
+    const docker = compileGenomeDocument({ id: 'package-docker', cwd: process.cwd(), home: '' });
+    assert.equal(docker.provenance['environment.docker-image'].path, 'builtin:package-docker');
+    assert.equal(docker.provenance['constraints.docker-distribution'].path, 'builtin:package-docker');
+
+    const apiWeb = compileGenomeDocument({ id: 'monorepo-api-web', cwd: process.cwd(), home: '' });
+    assert.equal(apiWeb.provenance['interfaces.http'].path, 'builtin:api-http');
+    assert.equal(apiWeb.provenance['interfaces.web'].path, 'builtin:web-ui');
+    assert.equal(apiWeb.provenance['verifications.api-web-integration'].path, 'builtin:monorepo-api-web');
+
+    const integration = compileGenomeDocument({ id: 'monorepo-integration-verification', cwd: process.cwd(), home: '' });
+    assert.equal(integration.provenance['verifications.monorepo-integration'].path, 'builtin:monorepo-integration-verification');
+    assert.equal(integration.provenance['constraints.monorepo-integration-required'].path, 'builtin:monorepo-integration-verification');
   });
 
   test('builtin genomes recursively compose into a compiled seed document', () => {

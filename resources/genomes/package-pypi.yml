@@ -1,0 +1,10 @@
+metadata:
+  name: package-pypi
+  summary: PyPI package distribution contract.
+  description: Adds Python package distribution expectations.
+environment:
+  pypi-package: Package metadata and build behavior are defined through standard Python packaging files.
+constraints:
+  pypi-distribution: The project can be packaged or installed through PyPI-compatible tooling.
+compatibility:
+  python-package-interface: Published package modules and entry points must not change without a Seed change.

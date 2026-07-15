@@ -1,0 +1,10 @@
+metadata:
+  name: monorepo-single-seed
+  summary: Single Seed monorepo contract.
+  description: Defines one Seed file governing multiple components in a monorepo.
+scope:
+  monorepo-single-seed: A single Seed file may describe multiple repo components when their behavior should be verified together.
+constraints:
+  single-seed-monorepo: The Seed should make component boundaries explicit enough that agents can update and verify the correct areas.
+freedom:
+  monorepo-layout-choice: Implementation may choose the internal monorepo directory layout unless the Seed narrows it.

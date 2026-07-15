@@ -1,0 +1,10 @@
+metadata:
+  name: package-go-install
+  summary: Go install distribution contract.
+  description: Adds Go module installation expectations.
+environment:
+  go-module-package: Package metadata and install behavior are defined through go.mod and Go package paths.
+constraints:
+  go-install-distribution: The project can be installed through go install or equivalent Go module tooling.
+compatibility:
+  go-install-interface: Published module paths and command package names must not change without a Seed change.

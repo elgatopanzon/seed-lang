@@ -1,0 +1,10 @@
+metadata:
+  name: package-npm
+  summary: npm package distribution contract.
+  description: Adds npm package distribution expectations.
+environment:
+  npm-package: Package metadata and install behavior are defined through package.json.
+constraints:
+  npm-distribution: The project can be packaged or installed through npm-compatible tooling.
+compatibility:
+  npm-package-interface: Published package entry points and exported files must not change without a Seed change.

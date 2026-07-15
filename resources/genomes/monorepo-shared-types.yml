@@ -1,0 +1,10 @@
+metadata:
+  name: monorepo-shared-types
+  summary: Shared types monorepo contract.
+  description: Adds shared type or schema expectations across monorepo components.
+scope:
+  shared-types: Multiple components share types, schemas, DTOs, or equivalent contract definitions.
+constraints:
+  shared-type-boundary: Shared type definitions must stay compatible with all components that consume them.
+compatibility:
+  shared-type-compatibility: Type or schema changes must be propagated to affected producers, consumers, and tests.

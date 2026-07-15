@@ -1,0 +1,20 @@
+metadata:
+  name: monorepo-api-mobile
+  summary: API and mobile monorepo contract.
+  description: Adds monorepo expectations for a backend API and mobile client.
+genomes:
+  - monorepo-shared-api
+  - mobile-app
+scope:
+  api-mobile-components: The monorepo contains backend API and mobile client components governed by this Seed.
+constraints:
+  api-mobile-boundary: Mobile client behavior must match the backend API contract declared by the Seed.
+verifications:
+  api-mobile-integration:
+    title: API and mobile integration passes
+    description: Verify mobile workflows communicate with the API according to the shared Seed contract.
+    method: Run an integration check that exercises at least one Seed-critical mobile-to-API workflow.
+    evidence_required:
+      - Integration command.
+      - API and mobile components exercised.
+      - Passing output or failing diagnostics.

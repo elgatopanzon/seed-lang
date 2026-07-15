@@ -1,0 +1,12 @@
+metadata:
+  name: monorepo-shared-api
+  summary: Shared API monorepo contract.
+  description: Adds shared API contract expectations across monorepo components.
+genomes:
+  - api-http
+scope:
+  shared-api-contract: Multiple components share an API contract or interface definition inside the monorepo.
+constraints:
+  shared-api-boundary: API providers and consumers must agree on request, response, and error contracts declared by the Seed.
+compatibility:
+  shared-api-compatibility: Shared API changes must be reflected across all affected components before verification is complete.

@@ -1,0 +1,10 @@
+metadata:
+  name: package-nuget
+  summary: NuGet package distribution contract.
+  description: Adds .NET NuGet package distribution expectations.
+environment:
+  nuget-package: Package metadata and build behavior are defined through .NET project packaging configuration.
+constraints:
+  nuget-distribution: The project can be packaged or installed through NuGet-compatible tooling.
+compatibility:
+  nuget-package-interface: Published package APIs and assets must not change without a Seed change.

@@ -1,0 +1,16 @@
+metadata:
+  name: package-systemd-service
+  summary: systemd service distribution contract.
+  description: Adds Linux systemd service packaging expectations.
+environment:
+  systemd-service: The project can be installed or run as a systemd-managed service on Linux.
+interfaces:
+  systemd-service:
+    purpose: Operators manage the project through systemd service controls.
+    examples:
+      - systemctl start <service>
+      - systemctl status <service>
+constraints:
+  systemd-service-distribution: Service packaging includes service unit configuration, startup command, and runtime user or environment expectations.
+observability:
+  systemd-service-logs: Service logs are available through the configured journal or log target.

@@ -1,0 +1,10 @@
+metadata:
+  name: monorepo-component-boundaries
+  summary: Monorepo component boundary contract.
+  description: Requires clear component ownership and boundaries in monorepo implementations.
+scope:
+  component-boundaries: Monorepo components have explicit responsibilities and dependency boundaries.
+constraints:
+  component-boundary-clarity: Cross-component dependencies should be intentional, documented by the Seed, or obvious from shared interfaces.
+freedom:
+  component-implementation-choice: Each component may choose its internal implementation details unless the Seed narrows them.

@@ -1,0 +1,20 @@
+metadata:
+  name: monorepo-api-web
+  summary: API and web monorepo contract.
+  description: Adds monorepo expectations for a backend API and web UI.
+genomes:
+  - monorepo-shared-api
+  - web-ui
+scope:
+  api-web-components: The monorepo contains backend API and web UI components governed by this Seed.
+constraints:
+  api-web-boundary: Web UI behavior must match the backend API contract declared by the Seed.
+verifications:
+  api-web-integration:
+    title: API and web integration passes
+    description: Verify web workflows communicate with the API according to the shared Seed contract.
+    method: Run an integration check that exercises at least one Seed-critical web-to-API workflow.
+    evidence_required:
+      - Integration command.
+      - API and web components exercised.
+      - Passing output or failing diagnostics.

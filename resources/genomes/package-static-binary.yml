@@ -1,0 +1,10 @@
+metadata:
+  name: package-static-binary
+  summary: Static binary distribution contract.
+  description: Adds single-file static or self-contained binary distribution expectations.
+environment:
+  static-binary: The project can be built as a self-contained executable for the declared target platforms.
+constraints:
+  static-binary-distribution: The distributed binary should run without requiring project source files or undeclared runtime dependencies.
+compatibility:
+  binary-name-stability: Distributed binary names and primary invocation shape must not change without a Seed change.

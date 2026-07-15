@@ -1,0 +1,10 @@
+metadata:
+  name: package-docker
+  summary: Docker image distribution contract.
+  description: Adds Docker image build and runtime packaging expectations.
+environment:
+  docker-image: The project can be packaged as a Docker or OCI-compatible image.
+constraints:
+  docker-distribution: The image build must include the files and runtime configuration required for Seed-critical behavior.
+observability:
+  container-startup-errors: Container startup failures should expose clear diagnostics through logs.

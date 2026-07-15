@@ -1,0 +1,10 @@
+metadata:
+  name: package-cargo
+  summary: Cargo package distribution contract.
+  description: Adds Rust Cargo package distribution expectations.
+environment:
+  cargo-package: Package metadata and build behavior are defined through Cargo.toml.
+constraints:
+  cargo-distribution: The project can be packaged or installed through Cargo-compatible tooling.
+compatibility:
+  cargo-package-interface: Published crate APIs and binary names must not change without a Seed change.
