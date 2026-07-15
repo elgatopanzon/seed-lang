@@ -1,0 +1,15 @@
+metadata:
+  name: desktop-tauri
+  summary: Tauri desktop client contract.
+  description: Adds Tauri desktop application implementation expectations.
+genomes:
+  - desktop-client
+  - web-ui
+  - cli-rust
+environment:
+  tauri-runtime: The desktop client is implemented with Tauri or a compatible
+    webview plus Rust backend model.
+constraints:
+  tauri-desktop-runtime: The target project uses Tauri for the desktop client.
+freedom:
+  tauri-project-structure: Implementation may choose any maintainable Tauri project structure.

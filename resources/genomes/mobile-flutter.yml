@@ -1,0 +1,13 @@
+metadata:
+  name: mobile-flutter
+  summary: Flutter mobile client contract.
+  description: Adds Flutter mobile application implementation expectations.
+genomes:
+  - mobile-app
+environment:
+  flutter-framework: The mobile client is implemented with Flutter and Dart or a
+    compatible Flutter workflow.
+constraints:
+  flutter-mobile-runtime: The target project uses Flutter for the mobile client.
+freedom:
+  flutter-project-structure: Implementation may choose any maintainable Flutter project structure.

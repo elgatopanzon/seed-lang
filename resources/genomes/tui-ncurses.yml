@@ -1,0 +1,10 @@
+metadata:
+  name: tui-ncurses
+  summary: ncurses TUI client contract.
+  description: Adds ncurses-style terminal UI implementation expectations.
+genomes:
+  - tui-client
+environment:
+  ncurses-runtime: The TUI uses ncurses or an ncurses-compatible terminal UI library.
+constraints:
+  ncurses-tui-runtime: The target project uses ncurses-style terminal UI rendering.

@@ -1,0 +1,12 @@
+metadata:
+  name: mobile-ios-swift
+  summary: iOS Swift mobile client contract.
+  description: Adds native iOS Swift application implementation expectations.
+genomes:
+  - mobile-app
+environment:
+  ios-swift-runtime: The mobile client targets iOS using Swift and Apple platform tooling.
+constraints:
+  ios-swift-mobile-runtime: The target project uses native Swift for the iOS mobile client.
+freedom:
+  ios-swift-project-structure: Implementation may choose any maintainable iOS Swift project structure.

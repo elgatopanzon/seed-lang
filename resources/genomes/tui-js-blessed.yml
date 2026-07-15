@@ -1,0 +1,12 @@
+metadata:
+  name: tui-js-blessed
+  summary: JavaScript Blessed TUI client contract.
+  description: Adds Blessed-based JavaScript terminal UI implementation expectations.
+genomes:
+  - tui-client
+  - cli-nodejs
+environment:
+  blessed-runtime: The TUI is implemented with Blessed or a compatible JavaScript
+    terminal UI library.
+constraints:
+  blessed-tui-runtime: The target project uses JavaScript Blessed for the terminal UI.

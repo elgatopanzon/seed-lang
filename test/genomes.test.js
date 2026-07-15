@@ -37,6 +37,29 @@ function writeYaml(file, document) {
 describe('seed genomes', () => {
   test('builtin genome definitions load from packaged YAML resources', () => {
     const expectedBuiltins = [
+      'desktop-client',
+      'desktop-dotnet',
+      'desktop-electron',
+      'desktop-gtk',
+      'desktop-opengl',
+      'desktop-qt',
+      'desktop-tauri',
+      'mobile-android-kotlin',
+      'mobile-android-native',
+      'mobile-app',
+      'mobile-capacitor',
+      'mobile-flutter',
+      'mobile-ios-swift',
+      'mobile-react-native',
+      'tui-client',
+      'tui-go-bubble-tea',
+      'tui-js-blessed',
+      'tui-js-ink',
+      'tui-ncurses',
+      'tui-notcurses',
+      'tui-python-textual',
+      'tui-rust-cursive',
+      'tui-rust-ratatui',
       'web-accessibility',
       'web-admin-panel',
       'web-dashboard',
@@ -145,6 +168,21 @@ describe('seed genomes', () => {
     const pwa = compileGenomeDocument({ id: 'web-pwa', cwd: process.cwd(), home: '' });
     assert.equal(pwa.provenance['behavior.web-app-manifest'].path, 'builtin:web-pwa');
     assert.equal(pwa.provenance['interfaces.web'].path, 'builtin:web-ui');
+
+    const capacitor = compileGenomeDocument({ id: 'mobile-capacitor', cwd: process.cwd(), home: '' });
+    assert.equal(capacitor.provenance['interfaces.mobile'].path, 'builtin:mobile-app');
+    assert.equal(capacitor.provenance['interfaces.web'].path, 'builtin:web-ui');
+    assert.equal(capacitor.provenance['constraints.capacitor-mobile-runtime'].path, 'builtin:mobile-capacitor');
+
+    const tauri = compileGenomeDocument({ id: 'desktop-tauri', cwd: process.cwd(), home: '' });
+    assert.equal(tauri.provenance['interfaces.desktop'].path, 'builtin:desktop-client');
+    assert.equal(tauri.provenance['interfaces.web'].path, 'builtin:web-ui');
+    assert.equal(tauri.provenance['environment.rust-runtime'].path, 'builtin:cli-rust');
+
+    const textual = compileGenomeDocument({ id: 'tui-python-textual', cwd: process.cwd(), home: '' });
+    assert.equal(textual.provenance['interfaces.tui'].path, 'builtin:tui-client');
+    assert.equal(textual.provenance['environment.python-runtime'].path, 'builtin:cli-python');
+    assert.equal(textual.provenance['constraints.textual-tui-runtime'].path, 'builtin:tui-python-textual');
   });
 
   test('builtin genomes recursively compose into a compiled seed document', () => {

@@ -1,0 +1,10 @@
+metadata:
+  name: tui-notcurses
+  summary: notcurses TUI client contract.
+  description: Adds notcurses terminal UI implementation expectations.
+genomes:
+  - tui-client
+environment:
+  notcurses-runtime: The TUI is implemented with notcurses or a compatible terminal UI stack.
+constraints:
+  notcurses-tui-runtime: The target project uses notcurses for terminal UI rendering.

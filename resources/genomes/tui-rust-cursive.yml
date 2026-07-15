@@ -1,0 +1,11 @@
+metadata:
+  name: tui-rust-cursive
+  summary: Rust Cursive TUI client contract.
+  description: Adds Cursive-based Rust terminal UI implementation expectations.
+genomes:
+  - tui-client
+  - cli-rust
+environment:
+  cursive-runtime: The TUI is implemented with Cursive or a compatible Rust terminal UI stack.
+constraints:
+  cursive-tui-runtime: The target project uses Rust Cursive for the terminal UI.

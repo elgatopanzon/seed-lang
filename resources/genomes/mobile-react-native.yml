@@ -1,0 +1,12 @@
+metadata:
+  name: mobile-react-native
+  summary: React Native mobile client contract.
+  description: Adds React Native mobile application implementation expectations.
+genomes:
+  - mobile-app
+environment:
+  react-native-framework: The mobile client is implemented with React Native or a compatible runtime.
+constraints:
+  react-native-mobile-runtime: The target project uses React Native for the mobile client.
+freedom:
+  react-native-project-structure: Implementation may choose any maintainable React Native project structure.

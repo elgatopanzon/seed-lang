@@ -1,0 +1,11 @@
+metadata:
+  name: tui-go-bubble-tea
+  summary: Go Bubble Tea TUI client contract.
+  description: Adds Bubble Tea-based Go terminal UI implementation expectations.
+genomes:
+  - tui-client
+  - cli-go
+environment:
+  bubble-tea-runtime: The TUI is implemented with Bubble Tea or a compatible Go terminal UI stack.
+constraints:
+  bubble-tea-tui-runtime: The target project uses Go Bubble Tea for the terminal UI.

@@ -1,0 +1,12 @@
+metadata:
+  name: desktop-opengl
+  summary: OpenGL desktop client contract.
+  description: Adds OpenGL-rendered desktop application implementation expectations.
+genomes:
+  - desktop-client
+environment:
+  opengl-runtime: The desktop client uses OpenGL or an OpenGL-compatible rendering path.
+constraints:
+  opengl-desktop-rendering: The target project uses OpenGL for desktop rendering.
+freedom:
+  opengl-project-structure: Implementation may choose any maintainable OpenGL desktop project structure.

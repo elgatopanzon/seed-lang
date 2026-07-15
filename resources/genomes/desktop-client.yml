@@ -1,0 +1,18 @@
+metadata:
+  name: desktop-client
+  summary: Desktop application client contract.
+  description: Adds desktop application interface and platform expectations.
+interfaces:
+  desktop:
+    purpose: User interacts with the project through a desktop application.
+    examples:
+      - launch desktop app
+      - use desktop window controls
+behavior:
+  desktop-window-ui: The client presents a desktop window or desktop-native interaction surface.
+  desktop-lifecycle: The client handles desktop launch, close, and application
+    state behavior when relevant.
+environment:
+  desktop-platform: The client targets desktop operating systems defined or implied by the Seed.
+constraints:
+  desktop-client-interface: The target project exposes a desktop application client.

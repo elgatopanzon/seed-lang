@@ -1,0 +1,14 @@
+metadata:
+  name: desktop-dotnet
+  summary: .NET desktop client contract.
+  description: Adds .NET desktop application implementation expectations.
+genomes:
+  - desktop-client
+  - cli-csharp
+environment:
+  dotnet-desktop-runtime: The desktop client is implemented with .NET desktop
+    tooling or a compatible .NET UI framework.
+constraints:
+  dotnet-desktop-runtime: The target project uses .NET for the desktop client.
+freedom:
+  dotnet-desktop-project-structure: Implementation may choose any maintainable .NET desktop project structure.

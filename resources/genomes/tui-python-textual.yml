@@ -1,0 +1,11 @@
+metadata:
+  name: tui-python-textual
+  summary: Python Textual TUI client contract.
+  description: Adds Textual-based Python terminal UI implementation expectations.
+genomes:
+  - tui-client
+  - cli-python
+environment:
+  textual-runtime: The TUI is implemented with Textual or a compatible Python terminal UI stack.
+constraints:
+  textual-tui-runtime: The target project uses Python Textual for the terminal UI.

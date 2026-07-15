@@ -1,0 +1,18 @@
+metadata:
+  name: mobile-app
+  summary: Mobile application client contract.
+  description: Adds mobile application interface and platform expectations.
+interfaces:
+  mobile:
+    purpose: User interacts with the project through a mobile application.
+    examples:
+      - open app on a mobile device
+      - tap primary navigation
+behavior:
+  mobile-touch-ui: The client is usable through touch-oriented mobile interactions.
+  mobile-lifecycle: The client handles common mobile lifecycle events such as
+    launch, background, and resume when relevant.
+environment:
+  mobile-platform: The client targets mobile operating systems defined or implied by the Seed.
+constraints:
+  mobile-client-interface: The target project exposes a mobile application client.

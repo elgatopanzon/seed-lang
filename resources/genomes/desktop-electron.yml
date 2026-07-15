@@ -1,0 +1,14 @@
+metadata:
+  name: desktop-electron
+  summary: Electron desktop client contract.
+  description: Adds Electron desktop application implementation expectations.
+genomes:
+  - desktop-client
+  - web-ui
+environment:
+  electron-runtime: The desktop client is implemented with Electron or an
+    Electron-compatible Chromium/Node runtime.
+constraints:
+  electron-desktop-runtime: The target project uses Electron for the desktop client.
+freedom:
+  electron-project-structure: Implementation may choose any maintainable Electron project structure.

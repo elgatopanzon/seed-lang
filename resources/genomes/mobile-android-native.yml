@@ -1,0 +1,13 @@
+metadata:
+  name: mobile-android-native
+  summary: Native Android mobile client contract.
+  description: Adds native Android application implementation expectations.
+genomes:
+  - mobile-app
+environment:
+  android-native-runtime: The mobile client targets Android using native Android platform tooling.
+constraints:
+  android-native-mobile-runtime: The target project uses native Android
+    implementation patterns for the mobile client.
+freedom:
+  android-native-project-structure: Implementation may choose any maintainable native Android project structure.

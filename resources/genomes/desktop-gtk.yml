@@ -1,0 +1,12 @@
+metadata:
+  name: desktop-gtk
+  summary: GTK desktop client contract.
+  description: Adds GTK desktop application implementation expectations.
+genomes:
+  - desktop-client
+environment:
+  gtk-runtime: The desktop client is implemented with GTK or a GTK-compatible UI framework.
+constraints:
+  gtk-desktop-runtime: The target project uses GTK for the desktop client.
+freedom:
+  gtk-project-structure: Implementation may choose any maintainable GTK project structure.

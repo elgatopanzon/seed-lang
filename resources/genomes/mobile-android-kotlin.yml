@@ -1,0 +1,12 @@
+metadata:
+  name: mobile-android-kotlin
+  summary: Kotlin Android mobile client contract.
+  description: Adds native Android Kotlin application implementation expectations.
+genomes:
+  - mobile-android-native
+environment:
+  android-kotlin-runtime: The mobile client targets Android using Kotlin and Android platform tooling.
+constraints:
+  android-kotlin-mobile-runtime: The target project uses Kotlin for the native Android mobile client.
+freedom:
+  android-kotlin-project-structure: Implementation may choose any maintainable Android Kotlin project structure.

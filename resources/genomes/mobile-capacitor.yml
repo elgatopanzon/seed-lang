@@ -1,0 +1,14 @@
+metadata:
+  name: mobile-capacitor
+  summary: Capacitor mobile client contract.
+  description: Adds Capacitor-based hybrid mobile application implementation expectations.
+genomes:
+  - mobile-app
+  - web-ui
+environment:
+  capacitor-runtime: The mobile client uses Capacitor or a compatible
+    web-to-native mobile runtime.
+constraints:
+  capacitor-mobile-runtime: The target project uses Capacitor for a hybrid mobile client.
+freedom:
+  capacitor-project-structure: Implementation may choose any maintainable Capacitor project structure.

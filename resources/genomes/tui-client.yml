@@ -1,0 +1,18 @@
+metadata:
+  name: tui-client
+  summary: Terminal user interface client contract.
+  description: Adds terminal user interface expectations for keyboard-driven clients.
+interfaces:
+  tui:
+    purpose: User interacts with the project through a terminal user interface.
+    examples:
+      - run <command>
+      - navigate with keyboard controls
+behavior:
+  terminal-ui: The client presents an interactive terminal user interface.
+  keyboard-navigation: The TUI supports keyboard-driven navigation and actions.
+environment:
+  terminal: The client runs in a terminal environment with documented terminal
+    capability assumptions.
+constraints:
+  terminal-user-interface: The target project exposes a terminal user interface client.

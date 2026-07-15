@@ -1,0 +1,12 @@
+metadata:
+  name: desktop-qt
+  summary: Qt desktop client contract.
+  description: Adds Qt desktop application implementation expectations.
+genomes:
+  - desktop-client
+environment:
+  qt-runtime: The desktop client is implemented with Qt or a Qt-compatible UI framework.
+constraints:
+  qt-desktop-runtime: The target project uses Qt for the desktop client.
+freedom:
+  qt-project-structure: Implementation may choose any maintainable Qt project structure.
