@@ -93,6 +93,58 @@ describe('seed cli', () => {
   });
 
 
+  test('global --repo runs commands from the provided repository path', () => {
+    withTempDir((repo) => {
+      const outside = tempDir();
+      try {
+        const initialized = runCli(['--repo', repo, 'init'], outside);
+        assert.equal(initialized.code, 0);
+        assert.equal(fs.existsSync(path.join(repo, DEFAULT_SEED_PATH)), true);
+        assert.equal(fs.existsSync(path.join(outside, DEFAULT_SEED_PATH)), false);
+
+        const valid = runCli(['--repo', repo, 'validate'], outside);
+        assert.equal(valid.code, 0);
+        assert.ok(valid.stdout.includes('Seed contract valid'));
+
+        assert.equal(runCli(['--repo', repo, 'verify', 'start'], outside).code, 0);
+        assert.equal(runCli(['--repo', repo, 'verify', 'next'], outside).code, 0);
+        const cwdCheck = process.execPath + ' -e "process.exit(require(\'node:fs\').existsSync(\'seed/seed.yml\') ? 0 : 1)"';
+        const confirmed = runCli([
+          '--repo', repo,
+          'verify', 'confirm', 'seed-baseline-visibility',
+          '--owner', 'seed-cli',
+          '--file', 'implementation.js',
+          '--test-cmd', cwdCheck,
+          '--evidence', 'seed-baseline-visibility checked from external cwd with --repo',
+        ], outside);
+        assert.equal(confirmed.code, 0);
+
+        const session = JSON.parse(fs.readFileSync(sessionPath(repo), 'utf8'));
+        assert.equal(session.items[0].test_commands[0].cwd, '.');
+      } finally {
+        fs.rmSync(outside, { recursive: true, force: true });
+      }
+    });
+  });
+
+  test('global --repo errors clearly for missing or invalid paths', () => {
+    withTempDir((cwd) => {
+      const missing = runCli(['--repo'], cwd);
+      assert.equal(missing.code, 1);
+      assert.ok(missing.stderr.includes('--repo requires a repository path'));
+
+      const absent = runCli(['--repo', path.join(cwd, 'missing'), 'validate'], cwd);
+      assert.equal(absent.code, 1);
+      assert.ok(absent.stderr.includes('--repo path does not exist'));
+
+      const filePath = path.join(cwd, 'not-a-dir');
+      fs.writeFileSync(filePath, 'x', 'utf8');
+      const file = runCli(['--repo', filePath, 'validate'], cwd);
+      assert.equal(file.code, 1);
+      assert.ok(file.stderr.includes('--repo path is not a directory'));
+    });
+  });
+
   test('init writes verified genomes from repeatable and list options', () => {
     withTempDir((cwd) => {
       const result = runCli(['init', '--genome', 'cli-nodejs', '--genomes', 'cli-human-output,cli-json-output'], cwd);

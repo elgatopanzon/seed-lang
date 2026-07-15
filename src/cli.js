@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
+const fs = require('node:fs');
 const path = require('node:path');
 const {
   DEFAULT_SEED_PATH,
@@ -39,6 +40,8 @@ const DEFAULT_OWNER = 'seed-cli';
 
 function usage() {
   return [
+    'seed [--repo PATH] <command> [options]',
+    '',
     'seed init [--overwrite] [--genome ID] [--genomes ID[,ID...]]',
     'seed validate',
     'seed diff [--no-color]',
@@ -59,9 +62,34 @@ function usage() {
     'seed verify fail <constraint-id> --owner OWNER --file PATH [--file PATH...] --test-cmd CMD [--test-cmd CMD...] [--reason TEXT]',
     'seed verify status',
     '',
-    `seed source defaults to ${DEFAULT_SEED_PATH} and current working directory`,
+    `seed source defaults to ${DEFAULT_SEED_PATH} and current working directory unless --repo PATH is provided`,
     'default session id is \'default\'',
   ].join('\n');
+}
+
+function parseGlobalArgs(argv, invocationCwd = process.cwd()) {
+  const rest = [...argv];
+  let repoPath = invocationCwd;
+
+  while (rest[0] === '--repo') {
+    const value = rest[1];
+    if (!value || value.startsWith('-')) {
+      return { error: '--repo requires a repository path.' };
+    }
+
+    repoPath = path.resolve(invocationCwd, value);
+    rest.splice(0, 2);
+  }
+
+  if (!fs.existsSync(repoPath)) {
+    return { error: '--repo path does not exist: ' + repoPath };
+  }
+
+  if (!fs.statSync(repoPath).isDirectory()) {
+    return { error: '--repo path is not a directory: ' + repoPath };
+  }
+
+  return { cwd: repoPath, argv: rest };
 }
 
 function printIssues(title, issues) {
@@ -891,7 +919,17 @@ function run(argv = process.argv.slice(2)) {
     return 0;
   }
 
-  const [command, ...rest] = argv;
+  const parsedGlobals = parseGlobalArgs(argv);
+  if (parsedGlobals.error) {
+    return exitWithError(parsedGlobals.error);
+  }
+
+  const cwd = parsedGlobals.cwd;
+  const [command, ...rest] = parsedGlobals.argv;
+
+  if (!command) {
+    return exitWithError('missing command after global options.');
+  }
 
   if (command === 'init') {
     const parsed = parseInitArgs(rest);
@@ -901,7 +939,7 @@ function run(argv = process.argv.slice(2)) {
 
     try {
       const created = initSeed({
-        cwd: process.cwd(),
+        cwd,
         overwrite: parsed.options.overwrite,
         genomes: parsed.options.genomes,
       });
@@ -917,19 +955,19 @@ function run(argv = process.argv.slice(2)) {
       return exitWithError('seed validate does not take positional arguments.');
     }
 
-    return handleValidate(process.cwd());
+    return handleValidate(cwd);
   }
 
   if (command === 'diff') {
-    return handleDiff(process.cwd(), rest);
+    return handleDiff(cwd, rest);
   }
 
   if (command === 'blueprint') {
-    return handleBlueprint(process.cwd(), rest);
+    return handleBlueprint(cwd, rest);
   }
 
   if (command === 'genome') {
-    return handleGenome(process.cwd(), rest);
+    return handleGenome(cwd, rest);
   }
 
   if (command === 'verify') {
@@ -945,7 +983,7 @@ function run(argv = process.argv.slice(2)) {
       }
 
       try {
-        return handleVerifyStart(process.cwd());
+        return handleVerifyStart(cwd);
       } catch (error) {
         return exitWithError(error.message);
       }
@@ -956,7 +994,7 @@ function run(argv = process.argv.slice(2)) {
         return exitWithError('seed verify reset does not take arguments.');
       }
 
-      return handleVerifyReset(process.cwd());
+      return handleVerifyReset(cwd);
     }
 
     if (subcommand === 'sync') {
@@ -964,7 +1002,7 @@ function run(argv = process.argv.slice(2)) {
         return exitWithError('seed verify sync does not take arguments.');
       }
 
-      return handleVerifySync(process.cwd());
+      return handleVerifySync(cwd);
     }
 
     if (subcommand === 'pending') {
@@ -973,7 +1011,7 @@ function run(argv = process.argv.slice(2)) {
       }
 
       try {
-        return handleVerifyPending(process.cwd());
+        return handleVerifyPending(cwd);
       } catch (error) {
         return exitWithError(error.message);
       }
@@ -984,7 +1022,7 @@ function run(argv = process.argv.slice(2)) {
         return exitWithError('seed verify check does not take arguments.');
       }
 
-      return handleVerifyCheck(process.cwd());
+      return handleVerifyCheck(cwd);
     }
 
     if (subcommand === 'audit') {
@@ -992,7 +1030,7 @@ function run(argv = process.argv.slice(2)) {
         return exitWithError('seed verify audit does not take arguments.');
       }
 
-      return handleVerifyAudit(process.cwd());
+      return handleVerifyAudit(cwd);
     }
 
     if (subcommand === 'report') {
@@ -1000,7 +1038,7 @@ function run(argv = process.argv.slice(2)) {
         return exitWithError('seed verify report does not take arguments.');
       }
 
-      return handleVerifyReport(process.cwd());
+      return handleVerifyReport(cwd);
     }
 
     if (subcommand === 'next') {
@@ -1010,7 +1048,7 @@ function run(argv = process.argv.slice(2)) {
       }
 
       try {
-        return handleVerifyNext(process.cwd(), parsed.options.owner);
+        return handleVerifyNext(cwd, parsed.options.owner);
       } catch (error) {
         return exitWithError(error.message);
       }
@@ -1022,7 +1060,7 @@ function run(argv = process.argv.slice(2)) {
         return exitWithError(parsed.error);
       }
 
-      return handleVerifyConfirm(process.cwd(), parsed.constraintId, parsed.owner, parsed.payload, parsed.files, parsed.testCommands);
+      return handleVerifyConfirm(cwd, parsed.constraintId, parsed.owner, parsed.payload, parsed.files, parsed.testCommands);
     }
 
     if (subcommand === 'fail') {
@@ -1031,7 +1069,7 @@ function run(argv = process.argv.slice(2)) {
         return exitWithError(parsed.error);
       }
 
-      return handleVerifyFail(process.cwd(), parsed.constraintId, parsed.owner, parsed.payload, parsed.files, parsed.testCommands);
+      return handleVerifyFail(cwd, parsed.constraintId, parsed.owner, parsed.payload, parsed.files, parsed.testCommands);
     }
 
     if (subcommand === 'status') {
@@ -1040,7 +1078,7 @@ function run(argv = process.argv.slice(2)) {
       }
 
       try {
-        return handleVerifyStatus(process.cwd());
+        return handleVerifyStatus(cwd);
       } catch (error) {
         return exitWithError(error.message);
       }
