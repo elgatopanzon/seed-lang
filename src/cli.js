@@ -340,9 +340,50 @@ function parseOriginFilters(args, command) {
   };
 }
 
-function formatGenomeEntry(entry) {
-  const description = entry.description ? `\t${entry.description}` : '';
-  return `${entry.origin}\t${entry.id}\t${entry.path}${description}`;
+function padRight(value, width) {
+  return String(value).padEnd(width, ' ');
+}
+
+function formatGenomeList(entries) {
+  if (entries.length === 0) {
+    return 'No genomes found.';
+  }
+
+  const rows = entries.map((entry) => ({
+    origin: entry.origin,
+    id: entry.id,
+    source: entry.path,
+    description: entry.description ?? '',
+  }));
+  const headers = {
+    origin: 'Origin',
+    id: 'Genome',
+    source: 'Source',
+    description: 'Description',
+  };
+  const widths = {
+    origin: Math.max(headers.origin.length, ...rows.map((row) => row.origin.length)),
+    id: Math.max(headers.id.length, ...rows.map((row) => row.id.length)),
+    source: Math.max(headers.source.length, ...rows.map((row) => row.source.length)),
+  };
+  const formatRow = (row) => [
+    padRight(row.origin, widths.origin),
+    padRight(row.id, widths.id),
+    padRight(row.source, widths.source),
+    row.description,
+  ].join('  ').replace(/\s+$/, '');
+  const separator = [
+    '-'.repeat(widths.origin),
+    '-'.repeat(widths.id),
+    '-'.repeat(widths.source),
+    '-'.repeat(headers.description.length),
+  ].join('  ');
+
+  return [
+    formatRow(headers),
+    separator,
+    ...rows.map(formatRow),
+  ].join('\n');
 }
 
 function handleGenomeList(cwd, args) {
@@ -355,7 +396,7 @@ function handleGenomeList(cwd, args) {
   }
 
   const entries = listGenomeDefinitions({ cwd, origins: parsed.origins });
-  entries.forEach((entry) => console.log(formatGenomeEntry(entry)));
+  console.log(formatGenomeList(entries));
   return 0;
 }
 

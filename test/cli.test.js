@@ -360,18 +360,19 @@ describe('seed cli', () => {
 
         const builtin = runCli(['genome', 'list', '--builtin'], cwd);
         assert.equal(builtin.code, 0);
-        assert.ok(builtin.stdout.includes('builtin\tcli-nodejs\tbuiltin:cli-nodejs\tAdds Node.js runtime'));
+        assert.match(builtin.stdout, /^Origin\s+Genome\s+Source\s+Description/m);
+        assert.match(builtin.stdout, /builtin\s+cli-nodejs\s+builtin:cli-nodejs\s+Adds Node.js runtime/);
         assert.equal(builtin.stdout.includes('user-demo'), false);
         assert.equal(builtin.stdout.includes('repo-demo'), false);
 
         const user = runCli(['genome', 'list', '--user'], cwd);
         assert.equal(user.code, 0);
-        assert.ok(user.stdout.includes('user\tuser-demo'));
+        assert.match(user.stdout, /user\s+user-demo\s+/);
         assert.equal(user.stdout.includes('repo-demo'), false);
 
         const repo = runCli(['genome', 'list', '--repo'], cwd);
         assert.equal(repo.code, 0);
-        assert.ok(repo.stdout.includes('repo\trepo-demo'));
+        assert.match(repo.stdout, /repo\s+repo-demo\s+/);
         assert.equal(repo.stdout.includes('user-demo'), false);
       } finally {
         process.env.HOME = originalHome;
