@@ -1,0 +1,13 @@
+metadata:
+  name: state-stateless
+  summary: Stateless application contract.
+  description: Declares that the target project does not persist application state.
+state:
+  stateless:
+    description: The project does not require durable application state between independent runs or requests.
+    persistence: none
+    semantics: stateless
+constraints:
+  stateless-runtime: The implementation must not depend on persistent storage unless the Seed adds a state genome or state section.
+freedom:
+  stateless-storage-choice: Implementation may use in-memory temporary values during a single operation.

@@ -1,0 +1,12 @@
+metadata:
+  name: state-versioned
+  summary: Versioned state contract.
+  description: Adds explicit state versioning expectations.
+state:
+  versioned:
+    description: Durable state records or storage formats carry a version or equivalent compatibility marker.
+    semantics: versioned
+compatibility:
+  state-version-compatibility: State version changes must be detectable and handled without silent corruption.
+constraints:
+  explicit-state-version: Persisted state must expose a version marker when durable format compatibility matters.

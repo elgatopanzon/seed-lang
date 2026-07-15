@@ -1,0 +1,15 @@
+metadata:
+  name: state-filesystem
+  summary: Filesystem state contract.
+  description: Adds local filesystem persistence expectations.
+state:
+  filesystem:
+    description: Durable state is stored in local files under documented project-controlled paths.
+    persistence: filesystem
+    semantics: local-filesystem-persistence
+constraints:
+  filesystem-state: The implementation persists state through files, not an external database, unless the Seed says otherwise.
+security:
+  filesystem-path-boundary:
+    description: State files must stay inside documented project or user data directories.
+    policy: global

@@ -1,0 +1,13 @@
+metadata:
+  name: state-mysql
+  summary: MySQL state contract.
+  description: Adds MySQL or MariaDB persistence expectations.
+state:
+  mysql:
+    description: Durable structured state is stored in MySQL or MariaDB.
+    persistence: mysql
+    semantics: relational-database-persistence
+constraints:
+  mysql-state: The implementation uses MySQL-compatible storage for durable structured state when persistence is required.
+environment:
+  mysql-service: A MySQL-compatible service is required for normal operation.

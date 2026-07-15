@@ -1,0 +1,15 @@
+metadata:
+  name: verify-property-tests
+  summary: Property test verification contract.
+  description: Requires property or invariant-based checks where useful.
+verifications:
+  property-tests:
+    title: Property tests pass
+    description: Verify declared invariants hold across generated or varied inputs.
+    method: Run the property test command and inspect counterexamples.
+    evidence_required:
+      - Property test command.
+      - Properties or invariants exercised.
+      - Passing command output or failing counterexample.
+constraints:
+  property-test-invariants: Seed-critical invariants should be checked through property tests when examples alone are weak.

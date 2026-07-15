@@ -1,0 +1,15 @@
+metadata:
+  name: verify-api-contract
+  summary: API contract verification contract.
+  description: Requires API request and response contract checks.
+verifications:
+  api-contract:
+    title: API contract passes
+    description: Verify API routes, requests, responses, status codes, and error shapes satisfy the Seed.
+    method: Run API contract tests against the local or declared API target.
+    evidence_required:
+      - API contract test command.
+      - API target used.
+      - Passing command output or failing diagnostics.
+constraints:
+  api-contract-tests: Seed-critical API behavior should be covered by executable contract tests.

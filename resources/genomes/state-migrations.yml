@@ -1,0 +1,12 @@
+metadata:
+  name: state-migrations
+  summary: State migration contract.
+  description: Adds durable state migration expectations.
+state:
+  migrations:
+    description: Durable state changes are handled through explicit migrations or compatible upgrade logic.
+    semantics: migration
+compatibility:
+  migration-forward-compatibility: Existing state must remain readable or migratable after supported upgrades.
+constraints:
+  explicit-state-migrations: Schema or storage format changes require explicit migration behavior.

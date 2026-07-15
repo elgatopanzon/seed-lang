@@ -1,0 +1,15 @@
+metadata:
+  name: verify-gli-golden-output
+  summary: Golden output verification contract.
+  description: Requires golden output checks for stable command or interface output.
+verifications:
+  golden-output:
+    title: Golden output matches
+    description: Verify stable outputs match checked or declared golden expectations.
+    method: Run the golden output comparison command and inspect diffs.
+    evidence_required:
+      - Golden output command.
+      - Expected output source.
+      - Passing comparison output or diff diagnostics.
+constraints:
+  golden-output-stability: Stable user-visible or machine-readable outputs should be checked against golden expectations when practical.

@@ -1,0 +1,19 @@
+metadata:
+  name: verify-no-network
+  summary: No-network verification contract.
+  description: Requires verification that Seed-critical operations avoid network access.
+security:
+  no-network:
+    description: Seed-critical local operations must not connect to the network unless another Seed section explicitly allows it.
+    policy: global
+verifications:
+  no-network:
+    title: No network access
+    description: Verify Seed-critical local operations do not make network connections.
+    method: Run the relevant commands under a network-denied check, mock, sandbox, or static/runtime inspection.
+    evidence_required:
+      - No-network test command or inspection command.
+      - Operations checked.
+      - Passing output or detected network access diagnostics.
+constraints:
+  no-network-verification: Network isolation expectations must be explicitly verified for local workflows.

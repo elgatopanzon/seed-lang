@@ -1,0 +1,14 @@
+metadata:
+  name: verify-smoke-tests
+  summary: Smoke test verification contract.
+  description: Requires a fast basic health check.
+verifications:
+  smoke-tests:
+    title: Smoke tests pass
+    description: Verify the project starts or runs its most basic Seed-critical workflow.
+    method: Run the smoke test command from a clean local checkout or environment.
+    evidence_required:
+      - Smoke test command.
+      - Passing command output or failing diagnostics.
+constraints:
+  smoke-test-available: The project should expose a fast smoke check for basic implementation health.

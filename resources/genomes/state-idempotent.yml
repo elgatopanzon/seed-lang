@@ -1,0 +1,12 @@
+metadata:
+  name: state-idempotent
+  summary: Idempotent state mutation contract.
+  description: Adds idempotency expectations for state-changing operations.
+state:
+  idempotent-mutations:
+    description: Repeating the same logical state-changing operation does not create duplicate or conflicting durable effects.
+    semantics: idempotent
+behavior:
+  repeated-operation-idempotence: Re-running the same accepted operation with the same logical input produces the same durable outcome.
+constraints:
+  idempotent-state-changes: State mutation paths must be safe to retry when the Seed identifies them as retryable or idempotent.

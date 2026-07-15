@@ -1,0 +1,12 @@
+metadata:
+  name: state-event-log
+  summary: Event log state contract.
+  description: Adds append-only event log state expectations.
+state:
+  event-log:
+    description: Durable state changes are recorded as ordered events.
+    semantics: append-only-event-log
+constraints:
+  append-only-events: Recorded events are appended and not rewritten unless the Seed defines a compaction or repair process.
+observability:
+  event-log-diagnostics: Event log processing failures expose enough diagnostics to identify the failed event or position.

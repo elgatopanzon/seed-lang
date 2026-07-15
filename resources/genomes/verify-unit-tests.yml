@@ -1,0 +1,14 @@
+metadata:
+  name: verify-unit-tests
+  summary: Unit test verification contract.
+  description: Requires unit-level tests for isolated behavior.
+verifications:
+  unit-tests:
+    title: Unit tests pass
+    description: Verify isolated units of behavior covered by the Seed pass their unit tests.
+    method: Run the project's unit test command and inspect failures.
+    evidence_required:
+      - Unit test command.
+      - Passing command output or failing diagnostics.
+constraints:
+  unit-test-coverage: Seed-critical pure or isolated behavior should have unit test coverage when practical.

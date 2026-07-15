@@ -1,0 +1,13 @@
+metadata:
+  name: state-sqlite
+  summary: SQLite state contract.
+  description: Adds SQLite persistence expectations.
+state:
+  sqlite:
+    description: Durable structured state is stored in a SQLite database file.
+    persistence: sqlite
+    semantics: embedded-sql-persistence
+constraints:
+  sqlite-state: The implementation uses SQLite for durable structured state when persistence is required.
+environment:
+  sqlite-runtime: SQLite must be available through the selected language runtime or dependency set.

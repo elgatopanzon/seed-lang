@@ -1,0 +1,13 @@
+metadata:
+  name: state-redis
+  summary: Redis state contract.
+  description: Adds Redis-backed state or cache expectations.
+state:
+  redis:
+    description: Shared transient or durable state is stored in Redis according to the Seed's retention requirements.
+    persistence: redis
+    semantics: redis-backed-state
+constraints:
+  redis-state: The implementation uses Redis for the state or cache responsibilities declared by the Seed.
+environment:
+  redis-service: A Redis-compatible service is required when Redis-backed state is enabled.

@@ -1,0 +1,15 @@
+metadata:
+  name: state-mongodb
+  summary: MongoDB state contract.
+  description: Adds MongoDB document persistence expectations.
+genomes:
+  - state-nosql
+state:
+  mongodb:
+    description: Durable document state is stored in MongoDB.
+    persistence: mongodb
+    semantics: document-database-persistence
+constraints:
+  mongodb-state: The implementation uses MongoDB for durable document state when persistence is required.
+environment:
+  mongodb-service: A MongoDB-compatible service is required for normal operation.

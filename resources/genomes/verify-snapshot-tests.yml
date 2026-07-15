@@ -1,0 +1,15 @@
+metadata:
+  name: verify-snapshot-tests
+  summary: Snapshot test verification contract.
+  description: Requires snapshot checks for stable structured outputs or UI states.
+verifications:
+  snapshot-tests:
+    title: Snapshot tests pass
+    description: Verify stable structured output, rendered output, or UI state matches approved snapshots.
+    method: Run the snapshot test command and inspect snapshot diffs.
+    evidence_required:
+      - Snapshot test command.
+      - Snapshot update policy if snapshots changed.
+      - Passing command output or diff diagnostics.
+constraints:
+  snapshot-change-review: Snapshot changes must reflect intentional Seed changes, not accidental output drift.

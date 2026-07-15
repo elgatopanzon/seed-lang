@@ -1,0 +1,15 @@
+metadata:
+  name: verify-security-basic
+  summary: Basic security verification contract.
+  description: Requires basic security checks for Seed-critical risk areas.
+verifications:
+  security-basic:
+    title: Basic security check passes
+    description: Verify Seed-critical security policies are checked by executable or inspectable evidence.
+    method: Run the basic security check command and inspect reported issues.
+    evidence_required:
+      - Security check command.
+      - Policies or files checked.
+      - Passing command output or issue diagnostics.
+constraints:
+  basic-security-check: Seed-critical security policies should have at least one explicit verification path.

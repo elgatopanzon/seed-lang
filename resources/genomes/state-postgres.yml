@@ -1,0 +1,13 @@
+metadata:
+  name: state-postgres
+  summary: PostgreSQL state contract.
+  description: Adds PostgreSQL persistence expectations.
+state:
+  postgres:
+    description: Durable structured state is stored in PostgreSQL.
+    persistence: postgres
+    semantics: relational-database-persistence
+constraints:
+  postgres-state: The implementation uses PostgreSQL for durable structured state when persistence is required.
+environment:
+  postgres-service: A PostgreSQL service is required for normal operation.

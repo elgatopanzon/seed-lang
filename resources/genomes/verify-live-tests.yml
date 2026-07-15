@@ -1,0 +1,15 @@
+metadata:
+  name: verify-live-tests
+  summary: Live environment test verification contract.
+  description: Requires verification against a live or running environment when applicable.
+verifications:
+  live-tests:
+    title: Live tests pass
+    description: Verify the project works against the live runtime environment declared by the Seed.
+    method: Start or target the live environment, then run the live test command.
+    evidence_required:
+      - Live environment target.
+      - Live test command.
+      - Passing command output or failing diagnostics.
+constraints:
+  live-test-boundary: Live tests must use documented local, staging, or approved endpoints only.

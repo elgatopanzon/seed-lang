@@ -1,0 +1,15 @@
+metadata:
+  name: verify-seed-scripts
+  summary: Seed script verification contract.
+  description: Requires Seed-specific verification scripts under seed/scripts.
+verifications:
+  seed-scripts:
+    title: Seed verification scripts pass
+    description: Verify Seed-specific scripts used as evidence commands are present, executable, and pass.
+    method: Run the seed/scripts verification commands referenced by Seed evidence.
+    evidence_required:
+      - seed/scripts command.
+      - Script path.
+      - Passing command output or failing diagnostics.
+constraints:
+  seed-scripts-location: Seed-specific verification scripts should live under seed/scripts when they are not part of the normal project test suite.

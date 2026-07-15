@@ -414,7 +414,8 @@ function formatGenomeList(entries, columns = terminalWidth()) {
     source: Math.max(headers.source.length, ...rows.map((row) => row.source.length)),
   };
   const prefixWidth = widths.origin + widths.id + widths.source + 6;
-  const descriptionWidth = Math.max(headers.description.length, columns - prefixWidth);
+  const descriptionWidth = Math.max(1, columns - prefixWidth);
+  const descriptionHeader = descriptionWidth < headers.description.length ? 'Desc'.slice(0, descriptionWidth) : headers.description;
   const rowPrefix = (row) => [
     padRight(row.origin, widths.origin),
     padRight(row.id, widths.id),
@@ -436,7 +437,7 @@ function formatGenomeList(entries, columns = terminalWidth()) {
   ].join('  ');
 
   return [
-    rowPrefix(headers) + '  ' + headers.description,
+    rowPrefix(headers) + '  ' + descriptionHeader,
     separator,
     ...rows.flatMap(formatWrappedRow),
   ].join('\n');

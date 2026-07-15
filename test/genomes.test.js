@@ -60,6 +60,31 @@ describe('seed genomes', () => {
       'tui-python-textual',
       'tui-rust-cursive',
       'tui-rust-ratatui',
+      'state-event-log',
+      'state-filesystem',
+      'state-idempotent',
+      'state-local-cache',
+      'state-migrations',
+      'state-mongodb',
+      'state-mysql',
+      'state-nosql',
+      'state-postgres',
+      'state-redis',
+      'state-sqlite',
+      'state-stateless',
+      'state-versioned',
+      'verify-api-contract',
+      'verify-gli-golden-output',
+      'verify-integration-tests',
+      'verify-live-tests',
+      'verify-no-network',
+      'verify-performance-basic',
+      'verify-property-tests',
+      'verify-security-basic',
+      'verify-seed-scripts',
+      'verify-smoke-tests',
+      'verify-snapshot-tests',
+      'verify-unit-tests',
       'web-accessibility',
       'web-admin-panel',
       'web-dashboard',
@@ -183,6 +208,18 @@ describe('seed genomes', () => {
     assert.equal(textual.provenance['interfaces.tui'].path, 'builtin:tui-client');
     assert.equal(textual.provenance['environment.python-runtime'].path, 'builtin:cli-python');
     assert.equal(textual.provenance['constraints.textual-tui-runtime'].path, 'builtin:tui-python-textual');
+
+    const mongodb = compileGenomeDocument({ id: 'state-mongodb', cwd: process.cwd(), home: '' });
+    assert.equal(mongodb.provenance['state.nosql'].path, 'builtin:state-nosql');
+    assert.equal(mongodb.provenance['state.mongodb'].path, 'builtin:state-mongodb');
+
+    const noNetwork = compileGenomeDocument({ id: 'verify-no-network', cwd: process.cwd(), home: '' });
+    assert.equal(noNetwork.provenance['security.no-network'].path, 'builtin:verify-no-network');
+    assert.equal(noNetwork.provenance['verifications.no-network'].path, 'builtin:verify-no-network');
+
+    const seedScripts = compileGenomeDocument({ id: 'verify-seed-scripts', cwd: process.cwd(), home: '' });
+    assert.equal(seedScripts.provenance['verifications.seed-scripts'].path, 'builtin:verify-seed-scripts');
+    assert.equal(seedScripts.provenance['constraints.seed-scripts-location'].path, 'builtin:verify-seed-scripts');
   });
 
   test('builtin genomes recursively compose into a compiled seed document', () => {

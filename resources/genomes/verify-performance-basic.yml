@@ -1,0 +1,15 @@
+metadata:
+  name: verify-performance-basic
+  summary: Basic performance verification contract.
+  description: Requires basic performance checks for Seed-critical operations.
+verifications:
+  performance-basic:
+    title: Basic performance check passes
+    description: Verify Seed-critical operations satisfy the basic performance expectations declared by the Seed.
+    method: Run the basic performance command or benchmark and compare results to the Seed's threshold.
+    evidence_required:
+      - Performance command.
+      - Threshold or baseline used.
+      - Measured result.
+constraints:
+  basic-performance-check: Performance-sensitive Seed behavior should have an executable basic performance check.

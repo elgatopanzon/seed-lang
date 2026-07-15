@@ -1,0 +1,13 @@
+metadata:
+  name: state-local-cache
+  summary: Local cache state contract.
+  description: Adds local cache behavior expectations.
+state:
+  local-cache:
+    description: The project may cache derived data locally, but cached data must be rebuildable from authoritative inputs.
+    persistence: cache
+    semantics: rebuildable-local-cache
+constraints:
+  local-cache-rebuildable: Local cache contents must not be the only authoritative copy of required data.
+behavior:
+  cache-miss-rebuild: Missing or cleared local cache data is rebuilt or regenerated without corrupting results.

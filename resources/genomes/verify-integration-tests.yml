@@ -1,0 +1,14 @@
+metadata:
+  name: verify-integration-tests
+  summary: Integration test verification contract.
+  description: Requires tests that exercise integrated components.
+verifications:
+  integration-tests:
+    title: Integration tests pass
+    description: Verify the project components work together for Seed-critical workflows.
+    method: Run the project's integration test command or script.
+    evidence_required:
+      - Integration test command.
+      - Passing command output or failing diagnostics.
+constraints:
+  integration-test-coverage: Seed-critical multi-component workflows should have integration test coverage when practical.

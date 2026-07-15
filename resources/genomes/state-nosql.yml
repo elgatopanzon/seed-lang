@@ -1,0 +1,13 @@
+metadata:
+  name: state-nosql
+  summary: NoSQL state contract.
+  description: Adds document or key-value persistence expectations.
+state:
+  nosql:
+    description: Durable state is stored in a NoSQL database selected by the implementation or Seed.
+    persistence: nosql
+    semantics: nosql-persistence
+constraints:
+  nosql-state: The implementation may use a document, key-value, wide-column, or similar NoSQL store for durable state.
+freedom:
+  nosql-engine-choice: Implementation may choose the specific NoSQL engine unless the Seed narrows it.
