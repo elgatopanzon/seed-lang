@@ -34,6 +34,8 @@ const DEFAULT_LOCK_RETRY_MS = 50;
 const DEFAULT_TEST_COMMAND_TIMEOUT_MS = 30_000;
 const MAX_TEST_COMMAND_OUTPUT_CHARS = 4_000;
 const SESSION_SCHEMA_VERSION = 1;
+const SESSION_SNAPSHOT_PATH = '.seed/seed.snapshot.yml';
+const SESSION_COMMAND_CWD = '.';
 const VALID_STATUSES = [
   'pending',
   'claimed',
@@ -250,7 +252,7 @@ function runTestCommands(cwd, commands, { now } = {}) {
 
     return {
       command,
-      cwd: workspaceRoot(cwd),
+      cwd: SESSION_COMMAND_CWD,
       shell: true,
       timeoutMs: DEFAULT_TEST_COMMAND_TIMEOUT_MS,
       exitCode,
@@ -309,7 +311,7 @@ function hashEvidenceFiles(cwd, files) {
   });
 }
 
-function assertSessionShape(session, sourcePath, expectedSessionId, expectedSnapshotPath) {
+function assertSessionShape(session, sourcePath, expectedSessionId, expectedSnapshotPath, legacySnapshotPath) {
   if (!session || typeof session !== 'object' || Array.isArray(session)) {
     throw new Error(`Corrupt session state at ${sourcePath}: expected object.`);
   }
@@ -337,7 +339,7 @@ function assertSessionShape(session, sourcePath, expectedSessionId, expectedSnap
   assertFiniteTimestamp(session.createdAt, 'createdAt', sourcePath);
   assertFiniteTimestamp(session.updatedAt, 'updatedAt', sourcePath);
 
-  if (session.snapshotPath !== expectedSnapshotPath) {
+  if (![expectedSnapshotPath, legacySnapshotPath].includes(session.snapshotPath)) {
     throw new Error(`Corrupt session state at ${sourcePath}: snapshotPath does not match repo-local snapshot.`);
   }
 
@@ -532,10 +534,28 @@ function assertSeedDocument(seedDocument) {
   });
 }
 
+function normalizeStoredSessionPaths(state, cwd) {
+  state.snapshotPath = SESSION_SNAPSHOT_PATH;
+  const root = workspaceRoot(cwd);
+
+  state.items.forEach((item) => {
+    (item.test_commands ?? []).forEach((command) => {
+      if (!command || typeof command !== 'object') {
+        return;
+      }
+
+      if (command.cwd === root || (typeof command.cwd === 'string' && isAbsolute(command.cwd))) {
+        command.cwd = SESSION_COMMAND_CWD;
+      }
+    });
+  });
+}
+
 function readSessionState(cwd, sessionId, sourceLabel) {
   const state = readJsonFile(sessionPath(cwd, sessionId), sourceLabel);
   const sourceSnapshotPath = snapshotPath(cwd);
-  assertSessionShape(state, sourceLabel, sessionId, sourceSnapshotPath);
+  assertSessionShape(state, sourceLabel, sessionId, SESSION_SNAPSHOT_PATH, sourceSnapshotPath);
+  normalizeStoredSessionPaths(state, cwd);
 
   if (!existsSync(sourceSnapshotPath)) {
     throw new Error(`Snapshot missing at ${sourceSnapshotPath}.`);
@@ -946,7 +966,7 @@ function startSession({
     seedHash: seedHash(seedText),
     createdAt: nowValue,
     updatedAt: nowValue,
-    snapshotPath: sourceSnapshotPath,
+    snapshotPath: SESSION_SNAPSHOT_PATH,
     items,
   };
 

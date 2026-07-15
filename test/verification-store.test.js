@@ -108,6 +108,7 @@ describe('verification store', () => {
       );
       assert.equal(session.createdAt, 12_345);
       assert.equal(session.updatedAt, 12_345);
+      assert.equal(session.snapshotPath, '.seed/seed.snapshot.yml');
       assert.deepEqual(
         session.items.map((entry) => entry.id),
         ['verify-begin', 'verify-next', 'verify-final'],
@@ -286,6 +287,7 @@ describe('verification store', () => {
 
       assert.equal(confirmed.status, 'confirmed');
       assert.equal(confirmed.evidence, 'verified manually');
+      assert.equal(confirmed.test_commands[0].cwd, '.');
       assert.equal(failed.status, 'failed');
       assert.equal(failed.reason, 'environment missing');
       assert.equal(pending.status, 'pending');
@@ -625,6 +627,29 @@ describe('verification store', () => {
       assert.throws(() => {
         getStatus({ cwd });
       }, /duplicate item id/);
+    });
+  });
+
+  test('legacy absolute snapshot paths are accepted and normalized in memory', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        sessionId: 'default',
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+      const session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      session.snapshotPath = snapshotFile(cwd);
+      session.items[0].status = 'confirmed';
+      session.items[0].test_commands = [{ command: PASS_CMD, cwd }];
+      fs.writeFileSync(sessionFile(cwd), JSON.stringify(session, null, 2), 'utf8');
+
+      assert.doesNotThrow(() => getStatus({ cwd }));
+      claimNext({ cwd, owner: 'worker-A', now: () => 1_000 });
+
+      const normalized = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      assert.equal(normalized.snapshotPath, '.seed/seed.snapshot.yml');
+      assert.equal(normalized.items[0].test_commands[0].cwd, '.');
     });
   });
 
