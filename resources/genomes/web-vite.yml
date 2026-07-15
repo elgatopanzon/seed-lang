@@ -1,0 +1,12 @@
+metadata:
+  name: web-vite
+  summary: Vite web UI contract.
+  description: Adds Vite-based frontend build and development expectations.
+genomes:
+  - web-ui
+environment:
+  vite-build: The UI uses Vite or a Vite-compatible build and development server workflow.
+constraints:
+  vite-web-build: The target project uses Vite for web UI bundling or development.
+freedom:
+  vite-framework-choice: Implementation may pair Vite with any frontend framework allowed by the Seed.

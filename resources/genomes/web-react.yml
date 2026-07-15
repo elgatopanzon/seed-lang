@@ -1,0 +1,12 @@
+metadata:
+  name: web-react
+  summary: React web UI contract.
+  description: Adds React-based frontend implementation expectations.
+genomes:
+  - web-ui
+environment:
+  react-framework: The UI is implemented with React or a React-compatible component model.
+constraints:
+  react-web-ui-runtime: The target project uses React for browser UI rendering.
+freedom:
+  react-project-structure: Implementation may choose any maintainable React project structure.

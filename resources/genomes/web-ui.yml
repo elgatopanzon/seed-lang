@@ -1,0 +1,18 @@
+metadata:
+  name: web-ui
+  summary: Web user interface contract.
+  description: Adds browser-rendered user interface expectations for web applications.
+interfaces:
+  web:
+    purpose: User interacts with the project through a browser-based UI.
+    examples:
+      - GET /
+      - open app in a modern browser
+behavior:
+  browser-rendered-ui: The project presents an interactive or readable user
+    interface in a modern web browser.
+environment:
+  modern-browser: The UI targets current evergreen browsers unless the Seed
+    narrows supported browsers.
+constraints:
+  web-ui-interface: The target project exposes a browser-based web UI.

@@ -1,0 +1,13 @@
+metadata:
+  name: web-nextjs
+  summary: Next.js web UI contract.
+  description: Adds Next.js-based React web application expectations.
+genomes:
+  - web-react
+environment:
+  nextjs-framework: The UI is implemented with Next.js or a Next.js-compatible
+    React application model.
+constraints:
+  nextjs-web-ui-runtime: The target project uses Next.js for the web UI.
+freedom:
+  nextjs-project-structure: Implementation may choose any maintainable Next.js project structure.

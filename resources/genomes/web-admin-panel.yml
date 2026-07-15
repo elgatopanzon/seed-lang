@@ -1,0 +1,16 @@
+metadata:
+  name: web-admin-panel
+  summary: Web admin panel contract.
+  description: Adds administrative management UI expectations for web applications.
+genomes:
+  - web-ui
+behavior:
+  admin-list-detail: Administrative resources can be viewed through list and
+    detail workflows when applicable.
+  admin-actions: Administrative actions provide clear confirmation, success, or
+    failure feedback.
+security:
+  admin-boundary: Administrative views and actions must be protected when
+    authentication or authorization is required by the Seed.
+constraints:
+  admin-panel-web-ui: The target project exposes an admin-oriented web UI.

@@ -1,0 +1,12 @@
+metadata:
+  name: web-no-authentication
+  summary: Unauthenticated web UI contract.
+  description: Declares that the web UI does not require authentication by default.
+behavior:
+  no-login-required: Users can access the primary web UI without login or account
+    creation unless the Seed adds authentication requirements elsewhere.
+security:
+  no-authentication-boundary: The UI must not pretend to enforce user identity or
+    authorization when no authentication is required.
+constraints:
+  unauthenticated-web-ui: The target project web UI is intentionally usable without authentication.

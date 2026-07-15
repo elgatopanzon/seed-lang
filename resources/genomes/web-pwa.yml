@@ -1,0 +1,14 @@
+metadata:
+  name: web-pwa
+  summary: Progressive web app contract.
+  description: Adds progressive web app manifest, installability, and
+    offline-capability expectations.
+genomes:
+  - web-ui
+behavior:
+  web-app-manifest: The UI provides a web app manifest when PWA installability is required.
+  service-worker: The UI uses a service worker or equivalent strategy when offline
+    behavior is required.
+constraints:
+  progressive-web-app: The target project supports progressive web app behavior
+    when required by the Seed.

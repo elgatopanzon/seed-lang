@@ -1,0 +1,14 @@
+metadata:
+  name: web-spa
+  summary: Single-page application contract.
+  description: Adds client-side routing and in-browser application state expectations.
+genomes:
+  - web-ui
+behavior:
+  client-side-navigation: The UI can navigate between application views without
+    requiring a full page reload for every view change.
+  spa-state: Client-side UI state is managed consistently across navigation and
+    refresh behavior defined by the Seed.
+constraints:
+  single-page-application: The target project behaves as a browser single-page
+    application when required by the Seed.

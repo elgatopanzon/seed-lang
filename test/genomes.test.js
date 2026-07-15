@@ -37,6 +37,21 @@ function writeYaml(file, document) {
 describe('seed genomes', () => {
   test('builtin genome definitions load from packaged YAML resources', () => {
     const expectedBuiltins = [
+      'web-accessibility',
+      'web-admin-panel',
+      'web-dashboard',
+      'web-form-workflows',
+      'web-nextjs',
+      'web-no-authentication',
+      'web-pwa',
+      'web-react',
+      'web-responsive',
+      'web-spa',
+      'web-static',
+      'web-svelte',
+      'web-ui',
+      'web-vite',
+      'web-vue',
       'api-csharp-aspnet',
       'api-go-chi',
       'api-graphql',
@@ -121,6 +136,15 @@ describe('seed genomes', () => {
     const axum = compileGenomeDocument({ id: 'api-rust-axum', cwd: process.cwd(), home: '' });
     assert.equal(axum.provenance['constraints.axum-api-runtime'].path, 'builtin:api-rust-axum');
     assert.equal(axum.provenance['environment.rust-runtime'].path, 'builtin:cli-rust');
+
+    const nextjs = compileGenomeDocument({ id: 'web-nextjs', cwd: process.cwd(), home: '' });
+    assert.equal(nextjs.provenance['interfaces.web'].path, 'builtin:web-ui');
+    assert.equal(nextjs.provenance['constraints.react-web-ui-runtime'].path, 'builtin:web-react');
+    assert.equal(nextjs.provenance['constraints.nextjs-web-ui-runtime'].path, 'builtin:web-nextjs');
+
+    const pwa = compileGenomeDocument({ id: 'web-pwa', cwd: process.cwd(), home: '' });
+    assert.equal(pwa.provenance['behavior.web-app-manifest'].path, 'builtin:web-pwa');
+    assert.equal(pwa.provenance['interfaces.web'].path, 'builtin:web-ui');
   });
 
   test('builtin genomes recursively compose into a compiled seed document', () => {

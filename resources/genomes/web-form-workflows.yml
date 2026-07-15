@@ -1,0 +1,12 @@
+metadata:
+  name: web-form-workflows
+  summary: Web form workflow contract.
+  description: Adds form input, validation, submission, and feedback expectations
+    for web UIs.
+behavior:
+  form-inputs: Forms collect user input through labeled controls appropriate to
+    the data being entered.
+  form-validation: Invalid form input is surfaced with clear, actionable feedback.
+  form-submit-feedback: Form submission success or failure is visible to the user.
+constraints:
+  web-form-workflows: The web UI supports form-based user workflows when required by the Seed.

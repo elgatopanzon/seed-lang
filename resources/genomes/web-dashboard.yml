@@ -1,0 +1,11 @@
+metadata:
+  name: web-dashboard
+  summary: Web dashboard UI contract.
+  description: Adds dashboard-style information display and navigation expectations.
+genomes:
+  - web-ui
+behavior:
+  dashboard-summary: The UI presents high-level status or summary information for fast scanning.
+  dashboard-detail-navigation: Users can navigate from summary views to relevant details when details exist.
+constraints:
+  dashboard-web-ui: The target project exposes a dashboard-oriented web UI.

@@ -1,0 +1,12 @@
+metadata:
+  name: web-vue
+  summary: Vue web UI contract.
+  description: Adds Vue-based frontend implementation expectations.
+genomes:
+  - web-ui
+environment:
+  vue-framework: The UI is implemented with Vue or a Vue-compatible component model.
+constraints:
+  vue-web-ui-runtime: The target project uses Vue for browser UI rendering.
+freedom:
+  vue-project-structure: Implementation may choose any maintainable Vue project structure.

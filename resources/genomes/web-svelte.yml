@@ -1,0 +1,12 @@
+metadata:
+  name: web-svelte
+  summary: Svelte web UI contract.
+  description: Adds Svelte-based frontend implementation expectations.
+genomes:
+  - web-ui
+environment:
+  svelte-framework: The UI is implemented with Svelte or a Svelte-compatible component model.
+constraints:
+  svelte-web-ui-runtime: The target project uses Svelte for browser UI rendering.
+freedom:
+  svelte-project-structure: Implementation may choose any maintainable Svelte project structure.

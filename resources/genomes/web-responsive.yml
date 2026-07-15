@@ -1,0 +1,11 @@
+metadata:
+  name: web-responsive
+  summary: Responsive web UI contract.
+  description: Adds responsive layout expectations for desktop and mobile browser viewports.
+behavior:
+  responsive-layout: The UI adapts layout and controls across mobile, tablet, and
+    desktop viewport widths.
+  no-content-overlap: Responsive states must not cause incoherent text, controls,
+    or content overlap.
+constraints:
+  responsive-web-ui: The web UI supports meaningful use across common viewport sizes.

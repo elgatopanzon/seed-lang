@@ -1,0 +1,12 @@
+metadata:
+  name: web-accessibility
+  summary: Accessible web UI contract.
+  description: Adds accessibility expectations for browser-based user interfaces.
+behavior:
+  keyboard-access: Interactive controls are reachable and usable with keyboard navigation.
+  semantic-accessibility: UI structure uses semantic elements or ARIA where needed
+    for assistive technologies.
+  visible-focus: Keyboard focus is visibly indicated for interactive elements.
+constraints:
+  accessible-web-ui: The web UI is designed to be usable with common accessibility
+    tools and interaction modes.

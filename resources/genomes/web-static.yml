@@ -1,0 +1,13 @@
+metadata:
+  name: web-static
+  summary: Static web UI contract.
+  description: Adds static HTML/CSS/JavaScript web UI expectations.
+genomes:
+  - web-ui
+behavior:
+  static-assets: The UI can be served as static files without requiring a
+    server-side rendering runtime.
+constraints:
+  static-web-ui: The target project can deliver the web UI as static browser assets.
+freedom:
+  static-ui-structure: Implementation may choose any maintainable static asset structure.
