@@ -1,0 +1,19 @@
+metadata:
+  name: api-websocket
+  summary: WebSocket API backend contract.
+  description: Adds WebSocket connection, message, and close behavior expectations.
+interfaces:
+  websocket:
+    purpose: Clients communicate with the backend through WebSocket connections.
+    examples:
+      - CONNECT /ws
+      - send message over websocket
+behavior:
+  websocket-connect: The service accepts WebSocket connections on documented routes.
+  websocket-messages: Incoming and outgoing WebSocket messages follow the message
+    contract defined by the Seed.
+errors:
+  websocket-close: Protocol or validation failures close the connection or return
+    an error message according to the Seed.
+constraints:
+  websocket-api-interface: The target project exposes a WebSocket API interface.

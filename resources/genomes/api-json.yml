@@ -1,0 +1,16 @@
+metadata:
+  name: api-json
+  summary: JSON API backend contract.
+  description: Adds JSON request and response body expectations for backend APIs.
+behavior:
+  json-request-bodies: JSON request bodies must parse as valid JSON before semantic processing.
+  json-response-bodies: JSON response bodies must parse as valid JSON when the
+    response declares JSON content.
+errors:
+  invalid-json-request: Malformed JSON requests fail with a client error status
+    and a clear error response.
+compatibility:
+  json-api-field-stability: JSON response fields must not be renamed or removed without a Seed change.
+constraints:
+  json-api-format: The API uses JSON for structured request and response bodies
+    when required by the Seed.

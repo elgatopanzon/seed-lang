@@ -1,0 +1,13 @@
+metadata:
+  name: api-openapi
+  summary: OpenAPI-described backend contract.
+  description: Adds OpenAPI document expectations for HTTP API backends.
+genomes:
+  - api-http
+behavior:
+  openapi-contract: When an OpenAPI document is provided by the Seed, implemented
+    routes and schemas must conform to it.
+compatibility:
+  openapi-compatibility: Breaking OpenAPI contract changes require a Seed change.
+constraints:
+  openapi-described-api: The API can be described or validated with an OpenAPI document.

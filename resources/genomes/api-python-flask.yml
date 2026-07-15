@@ -1,0 +1,13 @@
+metadata:
+  name: api-python-flask
+  summary: Python Flask backend contract.
+  description: Adds Flask-based Python HTTP API implementation expectations.
+genomes:
+  - cli-python
+  - api-http
+environment:
+  flask-framework: The backend uses Flask or a Flask-compatible WSGI request model.
+constraints:
+  flask-api-runtime: The implementation is a Python Flask HTTP API backend.
+freedom:
+  flask-project-structure: Implementation may choose any maintainable Flask project structure.

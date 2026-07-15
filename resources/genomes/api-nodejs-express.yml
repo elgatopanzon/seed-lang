@@ -1,0 +1,13 @@
+metadata:
+  name: api-nodejs-express
+  summary: Node.js Express API backend contract.
+  description: Adds Express-based Node.js HTTP API implementation expectations.
+genomes:
+  - cli-nodejs
+  - api-http
+environment:
+  express-framework: The backend uses Express or an Express-compatible request handler model.
+constraints:
+  express-api-runtime: The implementation is a Node.js Express HTTP API backend.
+freedom:
+  express-project-structure: Implementation may choose any maintainable Express project structure.

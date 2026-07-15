@@ -1,0 +1,13 @@
+metadata:
+  name: api-csharp-aspnet
+  summary: C# ASP.NET backend contract.
+  description: Adds ASP.NET-based C# HTTP API implementation expectations.
+genomes:
+  - cli-csharp
+  - api-http
+environment:
+  aspnet-framework: The backend uses ASP.NET Core or a compatible .NET HTTP API framework.
+constraints:
+  aspnet-api-runtime: The implementation is a C# ASP.NET HTTP API backend.
+freedom:
+  aspnet-project-structure: Implementation may choose any maintainable ASP.NET project structure.

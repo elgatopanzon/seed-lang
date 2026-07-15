@@ -37,6 +37,20 @@ function writeYaml(file, document) {
 describe('seed genomes', () => {
   test('builtin genome definitions load from packaged YAML resources', () => {
     const expectedBuiltins = [
+      'api-csharp-aspnet',
+      'api-go-chi',
+      'api-graphql',
+      'api-grpc',
+      'api-http',
+      'api-json',
+      'api-nodejs-express',
+      'api-nodejs-fastify',
+      'api-openapi',
+      'api-python-fastapi',
+      'api-python-flask',
+      'api-rest',
+      'api-rust-axum',
+      'api-websocket',
       'cli-bash',
       'cli-c',
       'cli-config-csv',
@@ -95,6 +109,18 @@ describe('seed genomes', () => {
 
     const csvInput = compileGenomeDocument({ id: 'cli-csv-input', cwd: process.cwd(), home: '' });
     assert.equal(csvInput.provenance['behavior.inputs.csv-input'].path, 'builtin:cli-csv-input');
+
+    const rest = compileGenomeDocument({ id: 'api-rest', cwd: process.cwd(), home: '' });
+    assert.equal(rest.provenance['interfaces.http'].path, 'builtin:api-http');
+    assert.equal(rest.provenance['behavior.rest-resource-routes'].path, 'builtin:api-rest');
+
+    const express = compileGenomeDocument({ id: 'api-nodejs-express', cwd: process.cwd(), home: '' });
+    assert.equal(express.provenance['constraints.express-api-runtime'].path, 'builtin:api-nodejs-express');
+    assert.equal(express.provenance['environment.node-runtime'].path, 'builtin:cli-nodejs');
+
+    const axum = compileGenomeDocument({ id: 'api-rust-axum', cwd: process.cwd(), home: '' });
+    assert.equal(axum.provenance['constraints.axum-api-runtime'].path, 'builtin:api-rust-axum');
+    assert.equal(axum.provenance['environment.rust-runtime'].path, 'builtin:cli-rust');
   });
 
   test('builtin genomes recursively compose into a compiled seed document', () => {

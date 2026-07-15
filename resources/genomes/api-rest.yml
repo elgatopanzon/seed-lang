@@ -1,0 +1,15 @@
+metadata:
+  name: api-rest
+  summary: REST API backend contract.
+  description: Adds resource-oriented HTTP method and route expectations for
+    REST-style APIs.
+genomes:
+  - api-http
+behavior:
+  rest-resource-routes: Routes are organized around resources and use HTTP methods
+    to represent operations.
+  rest-status-codes: Responses use HTTP status codes that match the result of the
+    resource operation.
+constraints:
+  rest-api-style: The target project exposes a REST-style API where resource
+    semantics are externally observable.

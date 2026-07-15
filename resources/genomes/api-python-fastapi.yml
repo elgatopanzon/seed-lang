@@ -1,0 +1,13 @@
+metadata:
+  name: api-python-fastapi
+  summary: Python FastAPI backend contract.
+  description: Adds FastAPI-based Python HTTP API implementation expectations.
+genomes:
+  - cli-python
+  - api-http
+environment:
+  fastapi-framework: The backend uses FastAPI with an ASGI server or compatible deployment model.
+constraints:
+  fastapi-api-runtime: The implementation is a Python FastAPI HTTP API backend.
+freedom:
+  fastapi-project-structure: Implementation may choose any maintainable FastAPI project structure.

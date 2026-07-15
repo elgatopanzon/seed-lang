@@ -1,0 +1,13 @@
+metadata:
+  name: api-go-chi
+  summary: Go chi backend contract.
+  description: Adds chi-based Go HTTP API implementation expectations.
+genomes:
+  - cli-go
+  - api-http
+environment:
+  chi-framework: The backend uses chi or a chi-compatible Go HTTP router model.
+constraints:
+  chi-api-runtime: The implementation is a Go chi HTTP API backend.
+freedom:
+  chi-project-structure: Implementation may choose any maintainable Go chi project structure.

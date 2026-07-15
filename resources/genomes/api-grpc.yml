@@ -1,0 +1,17 @@
+metadata:
+  name: api-grpc
+  summary: gRPC API backend contract.
+  description: Adds gRPC service, method, message, and status expectations.
+interfaces:
+  grpc:
+    purpose: Clients communicate with the backend through gRPC service methods.
+    examples:
+      - Service.Method(request)
+      - grpcurl list
+behavior:
+  grpc-services: The API exposes documented gRPC services and methods.
+  grpc-messages: gRPC requests and responses conform to documented message schemas.
+errors:
+  grpc-status: gRPC failures use appropriate gRPC status codes and error messages.
+constraints:
+  grpc-api-interface: The target project exposes a gRPC API interface.

@@ -1,0 +1,22 @@
+metadata:
+  name: api-http
+  summary: HTTP API backend contract.
+  description: Adds HTTP request, response, status code, and header expectations
+    for backend services.
+interfaces:
+  http:
+    purpose: Clients communicate with the backend over HTTP.
+    examples:
+      - GET /health
+      - POST /resource
+behavior:
+  http-request-response: The service accepts HTTP requests and returns HTTP
+    responses with appropriate status codes and bodies.
+errors:
+  http-error-status: HTTP error responses use non-2xx status codes and clear error
+    bodies when a body is returned.
+observability:
+  http-health: The service exposes or documents a health check when operational
+    health matters.
+constraints:
+  http-api-interface: The target project exposes an HTTP API backend interface.

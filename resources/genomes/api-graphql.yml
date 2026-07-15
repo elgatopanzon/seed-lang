@@ -1,0 +1,20 @@
+metadata:
+  name: api-graphql
+  summary: GraphQL API backend contract.
+  description: Adds GraphQL schema, query, mutation, and error response expectations.
+interfaces:
+  graphql:
+    purpose: Clients communicate with the backend through a GraphQL endpoint.
+    examples:
+      - POST /graphql
+      - query { viewer { id } }
+behavior:
+  graphql-schema: The API exposes a GraphQL schema that defines supported queries,
+    mutations, and types.
+  graphql-execution: GraphQL requests return data and errors according to GraphQL
+    response semantics.
+errors:
+  graphql-errors: GraphQL validation or execution failures are returned in the
+    errors field when applicable.
+constraints:
+  graphql-api-interface: The target project exposes a GraphQL API interface.

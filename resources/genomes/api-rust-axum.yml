@@ -1,0 +1,13 @@
+metadata:
+  name: api-rust-axum
+  summary: Rust Axum backend contract.
+  description: Adds Axum-based Rust HTTP API implementation expectations.
+genomes:
+  - cli-rust
+  - api-http
+environment:
+  axum-framework: The backend uses Axum or a compatible Rust tower/hyper HTTP service model.
+constraints:
+  axum-api-runtime: The implementation is a Rust Axum HTTP API backend.
+freedom:
+  axum-project-structure: Implementation may choose any maintainable Rust Axum project structure.

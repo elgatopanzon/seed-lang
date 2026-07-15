@@ -1,0 +1,13 @@
+metadata:
+  name: api-nodejs-fastify
+  summary: Node.js Fastify API backend contract.
+  description: Adds Fastify-based Node.js HTTP API implementation expectations.
+genomes:
+  - cli-nodejs
+  - api-http
+environment:
+  fastify-framework: The backend uses Fastify or a Fastify-compatible route/plugin model.
+constraints:
+  fastify-api-runtime: The implementation is a Node.js Fastify HTTP API backend.
+freedom:
+  fastify-project-structure: Implementation may choose any maintainable Fastify project structure.
