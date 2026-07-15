@@ -1,0 +1,18 @@
+metadata:
+  name: cli-stdin-stdout
+  summary: Standard stream CLI contract.
+  description: Adds stdin input and stdout result expectations for
+    pipeline-friendly CLI tools.
+interfaces:
+  cli:
+    purpose: User can connect the CLI to standard shell pipelines.
+    examples:
+      - cat input.txt | <command>
+      - <command> < input.txt > output.txt
+behavior:
+  stdin-input: When no explicit input file is provided, the CLI may read input
+    from stdin when the Seed allows stream input.
+  stdout-output: Successful primary results are written to stdout unless the Seed
+    specifies an output file.
+constraints:
+  pipeline-friendly-cli: The CLI can participate in shell pipelines through stdin and stdout.

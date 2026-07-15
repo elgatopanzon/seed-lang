@@ -1,0 +1,16 @@
+metadata:
+  name: cli-config-env-file
+  summary: Env-file config CLI contract.
+  description: Adds dotenv-style environment file parsing expectations for CLI tools.
+behavior:
+  env-file-config-format: Environment files are parsed as KEY=VALUE entries when
+    env-file configuration is required.
+security:
+  env-file-secret-handling: Values loaded from environment files must not be
+    printed unless explicitly required by the Seed.
+errors:
+  invalid-env-file: Malformed environment files fail with a nonzero exit code and
+    identify the parsing problem.
+constraints:
+  env-file-config-support: The CLI supports dotenv-style configuration files when
+    the Seed requires them.

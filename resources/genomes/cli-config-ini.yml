@@ -1,0 +1,12 @@
+metadata:
+  name: cli-config-ini
+  summary: INI config CLI contract.
+  description: Adds INI configuration file parsing expectations for CLI tools.
+behavior:
+  ini-config-format: INI config files are parsed as sections and key/value pairs
+    when INI configuration is required.
+errors:
+  invalid-ini: Malformed INI config fails with a nonzero exit code and identifies
+    the parsing problem.
+constraints:
+  ini-config-support: The CLI supports INI files for configuration when the Seed requires INI.

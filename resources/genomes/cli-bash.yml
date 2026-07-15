@@ -1,0 +1,23 @@
+metadata:
+  name: cli-bash
+  summary: Bash command line application contract.
+  description: Adds Bash runtime and project structure expectations for CLI implementations.
+genomes:
+  - cli-interface
+interfaces:
+  cli:
+    purpose: User invokes the project from a terminal as a Bash CLI.
+    examples:
+      - bash ./<script>.sh --help
+      - <command> --help
+environment:
+  bash-runtime: Must run in Bash on Linux shells unless the Seed narrows shell compatibility.
+  bash-script: External command dependencies must be documented or checked before use.
+  linux: Must run on Linux shells unless the Seed narrows supported platforms.
+security:
+  no-secret-output: Must not print environment variables, tokens, or credentials
+    unless explicitly required by the Seed.
+constraints:
+  cli-bash-runtime: The implementation is a Bash command line application.
+freedom:
+  cli-bash-structure: Implementation may choose any maintainable internal Bash project structure.

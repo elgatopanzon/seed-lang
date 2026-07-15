@@ -1,0 +1,26 @@
+metadata:
+  name: cli-csharp
+  summary: C#/.NET command line application contract.
+  description: Adds C#/.NET runtime and project structure expectations for CLI
+    implementations.
+genomes:
+  - cli-interface
+interfaces:
+  cli:
+    purpose: User invokes the project from a terminal as a C#/.NET CLI.
+    examples:
+      - dotnet run -- --help
+      - <command> --help
+environment:
+  dotnet-runtime: Must run on a supported .NET SDK/runtime unless the Seed narrows the version.
+  dotnet-build: Project files must declare required .NET target frameworks and
+    package dependencies.
+  linux: Must run on Linux shells unless the Seed narrows supported platforms.
+security:
+  no-secret-output: Must not print environment variables, tokens, or credentials
+    unless explicitly required by the Seed.
+constraints:
+  cli-csharp-runtime: The implementation is a C#/.NET command line application.
+freedom:
+  cli-csharp-structure: Implementation may choose any maintainable internal
+    C#/.NET project structure.

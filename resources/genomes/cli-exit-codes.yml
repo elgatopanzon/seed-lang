@@ -1,0 +1,11 @@
+metadata:
+  name: cli-exit-codes
+  summary: CLI exit-code contract.
+  description: Adds explicit success and failure exit-code expectations for CLI tools.
+observability:
+  exit-code-zero-success: Exit code 0 means the requested operation completed successfully.
+  exit-code-nonzero-failure: Nonzero exit codes mean validation, input, usage, or execution failure.
+errors:
+  failure-exit-code: Every failure path exits with a nonzero exit code.
+constraints:
+  explicit-exit-code-semantics: The CLI exposes reliable exit-code semantics suitable for scripts and tests.

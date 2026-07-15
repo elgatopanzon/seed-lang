@@ -1,0 +1,19 @@
+metadata:
+  name: cli-config-file
+  summary: Config-file CLI contract.
+  description: Adds a generic external configuration file expectation for CLI tools.
+interfaces:
+  cli:
+    purpose: User can provide configuration through a file path option.
+    examples:
+      - <command> --config config.yml
+      - <command> --config ./config.json
+behavior:
+  config-file-loading: When a config file is provided, the CLI loads options from
+    that file before applying explicit command line overrides.
+errors:
+  invalid-config-file: Unreadable or invalid config files fail with a nonzero exit
+    code and a clear error message.
+constraints:
+  config-file-support: The CLI supports a configuration file when the Seed
+    requires configurable behavior.

@@ -36,15 +36,42 @@ function writeYaml(file, document) {
 
 describe('seed genomes', () => {
   test('builtin genome definitions load from packaged YAML resources', () => {
+    const expectedBuiltins = [
+      'cli-bash',
+      'cli-c',
+      'cli-config-csv',
+      'cli-config-env-file',
+      'cli-config-file',
+      'cli-config-ini',
+      'cli-cpp',
+      'cli-csharp',
+      'cli-env-vars',
+      'cli-exit-codes',
+      'cli-file-inputs',
+      'cli-go',
+      'cli-help-version',
+      'cli-human-output',
+      'cli-interface',
+      'cli-json-output',
+      'cli-nodejs',
+      'cli-posix',
+      'cli-python',
+      'cli-rust',
+      'cli-single-command',
+      'cli-stdin-stdout',
+      'cli-subcommands',
+    ];
     const files = fs.readdirSync(BUILTIN_GENOME_DIR).filter((entry) => entry.endsWith('.yml')).sort();
-    assert.deepEqual(files, [
-      'cli-human-output.yml',
-      'cli-interface.yml',
-      'cli-json-output.yml',
-      'cli-nodejs.yml',
-    ]);
+    assert.deepEqual(files, expectedBuiltins.map((id) => id + '.yml').sort());
 
     const definitions = listGenomeDefinitions({ origins: ['builtin'], home: '' });
+    assert.deepEqual(definitions.map((entry) => entry.id), expectedBuiltins.sort());
+    definitions.forEach((entry) => {
+      const compiled = compileGenomeDocument({ id: entry.id, cwd: process.cwd(), home: '' });
+      assert.equal(compiled.origin, 'builtin');
+      assert.equal(compiled.path, 'builtin:' + entry.id);
+      assert.equal(compiled.description.length > 0, true);
+    });
     const nodejs = definitions.find((entry) => entry.id === 'cli-nodejs');
     assert.equal(nodejs.description, 'Adds Node.js runtime, npm dependency, Linux shell, and Node CLI structure expectations.');
 

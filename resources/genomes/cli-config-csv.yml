@@ -1,0 +1,13 @@
+metadata:
+  name: cli-config-csv
+  summary: CSV config/input CLI contract.
+  description: Adds CSV file parsing expectations for CLI configuration or tabular input.
+behavior:
+  csv-config-format: CSV input is parsed as comma-separated rows with a stable
+    header interpretation when headers are required.
+errors:
+  invalid-csv: Malformed CSV input fails with a nonzero exit code and identifies
+    the parsing problem.
+constraints:
+  csv-config-support: The CLI supports CSV files for configuration or tabular
+    input when the Seed requires CSV.

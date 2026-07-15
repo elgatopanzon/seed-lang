@@ -1,0 +1,18 @@
+metadata:
+  name: cli-subcommands
+  summary: Subcommand-oriented CLI contract.
+  description: Defines a CLI shaped around named subcommands such as add, list, or export.
+interfaces:
+  cli:
+    purpose: User invokes named subcommands through the CLI.
+    examples:
+      - <command> <subcommand> --help
+      - <command> <subcommand> [options]
+behavior:
+  subcommand-dispatch: The first positional command token selects a subcommand or
+    produces a clear unknown-subcommand error.
+errors:
+  unknown-subcommand: Unknown subcommands fail with a nonzero exit code and a
+    helpful error message.
+constraints:
+  subcommand-cli-shape: The CLI exposes behavior through named subcommands.

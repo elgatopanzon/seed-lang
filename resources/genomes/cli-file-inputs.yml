@@ -1,0 +1,19 @@
+metadata:
+  name: cli-file-inputs
+  summary: File-input CLI contract.
+  description: Adds local file path input expectations for CLI tools.
+interfaces:
+  cli:
+    purpose: User provides one or more local file paths to the CLI.
+    examples:
+      - <command> input.txt
+      - <command> file-a.txt file-b.txt
+behavior:
+  file-path-inputs: Input file paths are resolved relative to the working
+    directory unless the Seed specifies otherwise.
+errors:
+  missing-input-file: Missing input files fail with a nonzero exit code and
+    identify the missing path.
+constraints:
+  local-file-inputs: The CLI accepts local relative or absolute file path
+    arguments when file inputs are required.

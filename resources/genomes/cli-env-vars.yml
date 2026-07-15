@@ -1,0 +1,12 @@
+metadata:
+  name: cli-env-vars
+  summary: Environment-variable CLI contract.
+  description: Adds environment variable configuration expectations for CLI tools.
+behavior:
+  env-var-config: Documented environment variables may affect CLI behavior when
+    the Seed defines them.
+security:
+  env-var-secret-handling: Environment variable values must not be printed unless
+    explicitly required by the Seed.
+constraints:
+  environment-variable-support: The CLI may read documented environment variables for configuration.

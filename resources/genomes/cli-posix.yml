@@ -1,0 +1,18 @@
+metadata:
+  name: cli-posix
+  summary: POSIX-style command line interface contract.
+  description: Adds POSIX-style flags, stdin/stdout/stderr, and exit behavior expectations.
+interfaces:
+  cli:
+    purpose: User invokes the project through a POSIX-style command line interface.
+    examples:
+      - <command> --help
+      - <command> [options] [arguments]
+behavior:
+  posix-option-style: Long options use --name form and short options use -n form
+    when short options are provided.
+observability:
+  posix-streams: Normal output goes to stdout and diagnostic output goes to stderr.
+constraints:
+  posix-cli-conventions: The CLI follows common POSIX command line conventions
+    unless the Seed overrides them.

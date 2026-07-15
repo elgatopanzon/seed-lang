@@ -1,0 +1,16 @@
+metadata:
+  name: cli-help-version
+  summary: CLI help and version contract.
+  description: Adds --help and --version interface expectations for CLI tools.
+interfaces:
+  cli:
+    purpose: User can inspect CLI usage and version information.
+    examples:
+      - <command> --help
+      - <command> --version
+behavior:
+  help-output: --help prints usage information and exits successfully.
+  version-output: --version prints version information and exits successfully when
+    version reporting is implemented.
+constraints:
+  help-version-flags: The CLI supports help output and version output conventions.

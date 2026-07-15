@@ -1,0 +1,15 @@
+metadata:
+  name: cli-single-command
+  summary: Single-command CLI contract.
+  description: Defines a CLI with one primary command surface controlled by
+    options and arguments.
+interfaces:
+  cli:
+    purpose: User invokes one primary command with options and arguments.
+    examples:
+      - <command> [options] [arguments]
+      - <command> --help
+behavior:
+  single-command-dispatch: The CLI does not require a subcommand for its primary workflow.
+constraints:
+  single-command-cli-shape: The CLI is organized as one primary command rather than a subcommand tree.
