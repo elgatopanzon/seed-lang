@@ -255,6 +255,41 @@ function artifactDeclarations(value) {
   return value.artifacts.filter((entry) => typeof entry === 'string' && entry.length > 0);
 }
 
+function normalizeSelectorEntries(value, fieldName, genomeId) {
+  const entries = Array.isArray(value) ? value : [value];
+  if (!entries.every((entry) => typeof entry === 'string' && entry.trim() !== '')) {
+    throw new Error(`genome ${genomeId} ${fieldName} entries must be non-empty strings.`);
+  }
+
+  return entries.map((entry) => entry.trim());
+}
+
+function splitSelectorEntries(selectorText, specLabel) {
+  const entries = selectorText.split(',').map((entry) => entry.trim()).filter(Boolean);
+  if (entries.length === 0) {
+    throw new Error(`genome selector ${specLabel} must include an address inside brackets.`);
+  }
+
+  const include = [];
+  const exclude = [];
+  entries.forEach((entry) => {
+    if (entry.startsWith('!')) {
+      const selector = entry.slice(1).trim();
+      if (selector.length === 0) {
+        throw new Error(`genome selector ${specLabel} has an empty exclude selector.`);
+      }
+      exclude.push(selector);
+      return;
+    }
+
+    include.push(entry);
+  });
+
+  return {
+    include: include.length > 0 ? include : null,
+    exclude,
+  };
+}
 function parseGenomeSpec(spec) {
   if (typeof spec === 'string') {
     const match = spec.match(/^([^\[\]]+)(?:\[([^\]]*)\])?$/);
@@ -263,12 +298,12 @@ function parseGenomeSpec(spec) {
     }
 
     const id = match[1].trim();
-    const include = match[2] === undefined ? null : [match[2].trim()].filter(Boolean);
-    if (match[2] !== undefined && include.length === 0) {
-      throw new Error(`genome selector ${spec} must include an address inside brackets.`);
+    if (match[2] === undefined) {
+      return { id, include: null, exclude: [], label: spec };
     }
 
-    return { id, include, label: spec };
+    const selectors = splitSelectorEntries(match[2], spec);
+    return { id, include: selectors.include, exclude: selectors.exclude, label: spec };
   }
 
   if (isObject(spec)) {
@@ -278,14 +313,14 @@ function parseGenomeSpec(spec) {
 
     let include = null;
     if (spec.include !== undefined) {
-      include = Array.isArray(spec.include) ? spec.include : [spec.include];
-      if (!include.every((entry) => typeof entry === 'string' && entry.trim() !== '')) {
-        throw new Error(`genome ${spec.id} include entries must be non-empty strings.`);
-      }
-      include = include.map((entry) => entry.trim());
+      include = normalizeSelectorEntries(spec.include, 'include', spec.id);
     }
 
-    return { id: spec.id.trim(), include, label: spec.id.trim() };
+    const exclude = spec.exclude === undefined
+      ? []
+      : normalizeSelectorEntries(spec.exclude, 'exclude', spec.id);
+
+    return { id: spec.id.trim(), include, exclude, label: spec.id.trim() };
   }
 
   throw new Error('genomes entries must be strings or objects with id/include fields.');
@@ -318,9 +353,50 @@ function addressIndexes(document) {
 }
 
 function selectorMatches(selector, item) {
-  return item.address === selector || item.address.startsWith(`${selector}.`);
+  return item.address === selector || item.address.startsWith(selector + '.');
 }
 
+function globPatternMatches(pattern, value) {
+  const escaped = pattern
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*/g, '.*');
+  return new RegExp('^' + escaped + '$').test(value);
+}
+
+function excludeSelectorMatches(selector, item) {
+  if (selector.includes('*')) {
+    return globPatternMatches(selector, item.address) || globPatternMatches(selector, item.id);
+  }
+
+  return item.section === selector || selectorMatches(selector, item) || item.id === selector;
+}
+
+function deleteAddressValue(document, address) {
+  const parts = address.split('.');
+  const stack = [];
+  let cursor = document;
+
+  for (const part of parts.slice(0, -1)) {
+    if (!isObject(cursor?.[part])) {
+      return;
+    }
+    stack.push([cursor, part]);
+    cursor = cursor[part];
+  }
+
+  if (!isObject(cursor)) {
+    return;
+  }
+
+  delete cursor[parts.at(-1)];
+
+  for (let index = stack.length - 1; index >= 0; index -= 1) {
+    const [parent, key] = stack[index];
+    if (isObject(parent[key]) && Object.keys(parent[key]).length === 0) {
+      delete parent[key];
+    }
+  }
+}
 function setAddressValue(document, address, value) {
   const parts = address.split('.');
   let cursor = document;
@@ -338,15 +414,43 @@ function setAddressValue(document, address, value) {
   });
 }
 
-function projectGenomeDocument({ document, provenance, include, source, genomeId }) {
+function projectGenomeDocument({ document, provenance, include, exclude = [], source, genomeId }) {
+  const { items, byAddress, byArtifactId } = addressIndexes(document);
+  const excluded = new Set();
+
+  exclude.forEach((selector) => {
+    let matched = false;
+
+    items.forEach((item) => {
+      if (excludeSelectorMatches(selector, item)) {
+        excluded.add(item.address);
+        matched = true;
+      }
+    });
+
+    if (!matched && byArtifactId.has(selector)) {
+      excluded.add(byArtifactId.get(selector).address);
+      matched = true;
+    }
+
+    if (!matched) {
+      throw new Error(`Genome ${genomeId} exclude ${selector} did not match an address, section, artifact id, or glob pattern.`);
+    }
+  });
+
   if (!include) {
+    const projected = omitGenomeDirectives(document);
+    const projectedProvenance = { ...provenance };
+    Array.from(excluded).sort().forEach((address) => {
+      deleteAddressValue(projected, address);
+      delete projectedProvenance[address];
+    });
     return {
-      document: omitGenomeDirectives(document),
-      provenance: { ...provenance },
+      document: projected,
+      provenance: projectedProvenance,
     };
   }
 
-  const { items, byAddress, byArtifactId } = addressIndexes(document);
   const selected = new Set();
   const queue = [];
 
@@ -401,6 +505,10 @@ function projectGenomeDocument({ document, provenance, include, source, genomeId
   const projected = {};
   const projectedProvenance = {};
   Array.from(selected).sort().forEach((address) => {
+    if (excluded.has(address)) {
+      return;
+    }
+
     const item = byAddress.get(address);
     if (!item) {
       return;
@@ -415,7 +523,6 @@ function projectGenomeDocument({ document, provenance, include, source, genomeId
     provenance: projectedProvenance,
   };
 }
-
 function mergeProvenance(target, source) {
   Object.assign(target, source);
 }
@@ -427,6 +534,7 @@ function compileGenomeSpec(spec, context) {
     document: compiled.document,
     provenance: compiled.provenance,
     include: parsed.include,
+    exclude: parsed.exclude,
     source: sourceForGenome(compiled.genome),
     genomeId: parsed.id,
   });
@@ -435,13 +543,14 @@ function compileGenomeSpec(spec, context) {
     document: projected.document,
     provenance: projected.provenance,
     genomes: compiled.genomes.map((entry, index) => {
-      if (index !== compiled.genomes.length - 1 || !parsed.include) {
+      if (index !== compiled.genomes.length - 1 || (!parsed.include && parsed.exclude.length === 0)) {
         return entry;
       }
 
       return {
         ...entry,
-        include: parsed.include,
+        ...(parsed.include ? { include: parsed.include } : {}),
+        ...(parsed.exclude.length > 0 ? { exclude: parsed.exclude } : {}),
       };
     }),
   };

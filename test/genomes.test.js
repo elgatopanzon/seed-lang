@@ -379,6 +379,54 @@ describe('seed genomes', () => {
     assert.equal(address.document.environment, undefined);
   });
 
+  test('exclude selectors remove matching addresses from selected genomes', () => {
+    const noNetwork = compileSeedDocument({
+      document: {
+        genomes: ['verify-no-network[!*no-network*]'],
+      },
+      cwd: process.cwd(),
+      home: '',
+    });
+
+    assert.equal(noNetwork.document.security, undefined);
+    assert.equal(noNetwork.document.verifications, undefined);
+    assert.equal(noNetwork.document.constraints, undefined);
+    assert.deepEqual(noNetwork.genomes.at(-1).exclude, ['*no-network*']);
+    assert.equal(noNetwork.provenance['security.no-network'], undefined);
+
+    const apiWithoutHttp = compileSeedDocument({
+      document: {
+        genomes: ['monorepo-api-web[interfaces,!*http*]'],
+      },
+      cwd: process.cwd(),
+      home: '',
+    });
+
+    assert.equal(apiWithoutHttp.document.interfaces.http, undefined);
+    assert.equal(apiWithoutHttp.document.interfaces.web.purpose, 'User interacts with the project through a browser-based UI.');
+    assert.deepEqual(apiWithoutHttp.genomes.at(-1).include, ['interfaces']);
+    assert.deepEqual(apiWithoutHttp.genomes.at(-1).exclude, ['*http*']);
+  });
+
+  test('object exclude selectors are equivalent to string excludes', () => {
+    const compiled = compileSeedDocument({
+      document: {
+        genomes: [
+          {
+            id: 'verify-no-network',
+            exclude: ['*no-network*'],
+          },
+        ],
+      },
+      cwd: process.cwd(),
+      home: '',
+    });
+
+    assert.equal(compiled.document.security, undefined);
+    assert.equal(compiled.document.verifications, undefined);
+    assert.deepEqual(compiled.genomes.at(-1).exclude, ['*no-network*']);
+  });
+
   test('object include selectors are equivalent to string cherry-picks', () => {
     const compiled = compileSeedDocument({
       document: {
@@ -590,6 +638,20 @@ describe('seed genomes', () => {
     assert.throws(
       () => parseGenomeSpec('cli-nodejs[]'),
       /must include an address inside brackets/,
+    );
+
+    assert.throws(
+      () => parseGenomeSpec('cli-nodejs[!]'),
+      /empty exclude selector/,
+    );
+
+    assert.throws(
+      () => compileSeedDocument({
+        document: { genomes: ['cli-nodejs[!*missing*]'] },
+        cwd: process.cwd(),
+        home: '',
+      }),
+      /exclude \*missing\* did not match/,
     );
   });
 });
