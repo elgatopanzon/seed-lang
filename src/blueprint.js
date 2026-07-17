@@ -226,10 +226,10 @@ function compactYaml(value) {
   return stringify(value).replace(/\n+$/, '');
 }
 
-function renderItem(item) {
+function renderItem(item, { includeSource = true } = {}) {
   const lines = [];
   const renderedSource = sourceLabel(item.source);
-  const sourceSuffix = renderedSource ? ` [${renderedSource}]` : '';
+  const sourceSuffix = includeSource && renderedSource ? ` [${renderedSource}]` : '';
   const label = item.address ? `\`${item.address}\`` : `\`${item.id}\``;
   lines.push(`- ${label}${sourceSuffix}`);
 
@@ -240,14 +240,16 @@ function renderItem(item) {
   return lines.join('\n');
 }
 
-function renderMarkdown(blueprint) {
+function renderMarkdown(blueprint, { includeSource = true, includeGenomes = true, includeItemSources = true } = {}) {
   const lines = [
     '# Seed Blueprint',
-    '',
-    `Source: ${blueprint.source.path}`,
   ];
 
-  if (blueprint.source.genomes?.length > 0) {
+  if (includeSource) {
+    lines.push('', `Source: ${blueprint.source.path}`);
+  }
+
+  if (includeGenomes && blueprint.source.genomes?.length > 0) {
     lines.push(`Genomes: ${blueprint.source.genomes.map((entry) => `${entry.id} [${entry.origin}]`).join(', ')}`);
   }
 
@@ -264,7 +266,7 @@ function renderMarkdown(blueprint) {
     }
 
     section.items.forEach((item) => {
-      lines.push(renderItem(item), '');
+      lines.push(renderItem(item, { includeSource: includeItemSources }), '');
     });
   });
 

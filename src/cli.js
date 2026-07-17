@@ -15,7 +15,7 @@ const {
   pageOutput,
   renderMarkdown,
 } = require('./blueprint');
-const { getSeedDiff } = require('./diff');
+const { getBlueprintDiff, getSeedDiff } = require('./diff');
 const {
   compileGenomeDocument,
   initRepoGenome,
@@ -50,6 +50,7 @@ function usage() {
     'seed genome validate [--builtin] [--user] [--repo]',
     'seed genome blueprint <name> [--json] [--section ID] [--filter @ADDRESS] [--limit N] [--offset N] [--head N] [--tail N] [--pager]',
     'seed blueprint [--json] [--section ID] [--filter @ADDRESS] [--limit N] [--offset N] [--head N] [--tail N] [--pager]',
+    'seed blueprint diff [--no-color]',
     'seed verify start',
     'seed verify reset',
     'seed verify sync',
@@ -643,6 +644,10 @@ function parseBlueprintArgs(args) {
 }
 
 function handleBlueprint(cwd, args) {
+  if (args[0] === 'diff') {
+    return handleBlueprintDiff(cwd, args.slice(1));
+  }
+
   const parsed = parseBlueprintArgs(args);
   if (parsed.error) {
     return exitWithError(parsed.error);
@@ -682,6 +687,26 @@ function handleBlueprint(cwd, args) {
     }
 
     process.stdout.write(rendered);
+    return 0;
+  } catch (error) {
+    return exitWithError(error.message);
+  }
+}
+
+function handleBlueprintDiff(cwd, args) {
+  let noColor = false;
+
+  for (const arg of args) {
+    if (arg === '--no-color') {
+      noColor = true;
+    } else {
+      return exitWithError(`Unknown option for seed blueprint diff: ${arg}`);
+    }
+  }
+
+  try {
+    const diff = getBlueprintDiff({ cwd, noColor });
+    process.stdout.write(diff.text);
     return 0;
   } catch (error) {
     return exitWithError(error.message);

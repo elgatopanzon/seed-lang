@@ -261,6 +261,41 @@ describe('seed cli', () => {
       assert.ok(diff.stdout.split('\n').length < 16);
     });
   });
+
+  test('blueprint diff compares fully constructed snapshot and current blueprints', () => {
+    withTempDir((cwd) => {
+      assert.equal(runCli(['init', '--genome', 'cli-human-output'], cwd).code, 0);
+
+      const missingSnapshot = runCli(['blueprint', 'diff', '--no-color'], cwd);
+      assert.equal(missingSnapshot.code, 1);
+      assert.ok(missingSnapshot.stderr.includes('Seed snapshot missing'));
+
+      assert.equal(runCli(['verify', 'start'], cwd).code, 0);
+      const clean = runCli(['blueprint', 'diff', '--no-color'], cwd);
+      assert.equal(clean.code, 0);
+      assert.equal(clean.stdout, 'No Blueprint diff.');
+
+      const seedPath = path.join(cwd, DEFAULT_SEED_PATH);
+      const document = parse(fs.readFileSync(seedPath, 'utf8'));
+      document.genomes = ['cli-json-output'];
+      fs.writeFileSync(seedPath, stringify(document), 'utf8');
+
+      const diff = runCli(['blueprint', 'diff', '--no-color'], cwd);
+      assert.equal(diff.code, 0);
+      assert.ok(diff.stdout.includes('--- .seed/seed.snapshot.yml (blueprint)'));
+      assert.ok(diff.stdout.includes('+++ seed/seed.yml (blueprint)'));
+      assert.ok(diff.stdout.includes('## Functional Behavior'));
+      assert.ok(diff.stdout.includes('default-human-output'));
+      assert.ok(diff.stdout.includes('default-json'));
+      assert.ok(diff.stdout.includes('The CLI interface outputs JSON by default'));
+      assert.equal(diff.stdout.includes('[builtin:'), false);
+
+      const badOption = runCli(['blueprint', 'diff', '--bogus'], cwd);
+      assert.equal(badOption.code, 1);
+      assert.ok(badOption.stderr.includes('Unknown option for seed blueprint diff'));
+    });
+  });
+
   test('blueprint renders markdown and json views from the Seed file', () => {
     withTempDir((cwd) => {
       runCli(['init'], cwd);

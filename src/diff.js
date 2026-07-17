@@ -2,6 +2,8 @@
 
 const { existsSync, readFileSync } = require('node:fs');
 const { join } = require('node:path');
+const { parse } = require('yaml');
+const { compileBlueprint, renderMarkdown } = require('./blueprint');
 const { loadSeed } = require('./seed-file');
 
 function snapshotPath(cwd) {
@@ -99,10 +101,15 @@ function hunkHeader(hunk) {
   return '@@ -' + oldStart + ',' + oldCount + ' +' + newStart + ',' + newCount + ' @@';
 }
 
-function renderDiff(changes, { color = process.stdout.isTTY, context = 3 } = {}) {
+function renderDiff(changes, {
+  color = process.stdout.isTTY,
+  context = 3,
+  oldLabel = '.seed/seed.snapshot.yml',
+  newLabel = 'seed/seed.yml (compiled)',
+} = {}) {
   const rendered = [
-    colorize('--- .seed/seed.snapshot.yml', '31', color),
-    colorize('+++ seed/seed.yml (compiled)', '32', color),
+    colorize('--- ' + oldLabel, '31', color),
+    colorize('+++ ' + newLabel, '32', color),
   ];
 
   hunkRanges(changes, context).forEach((range) => {
@@ -121,6 +128,50 @@ function renderDiff(changes, { color = process.stdout.isTTY, context = 3 } = {})
   });
 
   return rendered.join('\n') + '\n';
+}
+
+function renderComparableBlueprint(document, seedPath) {
+  const blueprint = compileBlueprint({
+    document,
+    seedPath,
+  });
+  return renderMarkdown(blueprint, {
+    includeSource: false,
+    includeGenomes: false,
+    includeItemSources: false,
+  });
+}
+
+function getBlueprintDiff({ cwd = process.cwd(), noColor = false } = {}) {
+  const snapPath = snapshotPath(cwd);
+  if (!existsSync(snapPath)) {
+    throw new Error('Seed snapshot missing at ' + snapPath + '. Run seed verify start first.');
+  }
+
+  const snapshotText = readFileSync(snapPath, 'utf8');
+  let snapshotDocument;
+  try {
+    snapshotDocument = parse(snapshotText);
+  } catch (error) {
+    throw new Error('Failed to parse Seed snapshot YAML at ' + snapPath + ': ' + error.message);
+  }
+
+  const seed = loadSeed({ cwd });
+  const beforeText = renderComparableBlueprint(snapshotDocument, '.seed/seed.snapshot.yml');
+  const afterText = renderComparableBlueprint(seed.document, 'seed/seed.yml');
+  const changes = buildLineDiff(beforeText, afterText);
+  const changed = changes.some((entry) => entry.kind !== 'same');
+
+  return {
+    changed,
+    text: changed
+      ? renderDiff(changes, {
+        color: !noColor && process.stdout.isTTY,
+        oldLabel: '.seed/seed.snapshot.yml (blueprint)',
+        newLabel: 'seed/seed.yml (blueprint)',
+      })
+      : 'No Blueprint diff.\n',
+  };
 }
 
 function getSeedDiff({ cwd = process.cwd(), noColor = false } = {}) {
@@ -142,6 +193,7 @@ function getSeedDiff({ cwd = process.cwd(), noColor = false } = {}) {
 
 module.exports = {
   buildLineDiff,
+  getBlueprintDiff,
   getSeedDiff,
   renderDiff,
   snapshotPath,
