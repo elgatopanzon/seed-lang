@@ -1,0 +1,84 @@
+metadata:
+  name: cli-tui
+  summary: Framework-neutral full-screen terminal application contract.
+  description: Defines generic TUI application guardrails for full-screen rendering,
+    screens, keyboard navigation, focus, resize handling, and terminal restoration.
+genomes:
+  - tui-client
+behavior:
+  tui-rendering:
+    full-screen-redraw: The interface renders and updates a coherent terminal
+      viewport in place rather than emitting an ever-growing stream of output.
+    stable-frame: Each completed render reflects one coherent application state
+      without stale regions, interleaved output, or visibly partial frames.
+    resize-redraw: Terminal resize events recompute layout and repaint the current
+      screen without corrupting content or losing the active context.
+    bounded-layout: Content is clipped, wrapped, scrolled, or otherwise adapted
+      to the available viewport instead of drawing outside terminal bounds.
+  tui-screens:
+    explicit-screens: Distinct application contexts are modeled as identifiable
+      screens, views, dialogs, or overlays with clear entry and exit behavior.
+    current-context: The interface makes the current screen, active region, and
+      available primary actions understandable to the user.
+    transient-layers: Dialogs, menus, help, and error overlays preserve the
+      underlying screen and return predictably when dismissed.
+  tui-navigation:
+    keyboard-complete: Every primary workflow is operable from the keyboard.
+    visible-focus: The currently focused interactive element or region is always
+      visibly distinguishable.
+    predictable-back: Back, cancel, and escape actions dismiss the nearest
+      transient context or return to the previous screen without trapping focus.
+    stable-controls: Navigation and action keys remain consistent across screens
+      unless a screen clearly communicates a contextual override.
+    discoverable-controls: The current screen exposes or provides access to help
+      for its important navigation and action keys.
+  tui-lifecycle:
+    managed-terminal-mode: Interactive terminal modes and full-screen presentation
+      are entered only for the lifetime of the TUI session.
+    restore-terminal: Normal exit, user cancellation, handled errors, and signals
+      restore terminal modes, cursor visibility, and screen state before returning
+      control to the shell.
+errors:
+  non-interactive-terminal:
+    code: tui.non-interactive-terminal
+    when: The full-screen interface is started without a usable interactive terminal.
+    remediation: Fail visibly with a concise diagnostic or use an explicitly
+      documented non-interactive interface; never emit broken control sequences.
+  terminal-capability-failure:
+    code: tui.terminal-capability-failure
+    when: Required terminal capabilities cannot be initialized or maintained.
+    remediation: Restore any changed terminal state and fail visibly with a
+      concise diagnostic.
+compatibility:
+  terminal-cleanup: Returning to the shell must not leave raw input mode, hidden
+    cursor state, corrupted terminal attributes, or TUI rendering artifacts.
+constraints:
+  full-screen-terminal-application: The target interface behaves as an interactive
+    terminal application comparable to nano, Vim, or htop, not as a line-oriented
+    script that repeatedly prints replacement output.
+  no-framework-requirement: This genome imposes behavior and interaction contracts
+    only; it does not require a TUI framework, rendering library, or architecture.
+freedom:
+  tui-framework: The implementation may choose any framework, terminal library,
+    rendering strategy, state model, and screen architecture that satisfies the
+    observable TUI contract.
+verifications:
+  tui-application-lifecycle:
+    title: Full-screen TUI lifecycle is safe
+    description: Verify the interface redraws in place and restores the terminal
+      after normal exit and an interrupted or failed session.
+    method: Exercise the TUI in a pseudo-terminal, navigate between screens,
+      resize it, exit normally, interrupt a second run, and inspect terminal state.
+    evidence_required:
+      - Pseudo-terminal command or harness used.
+      - Screen navigation and resize observations.
+      - Terminal state observations after normal and interrupted exit.
+  tui-keyboard-navigation:
+    title: Keyboard navigation is complete and visible
+    description: Verify primary screens and actions are reachable with visible
+      focus, discoverable controls, and predictable back or cancel behavior.
+    method: Exercise every primary workflow using only documented keyboard controls.
+    evidence_required:
+      - Screens and primary workflows exercised.
+      - Navigation and action keys used.
+      - Focus, help, back, and cancel behavior observed.

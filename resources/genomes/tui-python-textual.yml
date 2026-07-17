@@ -3,7 +3,7 @@ metadata:
   summary: Python Textual TUI client contract.
   description: Adds Textual-based Python terminal UI implementation expectations.
 genomes:
-  - tui-client
+  - cli-tui
   - cli-python
 environment:
   textual-runtime: The TUI is implemented with Textual or a compatible Python terminal UI stack.

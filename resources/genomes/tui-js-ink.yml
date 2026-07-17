@@ -3,7 +3,7 @@ metadata:
   summary: Ink React TUI client contract.
   description: Adds Ink-based JavaScript terminal UI implementation expectations.
 genomes:
-  - tui-client
+  - cli-tui
   - cli-nodejs
 environment:
   ink-runtime: The TUI is implemented with Ink or a compatible React-style

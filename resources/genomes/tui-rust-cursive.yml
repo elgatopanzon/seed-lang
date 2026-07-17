@@ -3,7 +3,7 @@ metadata:
   summary: Rust Cursive TUI client contract.
   description: Adds Cursive-based Rust terminal UI implementation expectations.
 genomes:
-  - tui-client
+  - cli-tui
   - cli-rust
 environment:
   cursive-runtime: The TUI is implemented with Cursive or a compatible Rust terminal UI stack.

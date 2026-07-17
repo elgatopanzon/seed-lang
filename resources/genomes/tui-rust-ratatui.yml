@@ -3,7 +3,7 @@ metadata:
   summary: Rust Ratatui TUI client contract.
   description: Adds Ratatui-based Rust terminal UI implementation expectations.
 genomes:
-  - tui-client
+  - cli-tui
   - cli-rust
 environment:
   ratatui-runtime: The TUI is implemented with Ratatui or a compatible Rust terminal UI stack.

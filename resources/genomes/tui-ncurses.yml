@@ -3,7 +3,7 @@ metadata:
   summary: ncurses TUI client contract.
   description: Adds ncurses-style terminal UI implementation expectations.
 genomes:
-  - tui-client
+  - cli-tui
 environment:
   ncurses-runtime: The TUI uses ncurses or an ncurses-compatible terminal UI library.
 constraints:

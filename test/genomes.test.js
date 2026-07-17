@@ -51,6 +51,7 @@ describe('seed genomes', () => {
       'mobile-flutter',
       'mobile-ios-swift',
       'mobile-react-native',
+      'cli-tui',
       'tui-client',
       'tui-go-bubble-tea',
       'tui-js-blessed',
@@ -244,8 +245,15 @@ describe('seed genomes', () => {
 
     const textual = compileGenomeDocument({ id: 'tui-python-textual', cwd: process.cwd(), home: '' });
     assert.equal(textual.provenance['interfaces.tui'].path, 'builtin:tui-client');
+    assert.equal(textual.provenance['behavior.tui-rendering.full-screen-redraw'].path, 'builtin:cli-tui');
     assert.equal(textual.provenance['environment.python-runtime'].path, 'builtin:cli-python');
     assert.equal(textual.provenance['constraints.textual-tui-runtime'].path, 'builtin:tui-python-textual');
+
+    const cliTui = compileGenomeDocument({ id: 'cli-tui', cwd: process.cwd(), home: '' });
+    assert.equal(cliTui.provenance['interfaces.tui'].path, 'builtin:tui-client');
+    assert.equal(cliTui.provenance['behavior.tui-navigation.visible-focus'].path, 'builtin:cli-tui');
+    assert.equal(cliTui.provenance['behavior.tui-lifecycle.restore-terminal'].path, 'builtin:cli-tui');
+    assert.equal(cliTui.provenance['freedom.tui-framework'].path, 'builtin:cli-tui');
 
     const mongodb = compileGenomeDocument({ id: 'state-mongodb', cwd: process.cwd(), home: '' });
     assert.equal(mongodb.provenance['state.nosql'].path, 'builtin:state-nosql');
