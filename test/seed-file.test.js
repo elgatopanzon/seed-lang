@@ -115,6 +115,39 @@ describe('seed file primitives', () => {
     fs.rmSync(cwd, { recursive: true, force: true });
   });
 
+  test('loadSeed parses unquoted genome exclusion tags', () => {
+    withTempDir((cwd) => {
+      const text = renderSeedTemplate().replace(
+        'scope:',
+        'genomes:\n  - cli-hello-world\n  - !cli-single-command\nscope:',
+      );
+      fs.mkdirSync(path.join(cwd, 'seed'), { recursive: true });
+      fs.writeFileSync(path.join(cwd, DEFAULT_SEED_PATH), text, 'utf8');
+
+      const loaded = loadSeed({ cwd });
+
+      assert.deepEqual(loaded.rawDocument.genomes, ['cli-hello-world', '!cli-single-command']);
+      assert.equal(loaded.document.behavior['hello-world-output'].includes('Hello, world!'), true);
+      assert.equal(loaded.document.behavior['single-command-dispatch'], undefined);
+    });
+  });
+
+  test('loadSeed rejects YAML tags outside genome exclusions', () => {
+    withTempDir((cwd) => {
+      const text = renderSeedTemplate().replace(
+        'summary: Bounded behavior contract for a local repository.',
+        'summary: !unexpected',
+      );
+      fs.mkdirSync(path.join(cwd, 'seed'), { recursive: true });
+      fs.writeFileSync(path.join(cwd, DEFAULT_SEED_PATH), text, 'utf8');
+
+      assert.throws(
+        () => loadSeed({ cwd }),
+        /Unresolved tag: !unexpected/,
+      );
+    });
+  });
+
   test('loadSeed fails with clear missing-file hint', () => {
     const err = withTempDir((cwd) => {
       try {

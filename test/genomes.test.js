@@ -428,6 +428,49 @@ describe('seed genomes', () => {
     assert.deepEqual(apiWithoutHttp.genomes.at(-1).exclude, ['*http*']);
   });
 
+  test('genome exclusions remove a composed genome from the full graph', () => {
+    const compiled = compileSeedDocument({
+      document: {
+        genomes: ['cli-hello-world', '!cli-single-command'],
+        behavior: {
+          local: 'Local Seed behavior remains present.',
+        },
+      },
+      cwd: process.cwd(),
+      home: '',
+    });
+
+    assert.deepEqual(compiled.genomes.map((entry) => entry.id), [
+      'cli-interface',
+      'cli-hello-world',
+    ]);
+    assert.equal(compiled.document.behavior['single-command-dispatch'], undefined);
+    assert.equal(compiled.document.behavior['hello-world-output'].includes('Hello, world!'), true);
+    assert.equal(compiled.document.behavior.local, 'Local Seed behavior remains present.');
+    assert.equal(compiled.document.interfaces.cli.purpose, 'User invokes the project from a terminal as a CLI.');
+    assert.equal(compiled.provenance['interfaces.cli'].id, 'cli-interface');
+  });
+
+  test('genome exclusions apply regardless of directive order and fail when unmatched', () => {
+    const compiled = compileSeedDocument({
+      document: {
+        genomes: ['!cli-single-command', 'cli-hello-world'],
+      },
+      cwd: process.cwd(),
+      home: '',
+    });
+
+    assert.equal(compiled.document.behavior['single-command-dispatch'], undefined);
+    assert.throws(
+      () => compileSeedDocument({
+        document: { genomes: ['cli-hello-world', '!cli-subcommands'] },
+        cwd: process.cwd(),
+        home: '',
+      }),
+      /Genome exclusion !cli-subcommands did not match a composed genome/,
+    );
+  });
+
   test('object exclude selectors are equivalent to string excludes', () => {
     const compiled = compileSeedDocument({
       document: {

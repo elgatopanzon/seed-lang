@@ -1,7 +1,8 @@
 const { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } = require('node:fs');
 const { join, resolve } = require('node:path');
-const { parse, stringify } = require('yaml');
+const { stringify } = require('yaml');
 const { collectAddressableItems, collectPresentAddressableItems, validateGenomeDocument } = require('./validation');
+const { parseSeedYaml } = require('./seed-yaml');
 
 const REFERENCE_PATTERN = /@([A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)*)/g;
 const MAX_GENOME_DEPTH = 64;
@@ -89,7 +90,7 @@ function listGenomeFiles(root, origin, publicPathFor = (filePath) => filePath) {
       const filePath = join(root, entry.name);
       let description = '';
       try {
-        const document = parse(readFileSync(filePath, 'utf8'));
+        const document = parseSeedYaml(readFileSync(filePath, 'utf8'));
         description = document?.metadata?.description ?? document?.metadata?.summary ?? '';
       } catch (error) {
         description = '';
@@ -162,7 +163,7 @@ function loadGenomeFile(filePath, id, origin, publicPath = filePath) {
   }
 
   try {
-    const document = parse(readFileSync(filePath, 'utf8'));
+    const document = parseSeedYaml(readFileSync(filePath, 'utf8'));
     if (!isObject(document)) {
       throw new Error('genome file must contain an object');
     }
@@ -292,6 +293,12 @@ function splitSelectorEntries(selectorText, specLabel) {
 }
 function parseGenomeSpec(spec) {
   if (typeof spec === 'string') {
+    if (spec.startsWith('!')) {
+      const id = spec.slice(1).trim();
+      validateGenomeId(id);
+      return { id, excludeGenome: true, label: spec };
+    }
+
     const match = spec.match(/^([^\[\]]+)(?:\[([^\]]*)\])?$/);
     if (!match || match[1].trim() === '') {
       throw new Error('genomes entries must be non-empty genome ids or id[address] selectors.');
@@ -530,6 +537,9 @@ function mergeProvenance(target, source) {
 function compileGenomeSpec(spec, context) {
   const parsed = parseGenomeSpec(spec);
   const compiled = compileGenomeById(parsed.id, context);
+  if (compiled.excluded) {
+    return { document: {}, provenance: {}, genomes: [] };
+  }
   const projected = projectGenomeDocument({
     document: compiled.document,
     provenance: compiled.provenance,
@@ -566,16 +576,34 @@ function compileDocument({ document, context, source, keepGenomeDirectives = fal
     throw new Error('genomes must be an array of genome ids or genome selector objects when provided.');
   }
 
+  const parsedSpecs = genomeSpecs.map(parseGenomeSpec);
+  const ownExclusions = parsedSpecs
+    .filter((spec) => spec.excludeGenome)
+    .map((spec) => ({ id: spec.id, matched: false }));
+  const documentContext = {
+    ...context,
+    exclusions: [...(context.exclusions ?? []), ...ownExclusions],
+  };
+
   let compiled = {};
   const provenance = {};
   const genomes = [];
 
-  genomeSpecs.forEach((spec) => {
-    const genome = compileGenomeSpec(spec, context);
+  genomeSpecs.forEach((spec, index) => {
+    if (parsedSpecs[index].excludeGenome) {
+      return;
+    }
+
+    const genome = compileGenomeSpec(spec, documentContext);
     compiled = mergeSeedFragments(compiled, genome.document);
     mergeProvenance(provenance, genome.provenance);
     genomes.push(...genome.genomes);
   });
+
+  const unmatched = ownExclusions.find((exclusion) => !exclusion.matched);
+  if (unmatched) {
+    throw new Error(`Genome exclusion !${unmatched.id} did not match a composed genome.`);
+  }
 
   const ownDocument = keepGenomeDirectives ? structuredClone(document) : omitGenomeDirectives(document);
   compiled = mergeSeedFragments(compiled, ownDocument);
@@ -589,6 +617,14 @@ function compileDocument({ document, context, source, keepGenomeDirectives = fal
 }
 
 function compileGenomeById(id, context) {
+  const exclusions = (context.exclusions ?? []).filter((entry) => entry.id === id);
+  if (exclusions.length > 0) {
+    exclusions.forEach((entry) => {
+      entry.matched = true;
+    });
+    return { excluded: true };
+  }
+
   if (context.stack.includes(id)) {
     throw new Error(`Genome cycle detected: ${[...context.stack, id].join(' -> ')}`);
   }

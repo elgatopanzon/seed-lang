@@ -1,7 +1,8 @@
 const { existsSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
 const { dirname, join, resolve } = require('node:path');
-const { parse, stringify } = require('yaml');
+const { stringify } = require('yaml');
 const { compileSeedDocument } = require('./genomes');
+const { parseSeedYaml } = require('./seed-yaml');
 
 const DEFAULT_SEED_PATH = 'seed/seed.yml';
 const DEFAULT_SEED_SCRIPTS_PATH = 'seed/scripts';
@@ -154,7 +155,7 @@ function initSeed({ cwd, overwrite = false, genomes = [] } = {}) {
   return {
     path: seedPath,
     text,
-    document: parse(text),
+    document: parseSeedYaml(text),
   };
 }
 
@@ -169,7 +170,7 @@ function loadSeed({ cwd } = {}) {
   const text = readFileSync(seedPath, 'utf8');
 
   try {
-    const rawDocument = parse(text);
+    const rawDocument = parseSeedYaml(text);
     const compiled = compileSeedDocument({ document: rawDocument, cwd: root, seedPath: DEFAULT_SEED_PATH });
     return {
       path: seedPath,
