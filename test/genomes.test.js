@@ -177,6 +177,7 @@ describe('seed genomes', () => {
       'cli-file-inputs',
       'cli-go',
       'cli-help-version',
+      'cli-hello-world',
       'cli-human-output',
       'cli-interface',
       'cli-json-output',
@@ -205,6 +206,12 @@ describe('seed genomes', () => {
     const compiled = compileGenomeDocument({ id: 'cli-human-output', cwd: process.cwd(), home: '' });
     assert.equal(compiled.description, 'Makes successful CLI output readable terminal text with user-facing error expectations.');
     assert.equal(compiled.provenance['behavior.outputs.default-human-output'].path, 'builtin:cli-human-output');
+
+    const helloWorld = compileGenomeDocument({ id: 'cli-hello-world', cwd: process.cwd(), home: '' });
+    assert.equal(helloWorld.provenance['interfaces.cli'].path, 'builtin:cli-single-command');
+    assert.equal(helloWorld.provenance['behavior.hello-world-output'].path, 'builtin:cli-hello-world');
+    assert.equal(helloWorld.document.behavior['hello-world-output'], 'Running the CLI prints exactly Hello, world! followed by one newline, writes nothing to stderr, and exits successfully.');
+    assert.equal(helloWorld.provenance['verifications.hello-world'].path, 'builtin:cli-hello-world');
 
     const jsonl = compileGenomeDocument({ id: 'cli-jsonl-output', cwd: process.cwd(), home: '' });
     assert.equal(jsonl.provenance['behavior.outputs.default-jsonl'].path, 'builtin:cli-jsonl-output');

@@ -1,0 +1,26 @@
+metadata:
+  name: cli-hello-world
+  summary: Hello World CLI contract.
+  description: Defines a single-command CLI that prints the canonical Hello,
+    world! greeting and exits successfully.
+genomes:
+  - cli-interface
+  - cli-single-command
+behavior:
+  hello-world-output: Running the CLI prints exactly Hello, world! followed by
+    one newline, writes nothing to stderr, and exits successfully.
+compatibility:
+  hello-world-text: The successful greeting remains exactly Hello, world! with
+    matching capitalization and punctuation.
+constraints:
+  hello-world-cli: The target project exposes a runnable CLI whose primary and
+    default behavior is the Hello World greeting.
+verifications:
+  hello-world:
+    title: CLI prints Hello World
+    description: Verify the CLI prints the exact canonical greeting and exits successfully.
+    method: Run the CLI without arguments and capture stdout, stderr, and exit status.
+    evidence_required:
+      - Exact stdout containing Hello, world! followed by one newline.
+      - Empty stderr.
+      - Exit status 0.
