@@ -255,6 +255,11 @@ describe('seed genomes', () => {
     assert.equal(cliTui.provenance['behavior.tui-lifecycle.restore-terminal'].path, 'builtin:cli-tui');
     assert.equal(cliTui.provenance['freedom.tui-framework'].path, 'builtin:cli-tui');
 
+    const blessed = compileGenomeDocument({ id: 'tui-js-blessed', cwd: process.cwd(), home: '' });
+    assert.equal(blessed.provenance['environment.neo-blessed-runtime'].path, 'builtin:tui-js-blessed');
+    assert.equal(blessed.provenance['constraints.neo-blessed-tui-runtime'].path, 'builtin:tui-js-blessed');
+    assert.equal(blessed.document.constraints['neo-blessed-tui-runtime'], 'The target project uses the maintained neo-blessed package for the JavaScript terminal UI.');
+
     const mongodb = compileGenomeDocument({ id: 'state-mongodb', cwd: process.cwd(), home: '' });
     assert.equal(mongodb.provenance['state.nosql'].path, 'builtin:state-nosql');
     assert.equal(mongodb.provenance['state.mongodb'].path, 'builtin:state-mongodb');
