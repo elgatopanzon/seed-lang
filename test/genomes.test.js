@@ -37,6 +37,24 @@ function writeYaml(file, document) {
 describe('seed genomes', () => {
   test('builtin genome definitions load from packaged YAML resources', () => {
     const expectedBuiltins = [
+      'architecture-client-server',
+      'architecture-component-boundaries',
+      'architecture-ecs',
+      'architecture-event-driven',
+      'architecture-functional-core',
+      'architecture-layered',
+      'architecture-library-first',
+      'architecture-modular-monolith',
+      'architecture-monorepo-components',
+      'architecture-pipeline',
+      'architecture-plugin-host',
+      'architecture-ports-and-adapters',
+      'architecture-service-oriented',
+      'architecture-shared-nothing-workers',
+      'architecture-single-binary',
+      'architecture-single-component',
+      'architecture-state-machine',
+      'architecture-worker-queue',
       'desktop-client',
       'desktop-dotnet',
       'desktop-electron',
@@ -303,6 +321,37 @@ describe('seed genomes', () => {
     const integration = compileGenomeDocument({ id: 'monorepo-integration-verification', cwd: process.cwd(), home: '' });
     assert.equal(integration.provenance['verifications.monorepo-integration'].path, 'builtin:monorepo-integration-verification');
     assert.equal(integration.provenance['constraints.monorepo-integration-required'].path, 'builtin:monorepo-integration-verification');
+
+    const architectureExpectations = {
+      'architecture-client-server': 'client-server-contract',
+      'architecture-component-boundaries': 'component-interface-boundaries',
+      'architecture-ecs': 'ecs-data-and-logic-separation',
+      'architecture-event-driven': 'event-contracts',
+      'architecture-functional-core': 'functional-core-boundary',
+      'architecture-layered': 'inward-layer-dependencies',
+      'architecture-library-first': 'library-owns-product-behavior',
+      'architecture-modular-monolith': 'modular-monolith-boundaries',
+      'architecture-monorepo-components': 'monorepo-component-ownership',
+      'architecture-pipeline': 'pipeline-stage-contracts',
+      'architecture-plugin-host': 'plugin-contract',
+      'architecture-ports-and-adapters': 'ports-and-adapters-boundary',
+      'architecture-service-oriented': 'service-contract-boundaries',
+      'architecture-shared-nothing-workers': 'shared-nothing-coordination',
+      'architecture-single-binary': 'single-binary-delivery',
+      'architecture-single-component': 'single-component-cohesion',
+      'architecture-state-machine': 'explicit-state-transitions',
+      'architecture-worker-queue': 'worker-queue-contract',
+    };
+    Object.entries(architectureExpectations).forEach(([id, constraintId]) => {
+      const architecture = compileGenomeDocument({ id, cwd: process.cwd(), home: '' });
+      assert.equal(architecture.document.constraints[constraintId].policy, 'global');
+      assert.equal(architecture.document.verifications.length > 0, true);
+      assert.equal(architecture.provenance[`constraints.${constraintId}`].path, `builtin:${id}`);
+    });
+
+    const ecs = compileGenomeDocument({ id: 'architecture-ecs', cwd: process.cwd(), home: '' });
+    assert.match(ecs.document.constraints['ecs-data-and-logic-separation'].description, /components.*systems/i);
+    assert.match(ecs.document.constraints['entity-model'].description, /entity/i);
   });
 
   test('builtin genomes recursively compose into a compiled seed document', () => {

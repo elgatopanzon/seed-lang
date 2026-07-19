@@ -1,0 +1,19 @@
+metadata:
+  name: architecture-library-first
+  summary: Library-first architecture refinement contract.
+  description: Keeps product behavior in a reusable library with thin interface adapters.
+constraints:
+  library-owns-product-behavior:
+    description: Reusable library APIs own product behavior; CLI, API, UI, and automation entrypoints translate inputs and outputs without duplicating decisions.
+    policy: global
+  interface-adapters-remain-thin:
+    description: Entrypoints contain only interface-specific parsing, presentation, transport, and lifecycle integration.
+    policy: global
+verifications:
+  - id: library-first-architecture
+    description: Verify core workflows are usable through the library without invoking a product entrypoint.
+    method: Exercise representative behavior directly through library APIs and inspect entrypoint responsibilities.
+    evidence_required:
+      - Direct library invocation demonstrated.
+      - Entrypoint responsibility inspection.
+      - Duplicated product-logic check results.

@@ -1,0 +1,19 @@
+metadata:
+  name: architecture-plugin-host
+  summary: Plugin-host architecture refinement contract.
+  description: Defines stable extension discovery, compatibility, lifecycle, isolation, and failure behavior.
+constraints:
+  plugin-contract:
+    description: Plugins use an explicit, versioned interface with declared capabilities and compatibility rules.
+    policy: global
+  plugin-lifecycle-and-isolation:
+    description: Discovery, loading, initialization, execution, shutdown, isolation, and plugin failure handling are explicit and cannot silently corrupt the host.
+    policy: global
+verifications:
+  - id: plugin-host-architecture
+    description: Verify plugin compatibility, lifecycle, isolation, and visible failure handling.
+    method: Load compatible, incompatible, and failing plugins and observe host behavior through every lifecycle stage.
+    evidence_required:
+      - Plugin interface version and capabilities identified.
+      - Compatible plugin lifecycle observed.
+      - Incompatible and failing plugin results.

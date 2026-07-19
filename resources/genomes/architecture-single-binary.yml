@@ -1,0 +1,19 @@
+metadata:
+  name: architecture-single-binary
+  summary: Single-binary architecture refinement contract.
+  description: Requires delivery as one installable executable without separately deployed runtime services.
+constraints:
+  single-binary-delivery:
+    description: The delivered system is one installable executable and requires no separately deployed runtime service to provide its contracted behavior.
+    policy: global
+  self-contained-runtime-startup:
+    description: A clean supported environment can install and start the executable without orchestrating companion application processes.
+    policy: global
+verifications:
+  - id: single-binary-architecture
+    description: Verify packaging, installation, startup, and primary behavior from one executable.
+    method: Install the packaged artifact in a clean supported environment and run its primary workflow without companion services.
+    evidence_required:
+      - Produced executable identified.
+      - Clean installation and startup result.
+      - Companion-service dependency check.

@@ -1,0 +1,19 @@
+metadata:
+  name: architecture-layered
+  summary: Layered architecture contract.
+  description: Separates interface, application, domain, and infrastructure responsibilities with inward dependencies.
+constraints:
+  inward-layer-dependencies:
+    description: Interface and infrastructure depend toward application and domain responsibilities; domain behavior does not depend on outer delivery or infrastructure details.
+    policy: global
+  layer-responsibility-separation:
+    description: Interface, application orchestration, domain decisions, and infrastructure integration remain independently identifiable.
+    policy: global
+verifications:
+  - id: layered-architecture
+    description: Verify layer responsibilities and dependency direction.
+    method: Inspect representative workflows, imports, and dependency injection boundaries across every layer.
+    evidence_required:
+      - Layer responsibilities mapped.
+      - Inward dependency direction demonstrated.
+      - Domain independence from outer layers checked.

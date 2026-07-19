@@ -1,0 +1,19 @@
+metadata:
+  name: architecture-functional-core
+  summary: Functional-core architecture refinement contract.
+  description: Separates deterministic decisions from side effects at explicit boundaries.
+constraints:
+  functional-core-boundary:
+    description: Deterministic decisions and transformations remain separate from filesystem, network, clock, randomness, process, and other side effects.
+    policy: global
+  explicit-effect-shell:
+    description: Side effects occur through explicit boundary code that supplies inputs to and applies outputs from the deterministic core.
+    policy: global
+verifications:
+  - id: functional-core-architecture
+    description: Verify deterministic core behavior independently from side-effect adapters.
+    method: Test representative decisions with fixed inputs and inspect where external effects enter and leave the system.
+    evidence_required:
+      - Deterministic core tests.
+      - Side-effect boundaries identified.
+      - Hidden clock, randomness, filesystem, or network access check.

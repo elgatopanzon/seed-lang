@@ -1,0 +1,19 @@
+metadata:
+  name: architecture-shared-nothing-workers
+  summary: Shared-nothing worker architecture refinement contract.
+  description: Prevents concurrent workers from mutating shared implementation state directly.
+constraints:
+  shared-nothing-coordination:
+    description: Concurrent workers coordinate only through explicit messages, durable state, or immutable artifacts and do not directly mutate shared in-memory implementation state.
+    policy: global
+  worker-ownership-boundaries:
+    description: Each unit of mutable work has one explicit owner at a time or uses a declared concurrency-control contract.
+    policy: global
+verifications:
+  - id: shared-nothing-worker-architecture
+    description: Verify worker isolation and coordination under concurrent execution and failure.
+    method: Run concurrent workers against representative work, inject one worker failure, and inspect state ownership and recovery.
+    evidence_required:
+      - Coordination mechanism identified.
+      - Concurrent ownership observations.
+      - Failure isolation and recovery results.

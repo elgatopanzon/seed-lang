@@ -1,0 +1,19 @@
+metadata:
+  name: architecture-monorepo-components
+  summary: Monorepo-component architecture refinement contract.
+  description: Defines independently owned monorepo components with declared dependencies and integration contracts.
+constraints:
+  monorepo-component-ownership:
+    description: Every monorepo component has explicit ownership, responsibilities, public interfaces, and independently identifiable validation.
+    policy: global
+  monorepo-dependency-direction:
+    description: Cross-component dependencies have a declared direction and integration occurs only through explicit contracts.
+    policy: global
+verifications:
+  - id: monorepo-component-architecture
+    description: Verify component ownership, dependency direction, isolated validation, and integration contracts.
+    method: Inspect workspace boundaries and run representative component and cross-component checks.
+    evidence_required:
+      - Component and ownership map.
+      - Dependency direction inspection.
+      - Isolated and integration validation results.

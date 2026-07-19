@@ -1,0 +1,19 @@
+metadata:
+  name: architecture-service-oriented
+  summary: Service-oriented architecture contract.
+  description: Requires independently owned services communicating only through declared contracts.
+constraints:
+  service-contract-boundaries:
+    description: Services communicate only through declared, versioned contracts and never access another service's private state or implementation.
+    policy: global
+  independent-service-ownership:
+    description: Each service owns its behavior, data, deployment lifecycle, and compatibility responsibilities.
+    policy: global
+verifications:
+  - id: service-oriented-architecture
+    description: Verify service ownership, contract-only communication, and private-state isolation.
+    method: Inspect service dependencies, data access, deployment units, and representative inter-service exchanges.
+    evidence_required:
+      - Service ownership map.
+      - Inter-service contracts identified.
+      - Private-state access check results.

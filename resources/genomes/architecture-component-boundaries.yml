@@ -1,0 +1,19 @@
+metadata:
+  name: architecture-component-boundaries
+  summary: Component-boundary architecture refinement contract.
+  description: Requires component ownership, explicit interfaces, and prohibition of boundary bypasses.
+constraints:
+  component-interface-boundaries:
+    description: Each component owns its implementation and exposes explicit interfaces for all cross-component interaction.
+    policy: global
+  no-component-boundary-bypass:
+    description: Components do not import, mutate, query, or depend on another component's private implementation or state.
+    policy: global
+verifications:
+  - id: component-boundary-architecture
+    description: Verify component ownership, public interfaces, dependency direction, and absence of boundary bypasses.
+    method: Inspect representative cross-component workflows and dependency edges.
+    evidence_required:
+      - Component ownership map.
+      - Public interfaces identified.
+      - Boundary-bypass check results.

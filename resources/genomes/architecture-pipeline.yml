@@ -1,0 +1,19 @@
+metadata:
+  name: architecture-pipeline
+  summary: Pipeline architecture contract.
+  description: Requires independently understandable processing stages with explicit flow semantics.
+constraints:
+  pipeline-stage-contracts:
+    description: Every processing stage has explicit inputs, outputs, ordering, and failure behavior and can be understood independently.
+    policy: global
+  pipeline-flow-integrity:
+    description: Data moves between stages only through declared stage contracts without hidden cross-stage mutation.
+    policy: global
+verifications:
+  - id: pipeline-architecture
+    description: Verify stage contracts, ordering, data flow, and failure propagation.
+    method: Trace representative input through every stage and inject a stage failure.
+    evidence_required:
+      - Ordered stage list and contracts.
+      - End-to-end data-flow observation.
+      - Stage-failure behavior observed.

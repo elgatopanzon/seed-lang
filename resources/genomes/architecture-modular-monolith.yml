@@ -1,0 +1,19 @@
+metadata:
+  name: architecture-modular-monolith
+  summary: Modular-monolith architecture contract.
+  description: Requires one deployable application with explicit, acyclic module boundaries.
+constraints:
+  modular-monolith-boundaries:
+    description: The system is one deployable application whose modules expose controlled public interfaces and hide private implementation.
+    policy: global
+  acyclic-module-dependencies:
+    description: Module dependencies have an explicit direction and contain no cycles.
+    policy: global
+verifications:
+  - id: modular-monolith-architecture
+    description: Verify one deployment unit, controlled module interfaces, and an acyclic dependency graph.
+    method: Inspect deployment artifacts, module imports, public interfaces, and dependency direction.
+    evidence_required:
+      - Deployment unit identified.
+      - Module dependency graph or equivalent inspection.
+      - Boundary-bypass check results.

@@ -1,0 +1,22 @@
+metadata:
+  name: architecture-ecs
+  summary: Entity Component System architecture contract.
+  description: Requires a bespoke ECS where entities identify, components store data, and systems contain logic.
+constraints:
+  ecs-data-and-logic-separation:
+    description: Components contain data without domain logic; systems contain all behavior that reads or transforms component data.
+    policy: global
+  entity-model:
+    description: Every modeled runtime object is represented as an entity whose capabilities and state come from attached components.
+    policy: global
+  ecs-access-boundaries:
+    description: Systems declare the component data they require and do not bypass ECS storage through hidden parallel object state.
+    policy: global
+verifications:
+  - id: ecs-architecture
+    description: Verify all modeled objects are entities, all state is component data, and all logic executes in systems.
+    method: Inspect representative features and trace their identity, state, queries, and behavior through ECS boundaries.
+    evidence_required:
+      - Representative entity and component mappings.
+      - Systems and required component queries identified.
+      - Check for logic-bearing components or hidden parallel state.

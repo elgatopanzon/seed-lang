@@ -1,0 +1,19 @@
+metadata:
+  name: architecture-worker-queue
+  summary: Worker-queue architecture contract.
+  description: Defines explicit work submission, execution, status, retry, cancellation, and result boundaries.
+constraints:
+  worker-queue-contract:
+    description: Work submission, identity, execution, status, retry, cancellation, timeout, and result retrieval have explicit contracts.
+    policy: global
+  idempotent-worker-execution:
+    description: Retried or redelivered work cannot create unintended duplicate effects.
+    policy: global
+verifications:
+  - id: worker-queue-architecture
+    description: Verify work lifecycle boundaries and idempotent retry behavior.
+    method: Exercise submission, execution, status, cancellation, retry, duplicate delivery, failure, and result retrieval.
+    evidence_required:
+      - Work lifecycle states observed.
+      - Retry and duplicate-delivery results.
+      - Cancellation and failure results.

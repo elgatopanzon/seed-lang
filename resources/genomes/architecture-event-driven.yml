@@ -1,0 +1,19 @@
+metadata:
+  name: architecture-event-driven
+  summary: Event-driven architecture contract.
+  description: Requires typed, versioned events with explicit delivery and failure semantics.
+constraints:
+  event-contracts:
+    description: Events have explicit types, schemas, ownership, versions, and compatibility rules.
+    policy: global
+  event-delivery-semantics:
+    description: Ordering, duplication, retries, idempotency, acknowledgement, and failure handling are explicit for every event path that depends on them.
+    policy: global
+verifications:
+  - id: event-driven-architecture
+    description: Verify event contracts and delivery behavior under success, duplicate, retry, and failure conditions.
+    method: Inspect published schemas and exercise representative event delivery and recovery paths.
+    evidence_required:
+      - Event types, owners, and versions identified.
+      - Delivery semantics observed.
+      - Failure and duplicate handling observed.

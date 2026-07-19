@@ -1,0 +1,19 @@
+metadata:
+  name: architecture-client-server
+  summary: Client-server architecture contract.
+  description: Separates clients and servers through an explicit, versioned interface.
+constraints:
+  client-server-contract:
+    description: Client and server communicate only through an explicit interface whose requests, responses, errors, and compatibility are versioned.
+    policy: global
+  client-server-ownership:
+    description: Client presentation concerns and server-owned behavior or state remain separated across the interface boundary.
+    policy: global
+verifications:
+  - id: client-server-architecture
+    description: Verify client-server separation and interface compatibility.
+    method: Exercise representative success and failure exchanges while inspecting that neither side bypasses the declared interface.
+    evidence_required:
+      - Versioned interface contract identified.
+      - Success and failure exchanges observed.
+      - Boundary-bypass check results.

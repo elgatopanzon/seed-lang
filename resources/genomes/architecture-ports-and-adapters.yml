@@ -1,0 +1,19 @@
+metadata:
+  name: architecture-ports-and-adapters
+  summary: Ports-and-adapters refinement contract.
+  description: Keeps core behavior behind abstract ports and implements external concerns as adapters.
+constraints:
+  ports-and-adapters-boundary:
+    description: Core behavior depends on explicit ports; filesystems, databases, networks, user interfaces, and external services implement adapters outside the core.
+    policy: global
+  adapter-replaceability:
+    description: Replacing an adapter does not require changing core decisions or use-case behavior.
+    policy: global
+verifications:
+  - id: ports-and-adapters-architecture
+    description: Verify core dependency direction and adapter replaceability.
+    method: Inspect representative I/O paths and substitute or test an adapter through its port.
+    evidence_required:
+      - Ports and adapters mapped.
+      - Core imports checked for external details.
+      - Adapter substitution or isolated test demonstrated.

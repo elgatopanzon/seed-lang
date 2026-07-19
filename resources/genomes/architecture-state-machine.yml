@@ -1,0 +1,19 @@
+metadata:
+  name: architecture-state-machine
+  summary: State-machine architecture refinement contract.
+  description: Requires explicit lifecycle states, permitted transitions, and visible invalid-transition failures.
+constraints:
+  explicit-state-transitions:
+    description: Lifecycle state is explicit and changes only through declared transitions with defined guards, actions, and outcomes.
+    policy: global
+  invalid-transition-failure:
+    description: Invalid transitions fail visibly without partially applying state changes.
+    policy: global
+verifications:
+  - id: state-machine-architecture
+    description: Verify permitted transitions, rejected transitions, and atomic state changes.
+    method: Exercise every declared transition plus representative invalid transitions and inspect resulting state.
+    evidence_required:
+      - States and transition table identified.
+      - Permitted transition results.
+      - Invalid and interrupted transition results.

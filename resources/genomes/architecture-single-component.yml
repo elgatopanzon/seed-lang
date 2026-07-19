@@ -1,0 +1,18 @@
+metadata:
+  name: architecture-single-component
+  summary: Single-component architecture contract.
+  description: Requires one cohesive application or executable without unnecessary architectural divisions.
+constraints:
+  single-component-cohesion:
+    description: The system remains one cohesive application or executable with responsibilities separated only where clarity requires it.
+    policy: global
+  no-unnecessary-architecture:
+    description: Do not introduce services, plugins, modules, or abstraction layers without a concrete contract need.
+    policy: global
+verifications:
+  - id: single-component-architecture
+    description: Verify the implementation remains cohesive and contains no unjustified architectural divisions.
+    method: Inspect runtime units, module boundaries, extension points, and deployment topology against the Seed requirements.
+    evidence_required:
+      - Runtime and deployment units identified.
+      - Every architectural division justified by a contract requirement.
