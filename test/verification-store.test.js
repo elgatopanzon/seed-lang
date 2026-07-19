@@ -276,6 +276,38 @@ describe('verification store', () => {
     });
   });
 
+  test('claimItem is idempotent for the active claim owner', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+
+      const first = claimItem({
+        cwd,
+        itemId: 'verify-final',
+        owner: 'reviewer-A',
+        leaseMs: 120_000,
+        now: () => 10_000,
+      });
+      const repeated = claimItem({
+        cwd,
+        itemId: 'verify-final',
+        owner: 'reviewer-A',
+        leaseMs: 120_000,
+        now: () => 20_000,
+      });
+
+      assert.deepEqual(repeated.claim, first.claim);
+      const state = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      const item = state.items.find((entry) => entry.id === 'verify-final');
+      assert.equal(item.attempts, 1);
+      assert.equal(item.claim.claimedAt, 10_000);
+      assert.equal(item.claim.leaseUntil, 130_000);
+    });
+  });
+
   test('claimNext recovers stale claims and returns stale ids as warnings', () => {
     withTempDir((cwd) => {
       startSession({
@@ -353,6 +385,7 @@ describe('verification store', () => {
       assert.equal(confirmed.status, 'confirmed');
       assert.equal(confirmed.evidence, 'verified manually');
       assert.equal(confirmed.test_commands[0].cwd, '.');
+      assert.equal(confirmed.test_commands[0].timeoutMs, 300_000);
       assert.equal(failed.status, 'failed');
       assert.equal(failed.reason, 'environment missing');
       assert.equal(pending.status, 'pending');

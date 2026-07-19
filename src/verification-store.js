@@ -31,7 +31,7 @@ const DEFAULT_SESSION_ID = 'default';
 const DEFAULT_LEASE_MS = 60_000;
 const DEFAULT_LOCK_WAIT_MS = 60_000;
 const DEFAULT_LOCK_RETRY_MS = 50;
-const DEFAULT_TEST_COMMAND_TIMEOUT_MS = 30_000;
+const DEFAULT_TEST_COMMAND_TIMEOUT_MS = 300_000;
 const MAX_TEST_COMMAND_OUTPUT_CHARS = 4_000;
 const SESSION_SCHEMA_VERSION = 1;
 const SESSION_SNAPSHOT_PATH = '.seed/seed.snapshot.yml';
@@ -1074,16 +1074,19 @@ function claimItem({
       seedChanges = new Set();
     }
     const expiration = currentItemExpiration(cwd, item, seedChanges);
-    if (item.status !== 'pending' && !expiration) {
+    const alreadyClaimed = item.status === 'claimed' && item.claim?.owner === owner;
+    if (item.status !== 'pending' && !expiration && !alreadyClaimed) {
       throw new Error(`Cannot claim verification ${itemId}: expected pending, found ${item.status}.`);
     }
-    item.status = 'claimed';
-    item.claim = {
-      owner,
-      claimedAt: nowValue,
-      leaseUntil: nowValue + leaseMs,
-    };
-    item.attempts = (item.attempts ?? 0) + 1;
+    if (!alreadyClaimed) {
+      item.status = 'claimed';
+      item.claim = {
+        owner,
+        claimedAt: nowValue,
+        leaseUntil: nowValue + leaseMs,
+      };
+      item.attempts = (item.attempts ?? 0) + 1;
+    }
     state.updatedAt = nowValue;
     writeJsonAtomically(path, state);
     return {
