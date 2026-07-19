@@ -236,6 +236,46 @@ describe('verification store', () => {
     });
   });
 
+  test('claimItem reclaims the requested expired verification before pending work', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+
+      claimItem({
+        cwd,
+        itemId: 'verify-final',
+        owner: 'reviewer-A',
+        now: () => 1_000,
+      });
+      confirmItem({
+        cwd,
+        itemId: 'verify-final',
+        owner: 'reviewer-A',
+        files: ['implementation.js'],
+        testCommands: [PASS_CMD],
+        evidence: 'initial proof',
+        now: () => 2_000,
+      });
+      fs.writeFileSync(path.join(cwd, 'implementation.js'), 'changed\n', 'utf8');
+
+      const result = claimItem({
+        cwd,
+        itemId: 'verify-final',
+        owner: 'reviewer-B',
+        now: () => 3_000,
+      });
+
+      const state = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      assert.equal(result.item.id, 'verify-final');
+      assert.equal(state.items.find((entry) => entry.id === 'verify-begin').status, 'pending');
+      assert.equal(state.items.find((entry) => entry.id === 'verify-final').status, 'claimed');
+      assert.equal(state.items.find((entry) => entry.id === 'verify-final').claim.owner, 'reviewer-B');
+    });
+  });
+
   test('claimNext recovers stale claims and returns stale ids as warnings', () => {
     withTempDir((cwd) => {
       startSession({

@@ -583,6 +583,30 @@ describe('seed cli', () => {
     });
   });
 
+  test('verify claim reclaims a specific expired verification', () => {
+    withTempDir((cwd) => {
+      writeSeedFromTemplate(cwd, (document) => {
+        document.verifications = [
+          { id: 'verify-first', title: 'First check', description: 'first', method: 'manual', evidence_required: ['manual'] },
+          { id: 'verify-second', title: 'Second check', description: 'second', method: 'manual', evidence_required: ['manual'] },
+        ];
+      });
+      assert.equal(runCli(['verify', 'start'], cwd).code, 0);
+      assert.equal(runCli(['verify', 'claim', 'verify-second', '--owner', 'reviewer-A'], cwd).code, 0);
+      assert.equal(runCli(['verify', 'confirm', 'verify-second', '--owner', 'reviewer-A', '--file', 'implementation.js', '--test-cmd', PASS_CMD, '--evidence', 'initial proof'], cwd).code, 0);
+      fs.writeFileSync(path.join(cwd, 'implementation.js'), 'changed\n', 'utf8');
+
+      const claimed = runCli(['verify', 'claim', 'verify-second', '--owner', 'reviewer-B'], cwd);
+      assert.equal(claimed.code, 0);
+      assert.ok(claimed.stdout.includes('Claimed verification verify-second'));
+
+      const session = JSON.parse(fs.readFileSync(sessionPath(cwd), 'utf8'));
+      assert.equal(session.items.find((entry) => entry.id === 'verify-first').status, 'pending');
+      assert.equal(session.items.find((entry) => entry.id === 'verify-second').status, 'claimed');
+      assert.equal(session.items.find((entry) => entry.id === 'verify-second').claim.owner, 'reviewer-B');
+    });
+  });
+
   test('verify pending lists pending and expired items', () => {
     withTempDir((cwd) => {
       writeSeedFromTemplate(cwd, (document) => {

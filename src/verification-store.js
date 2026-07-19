@@ -1067,7 +1067,14 @@ function claimItem({
     if (!item) {
       throw new Error(`Unknown verification id ${itemId} in session ${sessionId}.`);
     }
-    if (item.status !== 'pending') {
+    let seedChanges = new Set();
+    try {
+      seedChanges = new Set(modifiedSeedAddresses(cwd));
+    } catch (error) {
+      seedChanges = new Set();
+    }
+    const expiration = currentItemExpiration(cwd, item, seedChanges);
+    if (item.status !== 'pending' && !expiration) {
       throw new Error(`Cannot claim verification ${itemId}: expected pending, found ${item.status}.`);
     }
     item.status = 'claimed';
