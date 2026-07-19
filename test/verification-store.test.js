@@ -11,6 +11,7 @@ const FAIL_CMD = process.execPath + ' -e "process.exit(1)"';
 
 const {
   checkSession,
+  claimItem,
   claimNext,
   confirmItem,
   failItem,
@@ -208,6 +209,30 @@ describe('verification store', () => {
       assert.equal(result.recoveredIds.length, 0);
       assert.equal(claimed.status, 'claimed');
       assert.equal(claimed.claim.owner, 'worker-A');
+    });
+  });
+
+  test('claimItem claims the requested pending verification without consuming earlier work', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+
+      const result = claimItem({
+        cwd,
+        itemId: 'verify-final',
+        owner: 'reviewer-A',
+        leaseMs: 120000,
+        now: () => 10_000,
+      });
+
+      const state = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      assert.equal(result.item.id, 'verify-final');
+      assert.equal(state.items.find((entry) => entry.id === 'verify-begin').status, 'pending');
+      assert.equal(state.items.find((entry) => entry.id === 'verify-final').status, 'claimed');
+      assert.equal(state.items.find((entry) => entry.id === 'verify-final').claim.owner, 'reviewer-A');
     });
   });
 

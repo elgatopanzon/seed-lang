@@ -27,6 +27,7 @@ const {
   verificationAudit,
   verificationReport,
   claimNext,
+  claimItem,
   confirmItem,
   failItem,
   getPendingItems,
@@ -55,6 +56,7 @@ function usage() {
     'seed verify reset',
     'seed verify sync',
     'seed verify next [--owner OWNER]',
+    'seed verify claim <constraint-id> [--owner OWNER]',
     'seed verify pending',
     'seed verify check',
     'seed verify audit',
@@ -194,6 +196,29 @@ function parseVerifyNextArgs(args) {
     }
   }
 
+  return { options };
+}
+
+function parseVerifyClaimArgs(args) {
+  if (args.length === 0 || args[0].startsWith('-')) {
+    return { error: 'seed verify claim requires exactly one <constraint-id>.' };
+  }
+  const options = { itemId: args[0], owner: DEFAULT_OWNER };
+  for (let index = 1; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--owner') {
+      const parsed = readOptionValue(args, index, '--owner', 'claim');
+      if (parsed.error) {
+        return parsed;
+      }
+      options.owner = parsed.value;
+      index += 1;
+    } else if (arg.startsWith('-')) {
+      return { error: `Unknown option for seed verify claim: ${arg}` };
+    } else {
+      return { error: `seed verify claim does not take positional arguments: ${arg}` };
+    }
+  }
   return { options };
 }
 
@@ -817,6 +842,12 @@ function handleVerifyNext(cwd, owner = DEFAULT_OWNER) {
   return 0;
 }
 
+function handleVerifyClaim(cwd, itemId, owner = DEFAULT_OWNER) {
+  const result = claimItem({ cwd, itemId, owner });
+  console.log(`Claimed verification ${result.item.id}`);
+  return 0;
+}
+
 function handleVerifyConfirm(cwd, constraintId, owner, evidence, files, testCommands) {
   try {
     const item = confirmItem({
@@ -1189,6 +1220,17 @@ function run(argv = process.argv.slice(2)) {
 
       try {
         return handleVerifyNext(cwd, parsed.options.owner);
+      } catch (error) {
+        return exitWithError(error.message);
+      }
+    }
+    if (subcommand === 'claim') {
+      const parsed = parseVerifyClaimArgs(subRest);
+      if (parsed.error) {
+        return exitWithError(parsed.error);
+      }
+      try {
+        return handleVerifyClaim(cwd, parsed.options.itemId, parsed.options.owner);
       } catch (error) {
         return exitWithError(error.message);
       }

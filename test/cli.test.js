@@ -563,6 +563,26 @@ describe('seed cli', () => {
     });
   });
 
+  test('verify claim claims a specific pending verification', () => {
+    withTempDir((cwd) => {
+      writeSeedFromTemplate(cwd, (document) => {
+        document.verifications = [
+          { id: 'verify-first', title: 'First check', description: 'first', method: 'manual', evidence_required: ['manual'] },
+          { id: 'verify-second', title: 'Second check', description: 'second', method: 'manual', evidence_required: ['manual'] },
+        ];
+      });
+      assert.equal(runCli(['verify', 'start'], cwd).code, 0);
+
+      const claimed = runCli(['verify', 'claim', 'verify-second', '--owner', 'reviewer-A'], cwd);
+      assert.equal(claimed.code, 0);
+      assert.ok(claimed.stdout.includes('Claimed verification verify-second'));
+
+      const session = JSON.parse(fs.readFileSync(sessionPath(cwd), 'utf8'));
+      assert.equal(session.items.find((entry) => entry.id === 'verify-first').status, 'pending');
+      assert.equal(session.items.find((entry) => entry.id === 'verify-second').status, 'claimed');
+    });
+  });
+
   test('verify pending lists pending and expired items', () => {
     withTempDir((cwd) => {
       writeSeedFromTemplate(cwd, (document) => {

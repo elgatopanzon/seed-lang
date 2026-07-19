@@ -1036,6 +1036,60 @@ function claimNext({
   }, { waitMs: lockWaitMs });
 }
 
+function claimItem({
+  cwd,
+  itemId,
+  sessionId = DEFAULT_SESSION_ID,
+  owner = `seed-${Date.now()}`,
+  leaseMs = DEFAULT_LEASE_MS,
+  now,
+  lockWaitMs = DEFAULT_LOCK_WAIT_MS,
+} = {}) {
+  assertSessionId(sessionId);
+  assertOwner(owner);
+
+  if (typeof itemId !== 'string' || itemId.length === 0) {
+    throw new Error('claimItem requires a verification item id.');
+  }
+  if (typeof leaseMs !== 'number' || !Number.isFinite(leaseMs) || leaseMs <= 0) {
+    throw new Error('claimItem requires leaseMs to be a positive number.');
+  }
+
+  const nowValue = normalizeNow(now);
+  const path = sessionPath(cwd, sessionId);
+  const label = `session state ${path}`;
+  const lock = lockPath(cwd, sessionId);
+
+  return withLock(lock, () => {
+    const state = readSessionState(cwd, sessionId, label);
+    const recovered = recoverStaleClaims(state.items, nowValue);
+    const item = state.items.find((entry) => entry.id === itemId);
+    if (!item) {
+      throw new Error(`Unknown verification id ${itemId} in session ${sessionId}.`);
+    }
+    if (item.status !== 'pending') {
+      throw new Error(`Cannot claim verification ${itemId}: expected pending, found ${item.status}.`);
+    }
+    item.status = 'claimed';
+    item.claim = {
+      owner,
+      claimedAt: nowValue,
+      leaseUntil: nowValue + leaseMs,
+    };
+    item.attempts = (item.attempts ?? 0) + 1;
+    state.updatedAt = nowValue;
+    writeJsonAtomically(path, state);
+    return {
+      item: itemSummary(item, verificationReferences(cwd, item), globalPolicies(cwd)),
+      claim: item.claim,
+      recoveredIds: recovered.recovered,
+      warnings: recovered.recovered.length
+        ? [{ code: 'recovered-stale-lease', ids: recovered.recovered }]
+        : [],
+    };
+  }, { waitMs: lockWaitMs });
+}
+
 function transitionItem({
   cwd,
   sessionId = DEFAULT_SESSION_ID,
@@ -1631,6 +1685,7 @@ function getStatus({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
 
 module.exports = {
   startSession,
+  claimItem,
   claimNext,
   confirmItem,
   failItem,
