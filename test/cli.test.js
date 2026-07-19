@@ -724,7 +724,7 @@ describe('seed cli', () => {
 
       const check = runCli(["verify", "check"], cwd);
       assert.equal(check.code, 1);
-      assert.ok(check.stdout.includes("Seed verification check: 1/2 passed"));
+      assert.ok(check.stdout.includes("Seed verification check: 1/2 passed (commands: 2 unique / 2 recorded)"));
       assert.ok(check.stdout.includes("- ok verify-first"));
       assert.ok(check.stdout.includes("- failed verify-second"));
     });

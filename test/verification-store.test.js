@@ -1104,6 +1104,40 @@ describe('verification store', () => {
     });
   });
 
+  test('checkSession executes each unique recorded command once and fans out its result', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+
+      const counterCommand = `${process.execPath} -e "const fs=require('node:fs');const p='check-count.txt';const n=fs.existsSync(p)?Number(fs.readFileSync(p,'utf8')):0;fs.writeFileSync(p,String(n+1))"`;
+      ['verify-begin', 'verify-next', 'verify-final'].forEach((id, index) => {
+        claimNext({ cwd, owner: 'worker-A', now: () => 1_000 + index * 1_000 });
+        confirmItem({
+          cwd,
+          itemId: id,
+          owner: 'worker-A',
+          files: ['implementation.js'],
+          testCommands: [counterCommand],
+          evidence: id,
+          now: () => 1_500 + index * 1_000,
+        });
+      });
+      fs.writeFileSync(path.join(cwd, 'check-count.txt'), '0', 'utf8');
+
+      const check = checkSession({ cwd, now: () => 10_000 });
+
+      assert.equal(check.ok, true);
+      assert.equal(check.recordedCommandTotal, 3);
+      assert.equal(check.uniqueCommandTotal, 1);
+      assert.equal(fs.readFileSync(path.join(cwd, 'check-count.txt'), 'utf8'), '1');
+      assert.equal(check.items.every((item) => item.commands[0].command === counterCommand), true);
+      assert.equal(check.items.every((item) => item.commands[0].passed), true);
+    });
+  });
+
   test('verificationAudit passes complete executable evidence and flags missing command evidence', () => {
     withTempDir((cwd) => {
       startSession({

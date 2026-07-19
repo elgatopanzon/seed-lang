@@ -889,7 +889,7 @@ function handleVerifyFail(cwd, constraintId, owner, reason, files, testCommands)
 function handleVerifyCheck(cwd) {
   try {
     const result = checkSession({ cwd });
-    console.log('Seed verification check: ' + result.passed + '/' + result.total + ' passed');
+    console.log('Seed verification check: ' + result.passed + '/' + result.total + ' passed (commands: ' + result.uniqueCommandTotal + ' unique / ' + result.recordedCommandTotal + ' recorded)');
     result.items.forEach((item) => {
       const address = item.address ? ' @' + item.address : '';
       const state = item.ok ? 'ok' : 'failed';
