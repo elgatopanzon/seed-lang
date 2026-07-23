@@ -1273,7 +1273,7 @@ function run(argv = process.argv.slice(2)) {
 }
 
 if (require.main === module) {
-  process.exit(run());
+  process.exitCode = run();
 }
 
 module.exports = { run };

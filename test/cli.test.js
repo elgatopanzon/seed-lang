@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const os = require('node:os');
 const path = require('node:path');
 const fs = require('node:fs');
+const { spawn } = require('node:child_process');
 const { parse, stringify } = require('yaml');
 
 const { DEFAULT_SEED_PATH, renderSeedTemplate } = require('../src/seed-file');
@@ -10,6 +11,7 @@ const { run } = require('../src/cli');
 
 const PASS_CMD = process.execPath + ' -e "process.exit(0)"';
 const FAIL_CMD = process.execPath + ' -e "process.exit(1)"';
+const CLI_PATH = fs.realpathSync(path.join(__dirname, '..', 'src', 'cli.js'));
 
 function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'seed-cli-test-'));
@@ -23,6 +25,42 @@ function withTempDir(runTest) {
   } finally {
     fs.rmSync(cwd, { recursive: true, force: true });
   }
+}
+
+async function withTempDirAsync(runTest) {
+  const cwd = tempDir();
+  fs.writeFileSync(path.join(cwd, 'implementation.js'), 'module.exports = {};\n', 'utf8');
+  try {
+    return await runTest(cwd);
+  } finally {
+    fs.rmSync(cwd, { recursive: true, force: true });
+  }
+}
+
+function runCliPiped(args, cwd) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [CLI_PATH, ...args], {
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.on('error', reject);
+    setTimeout(() => {
+      child.stdout.on('data', (chunk) => {
+        stdout += chunk;
+      });
+      child.stderr.on('data', (chunk) => {
+        stderr += chunk;
+      });
+    }, 100);
+    child.on('close', (code, signal) => {
+      resolve({ code, signal, stdout, stderr });
+    });
+  });
 }
 
 function runCli(args, cwd) {
@@ -821,6 +859,36 @@ describe('seed cli', () => {
         cwd,
       );
       assert.equal(rightOwner.code, 0);
+    });
+  });
+
+  test('verify status drains large JSON output through a pipe before exit', async () => {
+    await withTempDirAsync(async (cwd) => {
+      const itemCount = 1500;
+      const itemKey = (index) => `large-output-${String(index).padStart(4, '0')}-${'x'.repeat(1000)}`;
+      writeSeedFromTemplate(cwd, (document) => {
+        for (let index = 0; index < itemCount; index += 1) {
+          document.behavior[itemKey(index)] = {
+            description: 'Initial behavior used to create the verification snapshot.',
+          };
+        }
+      });
+      assert.equal(runCli(['verify', 'start'], cwd).code, 0);
+
+      const document = parse(fs.readFileSync(path.join(cwd, DEFAULT_SEED_PATH), 'utf8'));
+      for (let index = 0; index < itemCount; index += 1) {
+        document.behavior[itemKey(index)].description =
+          'Changed behavior included in the large verification status response.';
+      }
+      fs.writeFileSync(path.join(cwd, DEFAULT_SEED_PATH), stringify(document), 'utf8');
+
+      const result = await runCliPiped(['verify', 'status'], cwd);
+      assert.equal(result.code, 0, result.stderr);
+      assert.equal(result.signal, null);
+      assert.ok(result.stdout.length > 64 * 1024, `expected more than 64 KiB, received ${result.stdout.length} bytes`);
+      const status = JSON.parse(result.stdout);
+      assert.ok(status.modifiedSeedAddresses.includes(`behavior.${itemKey(0)}`));
+      assert.ok(status.modifiedSeedAddresses.includes(`behavior.${itemKey(itemCount - 1)}`));
     });
   });
 
