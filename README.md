@@ -8,6 +8,7 @@ Seed is a contract language for specifying bounded software behavior as the sole
 - `seed verify next`
 - `seed verify confirm <constraint-id> [--evidence TEXT]`
 - `seed verify fail <constraint-id> [--reason TEXT]`
+- `seed verify refresh-expired --owner OWNER [--json]`
 - `seed verify status`
 
 Defaults:
@@ -16,3 +17,8 @@ Defaults:
 - Session id: `default`
 
 Validation errors exit nonzero; warnings are shown and do not fail valid contracts.
+
+`verify refresh-expired` is a strict automation fast path. It accepts only an
+expiry-only queue caused by changed evidence files with an unchanged Seed
+contract. It runs every unique stored proof command once and atomically refreshes
+all affected evidence only when every proof passes.

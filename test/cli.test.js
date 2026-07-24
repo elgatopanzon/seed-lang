@@ -692,6 +692,44 @@ describe('seed cli', () => {
     });
   });
 
+  test('verify refresh-expired replays and refreshes an expiry-only queue', () => {
+    withTempDir((cwd) => {
+      writeSeedFromTemplate(cwd, (document) => {
+        document.verifications = [
+          {
+            id: 'verify-refresh',
+            title: 'Refresh proof',
+            description: 'Verify refreshed evidence.',
+            method: 'Run the focused command.',
+            evidence_required: ['Executable proof.'],
+          },
+        ];
+      });
+      assert.equal(runCli(['verify', 'start'], cwd).code, 0);
+      const itemIds = JSON.parse(fs.readFileSync(sessionPath(cwd), 'utf8'))
+        .items.map((item) => item.id);
+      for (const itemId of itemIds) {
+        assert.equal(runCli(['verify', 'claim', itemId, '--owner', 'worker-A'], cwd).code, 0);
+        assert.equal(runCli([
+          'verify', 'confirm', itemId, '--owner', 'worker-A',
+          '--file', 'implementation.js', '--test-cmd', PASS_CMD, '--evidence', 'initial proof',
+        ], cwd).code, 0);
+      }
+      fs.writeFileSync(path.join(cwd, 'implementation.js'), 'changed\n', 'utf8');
+
+      const refreshed = runCli([
+        'verify', 'refresh-expired', '--owner', 'synthesis-runner', '--json',
+      ], cwd);
+
+      assert.equal(refreshed.code, 0);
+      const payload = JSON.parse(refreshed.stdout);
+      assert.equal(payload.ok, true);
+      assert.equal(payload.refreshed, itemIds.length);
+      assert.equal(payload.uniqueCommandTotal, 1);
+      assert.equal(JSON.parse(runCli(['verify', 'status'], cwd).stdout).expired, 0);
+    });
+  });
+
   test('confirm, fail, and status report completion and transitions', () => {
     withTempDir((cwd) => {
       writeSeedFromTemplate(cwd, (document) => {

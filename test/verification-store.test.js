@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
-const { parse } = require('yaml');
+const { parse, stringify } = require('yaml');
 const assert = require('node:assert/strict');
 const { test, describe } = require('node:test');
 
@@ -17,6 +17,7 @@ const {
   failItem,
   getPendingItems,
   getStatus,
+  refreshExpiredEvidence,
   startSession,
   syncSession,
   verificationAudit,
@@ -84,6 +85,18 @@ function testFileHash(buffer) {
 
 function passCommand(label) {
   return `${process.execPath} -e "process.exit(0)" ${label}`;
+}
+
+function startSampleSessionWithSeed(cwd) {
+  const document = sampleDocument();
+  const seedText = stringify(document);
+  fs.mkdirSync(path.join(cwd, 'seed'), { recursive: true });
+  fs.writeFileSync(path.join(cwd, 'seed', 'seed.yml'), seedText, 'utf8');
+  return startSession({
+    cwd,
+    seedDocument: document,
+    seedText,
+  });
 }
 
 describe('verification store', () => {
@@ -1135,6 +1148,74 @@ describe('verification store', () => {
       assert.equal(fs.readFileSync(path.join(cwd, 'check-count.txt'), 'utf8'), '1');
       assert.equal(check.items.every((item) => item.commands[0].command === counterCommand), true);
       assert.equal(check.items.every((item) => item.commands[0].passed), true);
+    });
+  });
+
+  test('refreshExpiredEvidence replays unique proofs once and atomically refreshes hashes', () => {
+    withTempDir((cwd) => {
+      startSampleSessionWithSeed(cwd);
+
+      const counterCommand = `${process.execPath} -e "const fs=require('node:fs');const p='refresh-count.txt';const n=fs.existsSync(p)?Number(fs.readFileSync(p,'utf8')):0;fs.writeFileSync(p,String(n+1))"`;
+      ['verify-begin', 'verify-next', 'verify-final'].forEach((id, index) => {
+        claimNext({ cwd, owner: 'worker-A', now: () => 1_000 + index * 1_000 });
+        confirmItem({
+          cwd,
+          itemId: id,
+          owner: 'worker-A',
+          files: ['implementation.js'],
+          testCommands: [counterCommand],
+          evidence: id + ' checked with shared proof',
+          now: () => 1_500 + index * 1_000,
+        });
+      });
+      fs.writeFileSync(path.join(cwd, 'refresh-count.txt'), '0', 'utf8');
+      fs.writeFileSync(path.join(cwd, 'implementation.js'), 'module.exports = { refreshed: true };\n', 'utf8');
+
+      const refreshed = refreshExpiredEvidence({
+        cwd,
+        owner: 'synthesis-runner',
+        now: () => 10_000,
+      });
+
+      assert.equal(refreshed.ok, true);
+      assert.equal(refreshed.refreshed, 3);
+      assert.equal(refreshed.recordedCommandTotal, 3);
+      assert.equal(refreshed.uniqueCommandTotal, 1);
+      assert.equal(fs.readFileSync(path.join(cwd, 'refresh-count.txt'), 'utf8'), '1');
+      assert.equal(getStatus({ cwd }).expired, 0);
+      const session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      assert.equal(session.items.every((item) => item.status === 'confirmed'), true);
+      assert.equal(session.items.every((item) => item.test_commands[0].passed), true);
+    });
+  });
+
+  test('refreshExpiredEvidence leaves the session unchanged when a proof fails', () => {
+    withTempDir((cwd) => {
+      startSampleSessionWithSeed(cwd);
+      const conditionalCommand = `${process.execPath} -e "const fs=require('node:fs');process.exit(fs.existsSync('fail-refresh')?1:0)"`;
+      ['verify-begin', 'verify-next', 'verify-final'].forEach((id, index) => {
+        claimNext({ cwd, owner: 'worker-A', now: () => 1_000 + index * 1_000 });
+        confirmItem({
+          cwd,
+          itemId: id,
+          owner: 'worker-A',
+          files: ['implementation.js'],
+          testCommands: [conditionalCommand],
+          evidence: `${id} conditional proof`,
+          now: () => 1_500 + index * 1_000,
+        });
+      });
+      fs.writeFileSync(path.join(cwd, 'implementation.js'), 'module.exports = { changed: true };\n', 'utf8');
+      fs.writeFileSync(path.join(cwd, 'fail-refresh'), '', 'utf8');
+      const before = fs.readFileSync(sessionFile(cwd), 'utf8');
+
+      const refreshed = refreshExpiredEvidence({ cwd, owner: 'synthesis-runner' });
+
+      assert.equal(refreshed.ok, false);
+      assert.equal(refreshed.refreshed, 0);
+      assert.equal(refreshed.failedCommands.length, 1);
+      assert.equal(fs.readFileSync(sessionFile(cwd), 'utf8'), before);
+      assert.equal(getStatus({ cwd }).expired, 3);
     });
   });
 

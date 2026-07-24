@@ -24,6 +24,7 @@ const {
 } = require('./genomes');
 const {
   checkSession,
+  refreshExpiredEvidence,
   verificationAudit,
   verificationReport,
   claimNext,
@@ -59,6 +60,7 @@ function usage() {
     'seed verify claim <constraint-id> [--owner OWNER]',
     'seed verify pending',
     'seed verify check',
+    'seed verify refresh-expired --owner OWNER [--json]',
     'seed verify audit',
     'seed verify report',
     'seed verify confirm <constraint-id> --owner OWNER --file PATH [--file PATH...] --test-cmd CMD [--test-cmd CMD...] [--evidence TEXT]',
@@ -218,6 +220,31 @@ function parseVerifyClaimArgs(args) {
     } else {
       return { error: `seed verify claim does not take positional arguments: ${arg}` };
     }
+  }
+  return { options };
+}
+
+function parseVerifyRefreshArgs(args) {
+  const options = { owner: undefined, json: false };
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--owner') {
+      const parsed = readOptionValue(args, index, '--owner', 'refresh-expired');
+      if (parsed.error) {
+        return parsed;
+      }
+      options.owner = parsed.value;
+      index += 1;
+    } else if (arg === '--json') {
+      options.json = true;
+    } else if (arg.startsWith('-')) {
+      return { error: `Unknown option for seed verify refresh-expired: ${arg}` };
+    } else {
+      return { error: `seed verify refresh-expired does not take positional arguments: ${arg}` };
+    }
+  }
+  if (!options.owner) {
+    return { error: 'owner invalid: seed verify refresh-expired requires --owner.' };
   }
   return { options };
 }
@@ -907,6 +934,30 @@ function handleVerifyCheck(cwd) {
   }
 }
 
+function handleVerifyRefreshExpired(cwd, owner, json) {
+  try {
+    const result = refreshExpiredEvidence({ cwd, owner });
+    if (json) {
+      console.log(JSON.stringify(result));
+    } else if (result.ok) {
+      console.log(
+        `Refreshed ${result.refreshed} expired verification records `
+        + `(${result.uniqueCommandTotal} unique / ${result.recordedCommandTotal} recorded commands).`,
+      );
+    } else {
+      console.log(
+        `Seed evidence refresh failed: ${result.failedCommands.length} proof commands failed.`,
+      );
+      result.failedCommands.forEach((command) => {
+        console.log(`[failed] exit=${command.exitCode} cmd=${command.command}`);
+      });
+    }
+    return result.ok ? 0 : 1;
+  } catch (error) {
+    return exitWithError(error.message);
+  }
+}
+
 function formatIssueCodes(issues) {
   if (!Array.isArray(issues) || issues.length === 0) {
     return '';
@@ -1194,6 +1245,14 @@ function run(argv = process.argv.slice(2)) {
       }
 
       return handleVerifyCheck(cwd);
+    }
+
+    if (subcommand === 'refresh-expired') {
+      const parsed = parseVerifyRefreshArgs(subRest);
+      if (parsed.error) {
+        return exitWithError(parsed.error);
+      }
+      return handleVerifyRefreshExpired(cwd, parsed.options.owner, parsed.options.json);
     }
 
     if (subcommand === 'audit') {

@@ -1695,6 +1695,136 @@ function checkSession({ cwd, sessionId = DEFAULT_SESSION_ID, now } = {}) {
   };
 }
 
+function refreshExpiredEvidence({
+  cwd,
+  sessionId = DEFAULT_SESSION_ID,
+  owner,
+  now,
+  lockWaitMs = DEFAULT_LOCK_WAIT_MS,
+} = {}) {
+  assertSessionId(sessionId);
+  assertOwner(owner);
+
+  const path = sessionPath(cwd, sessionId);
+  const label = 'session state ' + path;
+  const lock = lockPath(cwd, sessionId);
+
+  return withLock(lock, () => {
+    const state = readSessionState(cwd, sessionId, label);
+    const status = summarizeStatus(cwd, state);
+    const modifiedAddresses = status.modifiedSeedAddresses ?? [];
+    const modifiedAddressErrors = modifiedAddresses
+      .filter((entry) => entry && typeof entry === 'object' && typeof entry.error === 'string')
+      .map((entry) => entry.error);
+    if (modifiedAddressErrors.length > 0) {
+      throw new Error(
+        'Cannot mechanically refresh evidence because Seed address comparison failed: '
+        + modifiedAddressErrors.join('; '),
+      );
+    }
+    if (modifiedAddresses.length > 0) {
+      throw new Error(
+        'Cannot mechanically refresh evidence while Seed addresses are modified: '
+        + modifiedAddresses.filter((entry) => typeof entry === 'string').join(', '),
+      );
+    }
+    if (status.expired === 0) {
+      throw new Error('No expired verification evidence is available to refresh.');
+    }
+    const newPending = status.pending - status.expired;
+    if (
+      newPending !== 0
+      || status.claimed !== 0
+      || status.failed !== 0
+      || status.blocked !== 0
+      || status.needs_review !== 0
+    ) {
+      throw new Error(
+        'Mechanical evidence refresh requires an expiry-only queue: '
+        + `pending=${newPending} claimed=${status.claimed} failed=${status.failed} `
+        + `blocked=${status.blocked} needs_review=${status.needs_review}`,
+      );
+    }
+    const unsupported = status.expiredEvidence.filter((entry) => entry.kind !== 'evidence-file');
+    if (unsupported.length > 0) {
+      throw new Error(
+        'Mechanical evidence refresh supports evidence-file expiry only: '
+        + unsupported.map((entry) => entry.id).join(', '),
+      );
+    }
+
+    const expiredIds = new Set(status.expiredIds);
+    const expiredItems = state.items.filter((item) => expiredIds.has(item.id));
+    for (const item of expiredItems) {
+      if (item.status !== 'confirmed') {
+        throw new Error(
+          `Mechanical evidence refresh requires prior confirmed state for ${item.id}; found ${item.status}.`,
+        );
+      }
+      if (!Array.isArray(item.evidence_files) || item.evidence_files.length === 0) {
+        throw new Error(`Mechanical evidence refresh requires evidence files for ${item.id}.`);
+      }
+      if (!Array.isArray(item.test_commands) || item.test_commands.length === 0) {
+        throw new Error(`Mechanical evidence refresh requires test commands for ${item.id}.`);
+      }
+    }
+
+    const terminalItems = state.items.filter((item) => terminalStatus(item));
+    const recordedCommands = terminalItems.flatMap((item) => (
+      Array.isArray(item.test_commands)
+        ? item.test_commands.map((entry) => entry.command)
+        : []
+    ));
+    const uniqueCommandList = Array.from(new Set(recordedCommands));
+    const uniqueResults = uniqueCommandList.length > 0
+      ? runTestCommands(cwd, uniqueCommandList, { now })
+      : [];
+    const failedCommands = uniqueResults.filter((result) => !result.passed);
+    if (failedCommands.length > 0) {
+      return {
+        sessionId,
+        owner,
+        ok: false,
+        refreshed: 0,
+        refreshedIds: [],
+        recordedCommandTotal: recordedCommands.length,
+        uniqueCommandTotal: uniqueCommandList.length,
+        failedCommands,
+      };
+    }
+
+    const resultsByCommand = new Map(
+      uniqueResults.map((result) => [result.command, result]),
+    );
+    for (const item of expiredItems) {
+      item.evidence_files = hashEvidenceFiles(
+        cwd,
+        item.evidence_files.map((entry) => entry.path),
+      );
+      item.test_commands = item.test_commands.map((entry) => (
+        structuredClone(resultsByCommand.get(entry.command))
+      ));
+      try {
+        item.seed_evidence = currentSeedEvidence(cwd, item);
+      } catch (error) {
+        item.seed_evidence = null;
+      }
+    }
+    state.updatedAt = resolveNow(now);
+    writeJsonAtomically(path, state);
+    return {
+      sessionId,
+      owner,
+      ok: true,
+      refreshed: expiredItems.length,
+      refreshedIds: expiredItems.map((item) => item.id),
+      recordedCommandTotal: recordedCommands.length,
+      uniqueCommandTotal: uniqueCommandList.length,
+      failedCommands: [],
+    };
+  }, { waitMs: lockWaitMs });
+}
+
 function getStatus({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
   assertSessionId(sessionId);
 
@@ -1715,6 +1845,7 @@ module.exports = {
   getStatus,
   getPendingItems,
   checkSession,
+  refreshExpiredEvidence,
   verificationAudit,
   verificationReport,
 };
