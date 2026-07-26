@@ -1,0 +1,24 @@
+metadata:
+  name: repo-ci
+  summary: Clean-checkout continuous integration contract.
+  description: Requires CI to execute the repository's authoritative validation from a clean checkout.
+behavior:
+  clean-checkout-validation: Continuous integration installs declared dependencies
+    and runs authoritative validation commands from a clean checkout without relying on undeclared local state.
+constraints:
+  ci-command-parity:
+    description: CI invokes the same authoritative build, test, format-check, and analysis commands documented for local use, with differences declared explicitly.
+    policy: global
+  required-ci-failures:
+    description: A failed required validation produces a failed CI result with accessible diagnostics rather than a warning-only or ignored outcome.
+    policy: global
+verifications:
+  repo-ci:
+    title: CI reproduces authoritative clean-checkout validation
+    description: Verify CI configuration installs only declared prerequisites and runs each required repository check with blocking failure semantics.
+    method: Inspect the CI workflow and execute its authoritative commands in a clean repository environment.
+    evidence_required:
+      - CI configuration paths and required jobs.
+      - Clean-environment commands and results.
+      - Local-to-CI command mapping and declared differences.
+      - Demonstration that a required check failure fails CI.

@@ -1,0 +1,23 @@
+metadata:
+  name: repo-generated-files
+  summary: Repository generated-artifact contract.
+  description: Declares generated files, their sources, regeneration, tracking policy, and drift checks.
+behavior:
+  reproducible-generation: Every declared generated artifact identifies its authoritative source and a deterministic regeneration command.
+constraints:
+  generated-file-inventory:
+    description: Generated artifacts are explicitly inventoried with ownership, source inputs, regeneration command, and whether each artifact is committed or ignored.
+    policy: global
+  generated-drift-blocking:
+    description: A focused non-mutating check fails when committed generated artifacts differ from regeneration output.
+    policy: global
+verifications:
+  repo-generated-files:
+    title: Generated artifacts are reproducible and drift-free
+    description: Verify declared generated artifacts reproduce from their sources and follow their tracking policy.
+    method: Run the focused generation or drift command in a clean workspace and compare resulting artifacts and repository status.
+    evidence_required:
+      - Generated artifact inventory and source mapping.
+      - Regeneration and drift-check commands.
+      - Artifact comparison and repository status results.
+      - Committed or ignored policy for each artifact.

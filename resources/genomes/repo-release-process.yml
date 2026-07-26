@@ -1,0 +1,21 @@
+metadata:
+  name: repo-release-process
+  summary: Repeatable repository release contract.
+  description: Requires a documented release command or checklist with validation, versioning, changelog, artifacts, publication, and post-release checks.
+behavior:
+  repeatable-release-workflow: The repository defines an ordered release command or checklist covering preflight validation, version change, changelog, artifact production, publication, and post-release verification.
+  release-failure-boundaries: The release workflow identifies which steps mutate local or remote state, how failures are surfaced, and what can be safely retried.
+constraints:
+  no-implicit-release-publication:
+    description: Publication is an explicit authorized step and is not performed merely by running ordinary build or validation commands.
+    policy: global
+verifications:
+  repo-release-process:
+    title: Release workflow is complete and repeatable
+    description: Verify the documented release workflow covers every required stage and can be dry-run or exercised without accidental publication.
+    method: Run the focused release preflight or dry-run and inspect state-changing boundaries and post-release checks.
+    evidence_required:
+      - Release command or checklist path.
+      - Preflight or dry-run command and output.
+      - Version, changelog, artifact, publication, and post-release stages.
+      - Authorization and retry boundaries.

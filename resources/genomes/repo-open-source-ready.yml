@@ -1,0 +1,29 @@
+metadata:
+  name: repo-open-source-ready
+  summary: Opt-in open-source repository readiness contract.
+  description: Composes public documentation, licensing, contribution, release history, security reporting, secret hygiene, and release expectations.
+genomes:
+  - repo-readme
+  - repo-license
+  - repo-contributing
+  - repo-changelog
+  - repo-security-policy
+  - repo-secret-hygiene
+  - repo-release-process
+constraints:
+  explicit-open-source-intent:
+    description: This bundle is selected only after the project owner explicitly intends public open-source distribution and supplies unresolved legal or policy decisions.
+    policy: global
+  public-repository-boundary-review:
+    description: Before publication, the repository reviews current content and reachable history for secrets, private infrastructure, personal data, proprietary artifacts, undocumented private dependencies, and incompatible licensing.
+    policy: global
+verifications:
+  repo-open-source-ready:
+    title: Repository is ready for intentional public distribution
+    description: Verify the composed repository artifacts and a focused current-tree and history audit satisfy the declared public-release boundary.
+    method: Run the repository's open-source readiness audit and review every finding before any publication action.
+    evidence_required:
+      - Explicit owner intent for public open-source distribution.
+      - Focused current-tree and history audit command with redacted results.
+      - README, license, contribution, changelog, security, secret, and release checks.
+      - Private dependency, personal data, proprietary content, and license findings disposition.

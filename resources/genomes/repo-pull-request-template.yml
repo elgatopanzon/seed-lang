@@ -1,0 +1,19 @@
+metadata:
+  name: repo-pull-request-template
+  summary: Repository pull-request evidence contract.
+  description: Requires pull requests to state scope, validation, compatibility, documentation, and contract impact.
+behavior:
+  pull-request-evidence: The pull-request template requests change purpose and scope, linked work, validation commands and results, compatibility impact, documentation impact, and applicable Seed or contract changes.
+constraints:
+  pull-request-template-discoverability:
+    description: The pull-request template is stored where the configured collaboration workflow applies it automatically or contributor guidance links it explicitly.
+    policy: global
+verifications:
+  repo-pull-request-template:
+    title: Pull-request template captures review evidence
+    description: Verify the declared collaboration workflow presents every required scope, validation, compatibility, documentation, and contract field.
+    method: Render or inspect the template through the configured host or a focused local template check.
+    evidence_required:
+      - Template path and rendered fields.
+      - Discoverability or automatic application route.
+      - Required review-evidence fields confirmed.

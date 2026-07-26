@@ -1,0 +1,21 @@
+metadata:
+  name: repo-branch-protection
+  summary: Repository protected-branch policy contract.
+  description: Declares required checks and review gates while leaving provider configuration to project infrastructure.
+constraints:
+  protected-branch-policy:
+    description: The repository declares protected branches, required checks, review count or roles, force-push policy, deletion policy, and applicable administrator exceptions.
+    policy: global
+  hosting-configuration-boundary:
+    description: The Seed contract specifies observable branch policy but does not claim provider-side enforcement without evidence from the configured hosting service.
+    policy: global
+verifications:
+  repo-branch-protection:
+    title: Hosted branch protection matches declared policy
+    description: Verify provider-side protected-branch settings and required check names match the repository declaration.
+    method: Read the configured hosting service's branch rules and compare them with declared checks and review gates without mutating settings.
+    evidence_required:
+      - Protected branches and declared policy.
+      - Read-only provider query or settings artifact.
+      - Required checks and review gates compared.
+      - Mismatches or unavailable provider evidence.

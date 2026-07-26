@@ -1,0 +1,26 @@
+metadata:
+  name: repo-monorepo-layout
+  summary: Repository monorepo layout contract.
+  description: Requires declared component roots, dependency direction, shared-tool boundaries, and component validation commands.
+behavior:
+  component-validation: Each monorepo component exposes focused build, test, analysis, and packaging commands applicable to that component.
+constraints:
+  declared-component-roots:
+    description: Every independently meaningful component has a unique declared root, ownership, purpose, public contracts, and artifact boundaries.
+    policy: global
+  monorepo-dependency-direction:
+    description: Allowed component dependency direction is explicit, cycles are forbidden unless declared and justified, and private implementation paths cannot be imported across components.
+    policy: global
+  shared-tooling-boundary:
+    description: Shared tooling and configuration have declared ownership and consumers; components do not silently depend on undeclared root-local behavior.
+    policy: global
+verifications:
+  repo-monorepo-layout:
+    title: Monorepo components and dependency boundaries are valid
+    description: Verify component roots, ownership, focused commands, dependency direction, and shared-tool consumers.
+    method: Run the focused component inventory and dependency-boundary checks, then execute representative component validation commands.
+    evidence_required:
+      - Component roots, purposes, and owners.
+      - Dependency-boundary command and results.
+      - Shared tooling consumers.
+      - Representative focused component commands.

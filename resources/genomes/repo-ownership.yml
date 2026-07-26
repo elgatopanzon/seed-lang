@@ -1,0 +1,24 @@
+metadata:
+  name: repo-ownership
+  summary: Repository component ownership contract.
+  description: Requires ownership and specialist review declarations for important repository areas.
+constraints:
+  component-ownership-map:
+    description: Important components, infrastructure, security-sensitive areas, generated artifacts, and documentation identify a responsible owner or review group.
+    policy: global
+  specialist-review-boundaries:
+    description: Repository areas requiring security, release, database, protocol, legal, or other specialist review are explicit and mapped to applicable changes.
+    policy: global
+  ownership-coverage:
+    description: Ownership rules have an explicit fallback and do not leave important tracked paths silently unowned.
+    policy: global
+verifications:
+  repo-ownership:
+    title: Important repository paths have effective ownership
+    description: Verify representative and sensitive paths resolve to intended owners and specialist review rules.
+    method: Run the focused ownership coverage check or query configured ownership rules for representative paths.
+    evidence_required:
+      - Ownership declaration path or source.
+      - Representative paths and resolved owners.
+      - Specialist-review paths checked.
+      - Unowned or conflicting paths.

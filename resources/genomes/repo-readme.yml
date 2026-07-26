@@ -1,0 +1,26 @@
+metadata:
+  name: repo-readme
+  summary: Root repository README contract.
+  description: Requires an accurate root README with executable setup, usage, and validation guidance.
+artifacts:
+  repo-readme:
+    path: README.md
+    description: Root repository introduction and operating guide.
+behavior:
+  readme-content: The root README states project purpose and status, prerequisites,
+    installation, basic usage, authoritative validation commands, and links to deeper documentation.
+constraints:
+  readme-command-accuracy:
+    description: Commands shown in the README are current, executable from their documented context, and checked against the repository.
+    policy: global
+verifications:
+  repo-readme:
+    title: Repository README is accurate and executable
+    description: Verify @repo-readme covers the required repository entrypoint information and its commands work as documented.
+    artifacts:
+      - repo-readme
+    method: Inspect the README and execute each setup, basic usage, and validation command in its documented context.
+    evidence_required:
+      - README path and required sections inspected.
+      - Commands executed and their results.
+      - Broken links, stale claims, or omitted prerequisites found.

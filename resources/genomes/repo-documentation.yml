@@ -1,0 +1,25 @@
+metadata:
+  name: repo-documentation
+  summary: Maintained repository documentation contract.
+  description: Requires navigable owned documentation, executable examples, and internal-link validation.
+behavior:
+  navigable-documentation: Repository documentation has an explicit entrypoint and links readers to task-focused material without requiring knowledge of the file layout.
+constraints:
+  documentation-ownership:
+    description: Major documentation areas identify their owning component or maintenance responsibility and the changes that require documentation updates.
+    policy: global
+  executable-documentation-examples:
+    description: Commands and code examples that claim executable behavior are checked in their documented environment and cannot pass solely through syntax inspection.
+    policy: global
+  internal-link-integrity:
+    description: A focused documentation check fails on broken internal links, missing referenced local artifacts, and invalid anchors where supported.
+    policy: global
+verifications:
+  repo-documentation:
+    title: Documentation is navigable, executable, and internally linked
+    description: Verify documentation navigation, representative examples, ownership, and internal links.
+    method: Run the focused documentation and link checks and execute representative user-facing examples.
+    evidence_required:
+      - Documentation entrypoint and ownership inspected.
+      - Documentation and link-check commands and output.
+      - Examples executed and results.

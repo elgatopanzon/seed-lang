@@ -1,0 +1,23 @@
+metadata:
+  name: repo-test-layout
+  summary: Repository test organization contract.
+  description: Defines ownership and boundaries for unit, integration, fixture, golden, and live-test content.
+constraints:
+  declared-test-layout:
+    description: The repository documents where unit, integration, live, fixture, golden, and test-helper content belongs, including categories that are intentionally absent.
+    policy: global
+  no-production-test-dependency:
+    description: Production code, packages, and runtime artifacts do not depend on test-only helpers, fixtures, goldens, or test framework modules.
+    policy: global
+  test-category-boundaries:
+    description: Test commands select their declared category predictably and live or external tests cannot run accidentally as part of isolated unit validation.
+    policy: global
+verifications:
+  repo-test-layout:
+    title: Test categories are organized and isolated
+    description: Verify representative tests and support artifacts occupy declared locations and production dependency paths exclude test-only content.
+    method: Inspect test-category discovery, run focused category listing or commands, and check production dependency or package contents.
+    evidence_required:
+      - Declared test layout and representative paths.
+      - Focused category discovery or execution results.
+      - Production dependency or package-content check.

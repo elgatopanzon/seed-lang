@@ -1,0 +1,28 @@
+metadata:
+  name: repo-license
+  summary: Explicit repository licensing contract.
+  description: Requires a declared license artifact and consistent package metadata without selecting a license automatically.
+artifacts:
+  repo-license:
+    path: LICENSE
+    description: Authoritative repository license text selected by the project owner.
+constraints:
+  explicit-license-choice:
+    description: The project owner explicitly selects the repository license; an implementation agent must not infer or choose one when the license is unspecified.
+    policy: global
+  license-metadata-consistency:
+    description: Package manifests, generated metadata, documentation, and source notices identify terms consistent with @repo-license.
+    artifacts:
+      - repo-license
+    policy: global
+verifications:
+  repo-license:
+    title: Repository license is explicit and consistent
+    description: Verify @repo-license records an owner-selected license and applicable metadata agrees with it.
+    artifacts:
+      - repo-license
+    method: Inspect the license decision and compare its identifier and terms with package manifests and repository documentation.
+    evidence_required:
+      - Owner-selected license and license artifact path.
+      - Package and documentation metadata inspected.
+      - Mismatches or unresolved license decisions.

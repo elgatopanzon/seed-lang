@@ -1,0 +1,24 @@
+metadata:
+  name: repo-commit-hygiene
+  summary: Atomic repository commit contract.
+  description: Requires reviewable single-purpose commits without secrets, temporary files, generated noise, or unrelated changes.
+constraints:
+  atomic-commit-scope:
+    description: Each commit represents one coherent change and excludes unrelated modifications even when they were present in the working tree.
+    policy: global
+  clean-commit-content:
+    description: Commits exclude credentials, local state, temporary files, editor artifacts, debug output, and unexplained generated noise.
+    policy: global
+  verified-commit-diff:
+    description: The staged diff is reviewed and focused validation passes before commit; verification hooks are not bypassed.
+    policy: global
+verifications:
+  repo-commit-hygiene:
+    title: Commit is atomic, clean, and verified
+    description: Verify a proposed commit contains only its declared purpose and no forbidden repository noise.
+    method: Inspect staged paths and diff, run focused validation and hygiene checks, and confirm unrelated working-tree changes remain unstaged.
+    evidence_required:
+      - Declared commit purpose and staged paths.
+      - Staged diff review result.
+      - Focused validation and hygiene commands.
+      - Unrelated working-tree state preserved.

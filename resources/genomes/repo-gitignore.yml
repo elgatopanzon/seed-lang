@@ -1,0 +1,23 @@
+metadata:
+  name: repo-gitignore
+  summary: Repository ignore-policy contract.
+  description: Requires appropriate ignore rules without hiding important source, fixtures, or release artifacts.
+artifacts:
+  repo-gitignore:
+    path: .gitignore
+    description: Repository ignore rules.
+constraints:
+  repository-ignore-policy:
+    description: Ignore rules cover applicable dependencies, build outputs, editor state, caches, credentials, and local runtime state without ignoring required source, fixtures, goldens, or release artifacts.
+    policy: global
+verifications:
+  repo-gitignore:
+    title: Ignore rules exclude only intended repository content
+    description: Verify @repo-gitignore handles representative generated and sensitive paths while required project artifacts remain trackable.
+    artifacts:
+      - repo-gitignore
+    method: Check representative ignored and required paths with the repository version-control ignore diagnostics.
+    evidence_required:
+      - Ignore diagnostic command and results.
+      - Representative generated, credential, cache, and local-state paths checked.
+      - Required source, fixture, golden, and release paths confirmed trackable.

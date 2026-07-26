@@ -1,0 +1,20 @@
+metadata:
+  name: repo-issue-templates
+  summary: Actionable repository issue-template contract.
+  description: Requires bug and feature intake templates with enough information for triage and acceptance.
+behavior:
+  bug-report-intake: The bug template requests reproduction, expected and actual behavior, environment, relevant diagnostics, and sensitive-data warnings.
+  feature-request-intake: The feature template requests user outcome, current limitation, proposed behavior, alternatives, scope, and acceptance criteria.
+constraints:
+  issue-template-discoverability:
+    description: Supported issue templates are stored where the configured tracker recognizes them or are linked clearly from the contribution workflow.
+    policy: global
+verifications:
+  repo-issue-templates:
+    title: Issue templates produce actionable reports
+    description: Verify bug and feature templates expose required fields and are discoverable through the declared issue workflow.
+    method: Render or inspect each template through the configured tracker or a focused local template check.
+    evidence_required:
+      - Template paths and rendered fields.
+      - Discoverability route.
+      - Bug reproduction and feature acceptance fields confirmed.

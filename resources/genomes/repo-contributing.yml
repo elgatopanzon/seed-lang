@@ -1,0 +1,28 @@
+metadata:
+  name: repo-contributing
+  summary: Repository contribution guide contract.
+  description: Requires executable contributor setup, development, validation, formatting, commit, and submission guidance.
+artifacts:
+  repo-contributing:
+    path: CONTRIBUTING.md
+    description: Repository contribution guide.
+behavior:
+  contributor-workflow: The contribution guide explains setup, development workflow,
+    authoritative tests, formatting, commit expectations, and contribution submission.
+constraints:
+  contributing-command-accuracy:
+    description: Commands in @repo-contributing are current and executable from their documented context.
+    artifacts:
+      - repo-contributing
+    policy: global
+verifications:
+  repo-contributing:
+    title: Contributor workflow is complete and executable
+    description: Verify a clean contributor can follow @repo-contributing through setup and validation without undocumented required steps.
+    artifacts:
+      - repo-contributing
+    method: Exercise the documented setup, development, formatting, and test workflow from a clean repository context.
+    evidence_required:
+      - Contributor commands executed and results.
+      - Commit and submission expectations inspected.
+      - Missing prerequisites or undocumented steps.

@@ -99,6 +99,31 @@ describe('seed genomes', () => {
       'package-pypi',
       'package-static-binary',
       'package-systemd-service',
+      'repo-branch-protection',
+      'repo-changelog',
+      'repo-ci',
+      'repo-code-formatting',
+      'repo-commit-hygiene',
+      'repo-contributing',
+      'repo-dependency-lock',
+      'repo-documentation',
+      'repo-editorconfig',
+      'repo-fixtures',
+      'repo-generated-files',
+      'repo-gitignore',
+      'repo-issue-templates',
+      'repo-license',
+      'repo-monorepo-layout',
+      'repo-open-source-ready',
+      'repo-ownership',
+      'repo-pull-request-template',
+      'repo-readme',
+      'repo-release-process',
+      'repo-secret-hygiene',
+      'repo-security-policy',
+      'repo-static-analysis',
+      'repo-test-layout',
+      'repo-versioning',
       'obs-audit-log',
       'obs-clear-errors',
       'obs-debug-mode',
@@ -347,6 +372,50 @@ describe('seed genomes', () => {
     const integration = compileGenomeDocument({ id: 'monorepo-integration-verification', cwd: process.cwd(), home: '' });
     assert.equal(integration.provenance['verifications.monorepo-integration'].path, 'builtin:monorepo-integration-verification');
     assert.equal(integration.provenance['constraints.monorepo-integration-required'].path, 'builtin:monorepo-integration-verification');
+
+    const repositoryExpectations = {
+      'repo-branch-protection': 'protected-branch-policy',
+      'repo-changelog': 'curated-changelog',
+      'repo-ci': 'ci-command-parity',
+      'repo-code-formatting': 'non-mutating-format-check',
+      'repo-commit-hygiene': 'atomic-commit-scope',
+      'repo-contributing': 'contributing-command-accuracy',
+      'repo-dependency-lock': 'applicable-lockfile-required',
+      'repo-documentation': 'documentation-ownership',
+      'repo-editorconfig': 'editorconfig-baseline',
+      'repo-fixtures': 'fixture-provenance',
+      'repo-generated-files': 'generated-file-inventory',
+      'repo-gitignore': 'repository-ignore-policy',
+      'repo-issue-templates': 'issue-template-discoverability',
+      'repo-license': 'explicit-license-choice',
+      'repo-monorepo-layout': 'declared-component-roots',
+      'repo-open-source-ready': 'explicit-open-source-intent',
+      'repo-ownership': 'component-ownership-map',
+      'repo-pull-request-template': 'pull-request-template-discoverability',
+      'repo-readme': 'readme-command-accuracy',
+      'repo-release-process': 'no-implicit-release-publication',
+      'repo-secret-hygiene': 'repository-secret-scanning',
+      'repo-security-policy': 'supported-security-versions',
+      'repo-static-analysis': 'blocking-analysis-findings',
+      'repo-test-layout': 'declared-test-layout',
+      'repo-versioning': 'canonical-version-source',
+    };
+    Object.entries(repositoryExpectations).forEach(([id, constraintId]) => {
+      const repository = compileGenomeDocument({ id, cwd: process.cwd(), home: '' });
+      assert.equal(repository.document.constraints[constraintId].policy, 'global');
+      assert.equal(Object.keys(repository.document.verifications).length > 0, true);
+      assert.equal(repository.provenance[`constraints.${constraintId}`].path, `builtin:${id}`);
+    });
+
+    const repositoryReadme = compileGenomeDocument({ id: 'repo-readme', cwd: process.cwd(), home: '' });
+    assert.equal(repositoryReadme.document.artifacts['repo-readme'].path, 'README.md');
+    assert.match(repositoryReadme.document.verifications['repo-readme'].method, /execute each setup/i);
+
+    const openSourceReady = compileGenomeDocument({ id: 'repo-open-source-ready', cwd: process.cwd(), home: '' });
+    assert.equal(openSourceReady.provenance['artifacts.repo-license'].path, 'builtin:repo-license');
+    assert.equal(openSourceReady.provenance['security.private-vulnerability-reporting'].path, 'builtin:repo-security-policy');
+    assert.equal(openSourceReady.provenance['security.no-committed-secrets'].path, 'builtin:repo-secret-hygiene');
+    assert.equal(openSourceReady.provenance['constraints.explicit-open-source-intent'].path, 'builtin:repo-open-source-ready');
 
     const architectureExpectations = {
       'architecture-client-server': 'client-server-contract',

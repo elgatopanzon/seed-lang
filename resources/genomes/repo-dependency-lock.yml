@@ -1,0 +1,23 @@
+metadata:
+  name: repo-dependency-lock
+  summary: Deterministic dependency lock contract.
+  description: Requires ecosystem lockfiles when applicable, deterministic installation, and visible lock drift.
+behavior:
+  deterministic-dependency-install: Repeated clean installations for the same supported environment resolve the dependency versions recorded by the authoritative lock artifact.
+constraints:
+  applicable-lockfile-required:
+    description: Each package ecosystem that supports and expects application lockfiles declares and tracks its authoritative lock artifact; documented exceptions must explain why no lock applies.
+    policy: global
+  lockfile-drift-blocking:
+    description: CI fails when a frozen or locked installation would modify the authoritative lock artifact unexpectedly.
+    policy: global
+verifications:
+  repo-dependency-lock:
+    title: Dependency installation is locked and drift-free
+    description: Verify applicable lock artifacts are tracked and clean installation does not produce unexplained dependency drift.
+    method: Run the ecosystem's frozen or locked clean-install command and confirm the repository remains unchanged.
+    evidence_required:
+      - Package ecosystems and authoritative lock paths.
+      - Frozen or locked installation command and output.
+      - Repository drift result.
+      - Documented exception for any ecosystem without a lock artifact.

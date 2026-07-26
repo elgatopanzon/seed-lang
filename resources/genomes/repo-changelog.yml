@@ -1,0 +1,28 @@
+metadata:
+  name: repo-changelog
+  summary: Human-readable repository changelog contract.
+  description: Requires curated release history and an explicit update workflow rather than generated commit dumps.
+artifacts:
+  repo-changelog:
+    path: CHANGELOG.md
+    description: Curated human-readable release history.
+constraints:
+  curated-changelog:
+    description: "@repo-changelog summarizes user-relevant changes in the declared entry format and is not an uncurated dump of commit messages."
+    artifacts:
+      - repo-changelog
+    policy: global
+  explicit-changelog-workflow:
+    description: The repository defines when unreleased changes are recorded and how they are promoted into a release entry.
+    policy: global
+verifications:
+  repo-changelog:
+    title: Changelog is curated and follows the release workflow
+    description: Verify @repo-changelog uses its declared format and represents recent user-relevant releases accurately.
+    artifacts:
+      - repo-changelog
+    method: Compare recent release changes and version history with changelog entries and inspect the update procedure.
+    evidence_required:
+      - Releases or changes sampled.
+      - Corresponding changelog entries.
+      - Entry format and update workflow inspected.

@@ -1,0 +1,29 @@
+metadata:
+  name: repo-security-policy
+  summary: Repository vulnerability reporting contract.
+  description: Requires supported-version guidance and a private vulnerability reporting route.
+artifacts:
+  repo-security-policy:
+    path: SECURITY.md
+    description: Repository security support and vulnerability reporting policy.
+security:
+  private-vulnerability-reporting:
+    description: "@repo-security-policy provides a private reporting route and tells reporters what information to include and what response to expect."
+    artifacts:
+      - repo-security-policy
+    policy: global
+constraints:
+  supported-security-versions:
+    description: The security policy identifies supported versions or explicitly states how support is determined.
+    policy: global
+verifications:
+  repo-security-policy:
+    title: Security reporting policy is actionable
+    description: Verify @repo-security-policy has current supported-version guidance and a usable private reporting route.
+    artifacts:
+      - repo-security-policy
+    method: Inspect the policy and validate the reporting route without submitting a vulnerability report.
+    evidence_required:
+      - Policy path and supported-version statement.
+      - Reporting route validation method and result.
+      - Expected report content and response guidance.

@@ -1,0 +1,22 @@
+metadata:
+  name: repo-static-analysis
+  summary: Repository static-analysis contract.
+  description: Requires focused lint, type, or static checks with blocking failures and documented suppressions.
+behavior:
+  authoritative-static-analysis: The repository defines applicable linting, type checking, and static-analysis commands for supported source and configuration formats.
+constraints:
+  blocking-analysis-findings:
+    description: Required static-analysis findings fail local validation and CI with actionable file, location, rule, and message diagnostics.
+    policy: global
+  narrow-analysis-suppressions:
+    description: Suppressions are scoped to the smallest applicable code or rule and include a durable justification; blanket unexplained suppression is forbidden.
+    policy: global
+verifications:
+  repo-static-analysis:
+    title: Static analysis is blocking and suppressions are justified
+    description: Verify applicable analysis commands pass and reject a representative intentional violation.
+    method: Run each focused analysis command, inspect suppressions, and demonstrate failure on an intentional applicable violation.
+    evidence_required:
+      - Analysis commands, scopes, and passing output.
+      - Intentional violation failure and diagnostics.
+      - Suppressions inspected with justifications.

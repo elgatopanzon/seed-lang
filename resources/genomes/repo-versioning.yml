@@ -1,0 +1,24 @@
+metadata:
+  name: repo-versioning
+  summary: Repository version authority contract.
+  description: Defines canonical version ownership, synchronization, and breaking, feature, and patch classification.
+behavior:
+  version-classification: The repository defines observable criteria for breaking,
+    feature, and patch releases appropriate to its public contracts.
+constraints:
+  canonical-version-source:
+    description: One declared repository location is authoritative for the current version and every duplicate or generated version is synchronized from it.
+    policy: global
+  version-consistency:
+    description: Packages, binaries, generated metadata, documentation, and release artifacts report the same intended version.
+    policy: global
+verifications:
+  repo-versioning:
+    title: Repository version is authoritative and synchronized
+    description: Verify the canonical version source, release classification rules, and all applicable exposed versions agree.
+    method: Run the focused version consistency check and inspect representative public version surfaces.
+    evidence_required:
+      - Canonical version source.
+      - Focused consistency command and output.
+      - Public version surfaces checked.
+      - Breaking, feature, and patch criteria.

@@ -1,0 +1,23 @@
+metadata:
+  name: repo-editorconfig
+  summary: Repository editor formatting contract.
+  description: Requires a root EditorConfig for stable cross-editor text-file basics.
+artifacts:
+  repo-editorconfig:
+    path: .editorconfig
+    description: Root editor configuration.
+constraints:
+  editorconfig-baseline:
+    description: The root EditorConfig defines applicable encoding, line endings, final newline, indentation, and trailing-whitespace policy with explicit file overrides when needed.
+    policy: global
+verifications:
+  repo-editorconfig:
+    title: EditorConfig covers repository text formats
+    description: Verify @repo-editorconfig resolves the intended text settings for representative source, configuration, documentation, and fixture files.
+    artifacts:
+      - repo-editorconfig
+    method: Resolve EditorConfig properties for representative tracked text files and compare them with repository formatting rules.
+    evidence_required:
+      - Files and resolved properties checked.
+      - Encoding, newline, indentation, and trailing-whitespace results.
+      - Necessary format-specific exceptions.

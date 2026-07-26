@@ -1,0 +1,26 @@
+metadata:
+  name: repo-fixtures
+  summary: Deterministic repository fixture contract.
+  description: Requires documented fixture provenance, ownership, update commands, and adversarial coverage.
+behavior:
+  deterministic-fixtures: Tests consume stable declared fixtures whose content and ordering do not depend on ambient time, network, locale, user state, or undeclared randomness.
+constraints:
+  fixture-provenance:
+    description: Each nontrivial fixture records its source or construction rationale, applicable license or privacy constraints, owning tests, and update method.
+    policy: global
+  fixture-update-workflow:
+    description: Generated or transformed fixtures have an explicit update command and reviewable diff; ordinary test execution does not silently rewrite them.
+    policy: global
+  adversarial-fixture-coverage:
+    description: Applicable fixtures include realistic success data plus declared empty, boundary, malformed, long-content, and failure cases.
+    policy: global
+verifications:
+  repo-fixtures:
+    title: Fixtures are deterministic, attributable, and updateable
+    description: Verify representative fixtures have provenance, owning tests, adversarial coverage, and reproducible update behavior.
+    method: Run focused fixture-consuming tests and any update command, then inspect reproducibility and repository drift.
+    evidence_required:
+      - Fixture paths, provenance, and owning tests.
+      - Focused commands and results.
+      - Adversarial cases represented.
+      - Update reproducibility and drift result.

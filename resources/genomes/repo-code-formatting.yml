@@ -1,0 +1,23 @@
+metadata:
+  name: repo-code-formatting
+  summary: Authoritative repository formatting contract.
+  description: Requires one documented formatting command and a non-mutating blocking check.
+behavior:
+  authoritative-format-command: The repository exposes one documented command that formats every declared source and text format or delegates to explicit format-specific tools.
+constraints:
+  non-mutating-format-check:
+    description: A focused format-check command reports drift and exits nonzero without rewriting files; CI treats it as required.
+    policy: global
+  formatting-scope:
+    description: Included file types, exclusions, generated-file handling, and tool versions are explicit and consistent between local and CI use.
+    policy: global
+verifications:
+  repo-code-formatting:
+    title: Formatting is deterministic and enforced without mutation
+    description: Verify authoritative formatting is idempotent and the check command rejects intentional drift without changing files.
+    method: Run formatting twice, run the non-mutating check, then introduce representative formatting drift and confirm the check fails.
+    evidence_required:
+      - Format and format-check commands.
+      - Idempotency and clean repository results.
+      - Intentional drift failure and diagnostics.
+      - Formatting scope and tool versions.
