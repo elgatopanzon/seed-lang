@@ -79,6 +79,11 @@ describe('seed genomes', () => {
       'tui-python-textual',
       'tui-rust-cursive',
       'tui-rust-ratatui',
+      'tui-visual-regression',
+      'ui-human-acceptance',
+      'ui-interaction',
+      'ui-responsive',
+      'ui-visual-regression',
       'monorepo-api-mobile',
       'monorepo-api-web',
       'monorepo-component-boundaries',
@@ -279,6 +284,27 @@ describe('seed genomes', () => {
     assert.equal(cliTui.provenance['behavior.tui-navigation.visible-focus'].path, 'builtin:cli-tui');
     assert.equal(cliTui.provenance['behavior.tui-lifecycle.restore-terminal'].path, 'builtin:cli-tui');
     assert.equal(cliTui.provenance['freedom.tui-framework'].path, 'builtin:cli-tui');
+
+    const responsiveUi = compileGenomeDocument({ id: 'ui-responsive', cwd: process.cwd(), home: '' });
+    assert.equal(responsiveUi.provenance['behavior.deterministic-production-rendering'].path, 'builtin:ui-visual-regression');
+    assert.equal(responsiveUi.provenance['behavior.responsive-frame-layout.named-breakpoints'].path, 'builtin:ui-responsive');
+    assert.equal(responsiveUi.document.constraints['visual-mutation-proof'].policy, 'global');
+
+    const interactionUi = compileGenomeDocument({ id: 'ui-interaction', cwd: process.cwd(), home: '' });
+    assert.equal(interactionUi.provenance['constraints.production-entrypoint-interactions'].path, 'builtin:ui-interaction');
+    assert.match(interactionUi.document.verifications['ui-interactions'].method, /after every meaningful action/i);
+
+    const visualTui = compileGenomeDocument({ id: 'tui-visual-regression', cwd: process.cwd(), home: '' });
+    assert.equal(visualTui.provenance['behavior.tui-rendering.full-screen-redraw'].path, 'builtin:cli-tui');
+    assert.equal(visualTui.provenance['behavior.deterministic-production-rendering'].path, 'builtin:ui-visual-regression');
+    assert.equal(visualTui.provenance['behavior.executable-interaction-scenarios'].path, 'builtin:ui-interaction');
+    assert.equal(visualTui.provenance['constraints.real-pty-verification'].path, 'builtin:tui-visual-regression');
+    assert.match(visualTui.document.constraints['exact-cell-grid-goldens'].description, /PNG.*supplement/i);
+
+    const humanAcceptance = compileGenomeDocument({ id: 'ui-human-acceptance', cwd: process.cwd(), home: '' });
+    assert.equal(humanAcceptance.provenance['constraints.independent-visual-baselines'].path, 'builtin:ui-visual-regression');
+    assert.equal(humanAcceptance.provenance['constraints.no-self-approved-ui-intent'].path, 'builtin:ui-human-acceptance');
+    assert.match(humanAcceptance.document.verifications['human-ui-acceptance'].method, /independent approval/i);
 
     const blessed = compileGenomeDocument({ id: 'tui-js-blessed', cwd: process.cwd(), home: '' });
     assert.equal(blessed.provenance['environment.neo-blessed-runtime'].path, 'builtin:tui-js-blessed');

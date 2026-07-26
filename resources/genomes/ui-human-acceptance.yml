@@ -1,0 +1,27 @@
+metadata:
+  name: ui-human-acceptance
+  summary: Human-approved UI reference contract.
+  description: Requires independent human approval of reference artifacts and major-screen visual changes.
+genomes:
+  - ui-visual-regression
+constraints:
+  human-approved-major-screen-references:
+    description: Every major screen declares a checked-in reference artifact whose intended layout has explicit human approval.
+    policy: global
+  no-self-approved-ui-intent:
+    description: The agent or implementation that produced a layout cannot approve its own output as the intended design without independent human approval.
+    policy: global
+  visual-change-approval-gate:
+    description: A visual change remains unverified until the affected reference or golden has explicit human approval recorded in evidence.
+    policy: global
+verifications:
+  human-ui-acceptance:
+    title: Major UI references have independent human approval
+    description: Verify each major screen and changed visual state matches a declared reference or golden with explicit human approval.
+    method: Present the produced frame, approved reference, and readable diff for each major screen or visual change, then record the independent approval decision.
+    evidence_required:
+      - Major screens and changed visual states reviewed.
+      - Human-approved reference or golden artifact path for each state.
+      - Produced frame artifact path and readable diff.
+      - Approver identity or durable approval record distinct from the implementing agent.
+      - Explicit approved or rejected decision and any required follow-up.

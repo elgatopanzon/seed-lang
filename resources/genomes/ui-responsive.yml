@@ -1,0 +1,28 @@
+metadata:
+  name: ui-responsive
+  summary: Responsive UI frame contract.
+  description: Requires exact visual coverage at named breakpoints with realistic and adversarial content.
+genomes:
+  - ui-visual-regression
+behavior:
+  responsive-frame-layout:
+    named-breakpoints: The project defines named viewport breakpoints with exact dimensions and an approved frame for each supported layout state.
+    bounded-content: Content clips, wraps, scrolls, or reflows without escaping the viewport or obscuring fixed controls.
+    selected-item-visibility: The selected or focused item remains visible after navigation, content changes, and viewport changes.
+    fixed-control-placement: Controls declared fixed remain visible, reachable, and correctly positioned at every breakpoint.
+    responsive-state-restoration: Resizing across breakpoints and back restores the applicable layout without losing meaningful UI state.
+constraints:
+  adversarial-responsive-fixtures:
+    description: Responsive frame fixtures include realistic content plus long labels, long unbroken content, dense lists, empty states, and other declared adversarial cases.
+    policy: global
+verifications:
+  responsive-frames:
+    title: Responsive states match exact breakpoint frames
+    description: Verify production rendering at every named breakpoint with realistic and adversarial fixtures.
+    method: Run focused frame comparisons at each declared breakpoint, navigate to selected content, resize across breakpoints and back, and inspect exact diffs.
+    evidence_required:
+      - Named breakpoints and exact viewport dimensions.
+      - Focused commands, approved goldens, and produced frames for every breakpoint.
+      - Realistic and adversarial fixtures used.
+      - Clipping, wrapping, selected-item visibility, and fixed-control observations.
+      - State observations before resize, after resize, and after restoration.

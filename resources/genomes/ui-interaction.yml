@@ -1,0 +1,26 @@
+metadata:
+  name: ui-interaction
+  summary: Executable UI interaction contract.
+  description: Requires production-entrypoint scenarios that verify focus, navigation, editing, cancellation, back behavior, and preserved state.
+behavior:
+  executable-interaction-scenarios: Important user workflows are represented by executable input and action scenarios with observable assertions after every meaningful action.
+  interaction-state-preservation: Focus, navigation context, edits, selections, and other meaningful state are preserved or cleared according to the declared workflow after each action.
+  cancellation-and-back: Cancel and back actions dismiss or reverse the nearest applicable operation without corrupting unrelated state or trapping focus.
+constraints:
+  production-entrypoint-interactions:
+    description: Interaction acceptance scenarios exercise the production entrypoint and rendered interface, not only reducers, view models, controllers, or isolated state transitions.
+    policy: global
+  claim-specific-interaction-commands:
+    description: Each interaction claim names a focused executable command; a generic whole-suite command is not sufficient as its sole evidence.
+    policy: global
+verifications:
+  ui-interactions:
+    title: Production UI interaction scenarios preserve declared state
+    description: Verify focus, navigation, editing, cancellation, back behavior, and state preservation through the production entrypoint.
+    method: Execute focused scenarios using realistic inputs and assert the rendered state after every meaningful action.
+    evidence_required:
+      - Focused command and executable scenario for each interaction claim.
+      - Production entrypoint exercised.
+      - Inputs and actions in execution order.
+      - Rendered focus, navigation, edit, cancellation, back, and state observations after meaningful actions.
+      - Failing diagnostics from an intentional interaction expectation violation.

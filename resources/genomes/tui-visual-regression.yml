@@ -1,0 +1,36 @@
+metadata:
+  name: tui-visual-regression
+  summary: PTY-backed terminal UI visual regression contract.
+  description: Extends visual and interaction verification with exact terminal cell-grid goldens, ANSI reconstruction, resize stability, bounds, and cleanup.
+genomes:
+  - cli-tui
+  - ui-visual-regression
+  - ui-interaction
+behavior:
+  terminal-frame-reconstruction:
+    cell-grid: Visual verification reconstructs the terminal text-cell grid after applying emitted text, cursor movement, clearing, styling, and other supported ANSI operations.
+    stable-redraw: Repeated redraws of unchanged state reconstruct the same complete grid without stale cells, partial frames, or appended pseudo-frames.
+    resize-grid: Resize events produce a complete bounded grid for the new dimensions and preserve declared application state.
+constraints:
+  real-pty-verification:
+    description: Terminal visual and interaction scenarios run the production entrypoint in a real pseudo-terminal rather than comparing direct string output alone.
+    policy: global
+  exact-cell-grid-goldens:
+    description: Reconstructed text-cell grids are the authoritative exact golden artifacts; PNG captures may supplement but never replace cell-grid evidence.
+    policy: global
+  terminal-cell-bounds:
+    description: Every reconstructed cell and cursor position remains within the declared terminal dimensions throughout input, redraw, and resize scenarios.
+    policy: global
+verifications:
+  tui-visual-regression:
+    title: Production TUI matches exact reconstructed cell grids
+    description: Verify production TUI frames, interactions, redraws, resize behavior, bounds, and terminal cleanup through a real pseudo-terminal.
+    method: Run focused PTY scenarios, reconstruct ANSI output into cell grids after meaningful actions, compare exact goldens, resize, exit normally, and interrupt a second run.
+    evidence_required:
+      - Focused PTY command and production entrypoint.
+      - Terminal dimensions, inputs, actions, and resize sequence.
+      - Approved text-cell golden and produced reconstructed grid for each claim.
+      - ANSI reconstruction and exact grid-diff diagnostics.
+      - Cell and cursor bounds results plus repeated-redraw stability results.
+      - Terminal state after normal exit and interruption.
+      - Supplemental PNG paths when captures are used.
