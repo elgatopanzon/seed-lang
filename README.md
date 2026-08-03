@@ -78,6 +78,36 @@ Answer questions in terms of required observable behavior. Review the resulting
 the agent reports that the contract is valid, internally consistent, and
 implementation-ready.
 
+### Optional: Approve UI Artifacts Before Implementation
+
+If the project has a web, desktop, mobile, terminal, or other visual interface,
+review its UI artifacts after planning and before implementation. These may
+include annotated wireframes, screen references, navigation flows, responsive
+states, terminal cell frames, interaction scenarios, fixtures, or approved
+goldens.
+
+UI intent is difficult to express completely in prose. It is also the area most
+likely to require experimentation before the Seed accurately represents what
+you want. Ask the agent to create or refine concrete artifacts, render or
+prototype alternatives when useful, and let you approve the intended screens
+and interactions.
+
+```text
+This project has a user interface. Use the seed-lang skill to review the Seed's
+UI requirements and artifacts before implementation. Create any missing screen,
+navigation, responsive-state, interaction, fixture, or golden artifacts needed
+to make the intended UI independently implementable and verifiable. Experiment
+with alternatives where the visual intent is unclear, ask me to approve major
+screens and flows, then update the Seed to reference the approved artifacts.
+Do not begin implementation until the UI contract is ready.
+```
+
+An implementation-generated screenshot should not automatically become the
+design authority. Major visual references and golden changes require explicit
+human approval. If implementation later reveals a better design, update and
+approve the UI artifacts and Seed first, then reimplement from the changed
+contract.
+
 ### 3. Implement With Seed Driven Development
 
 Once planning is complete, start a persistent implementation task. `/goal` is
@@ -97,6 +127,89 @@ expired: 0, and failed: 0. Then run seed verify sync.
 Implementation may take longer and use more tokens than direct prompt-driven
 coding. The intended result is bounded by the complete contract and verified
 without requiring you to steer ordinary implementation decisions.
+
+#### Start A Fresh Implementation With `/goal`
+
+From the project directory:
+
+```text
+/goal Use the seed-lang skill. Implement this project from seed/seed.yml using
+Seed Driven Development. Treat the Seed and its referenced artifacts as
+authoritative. Continue through implementation and focused executable evidence
+until seed verify audit has zero errors and seed verify status reports
+completed: true, satisfied: true, expired: 0, and failed: 0. Run seed verify
+sync only after those conditions pass. Stop and ask me only when a genuine
+product decision, approval, credential, or external access block requires human
+input.
+```
+
+#### Reimplement A Changed Contract With `/goal`
+
+Use this after changing an existing project's Seed:
+
+```text
+/goal Use the seed-lang skill. The authoritative Seed contract has changed.
+Validate it, inspect seed blueprint diff --no-color, and reimplement the project
+using Seed Driven Development so the implementation matches the complete
+current blueprint. Reverify every new or expired item with focused executable
+evidence. Continue until seed verify audit has zero errors and seed verify
+status reports completed: true, satisfied: true, expired: 0, and failed: 0.
+Then run seed verify sync. Do not preserve implementation behavior that
+contradicts the updated Seed.
+```
+
+#### Claude Code Ultracode
+
+Start a fresh implementation with this prompt:
+
+```text
+Use the seed-lang skill and work persistently until completion. Implement this
+project from seed/seed.yml using Seed Driven Development. Treat the Seed and its
+referenced artifacts as authoritative. Produce focused executable evidence for
+every contract item. Finish only when seed verify audit has zero errors and
+seed verify status reports completed: true, satisfied: true, expired: 0, and
+failed: 0, then run seed verify sync. Ask me only for genuine human-required
+product decisions, approvals, credentials, or external access.
+```
+
+After a Seed contract change, use:
+
+```text
+Use the seed-lang skill and work persistently until completion. The Seed
+contract has changed. Validate it, inspect seed blueprint diff --no-color, and
+reimplement the project from the complete current blueprint using Seed Driven
+Development. Reverify all new and expired items. Finish only when seed verify
+audit has zero errors and seed verify status reports completed: true,
+satisfied: true, expired: 0, and failed: 0, then run seed verify sync. Do not
+patch around or contradict the changed contract.
+```
+
+#### Codex Ultra
+
+Start a fresh implementation with this prompt:
+
+```text
+Use the seed-lang skill. Implement this project from seed/seed.yml using Seed
+Driven Development and continue autonomously until the complete contract is
+implemented. Treat the Seed and its referenced artifacts as authoritative.
+Record focused executable evidence for every item. Finish only when seed verify
+audit has zero errors and seed verify status reports completed: true,
+satisfied: true, expired: 0, and failed: 0, then run seed verify sync. Request
+input only for genuine human-required product decisions, approvals, credentials,
+or external access.
+```
+
+After a Seed contract change, use:
+
+```text
+Use the seed-lang skill. The authoritative Seed has changed. Validate it,
+inspect seed blueprint diff --no-color, and reimplement the project from the
+complete current blueprint using Seed Driven Development. Reverify every new or
+expired contract item with focused executable evidence. Finish only when seed
+verify audit has zero errors and seed verify status reports completed: true,
+satisfied: true, expired: 0, and failed: 0, then run seed verify sync. Do not
+make code-only adjustments that leave the implementation out of sync with Seed.
+```
 
 ### 4. Watch For Blocks And Human Decisions
 
@@ -176,7 +289,7 @@ requiring continuous human steering.
 ## Install From This Repository
 
 ```sh
-git clone git@github.com:elgatopanzon/seed-lang.git
+git clone https://github.com/elgatopanzon/seed-lang.git
 cd seed-lang
 npm install
 npm install -g .
