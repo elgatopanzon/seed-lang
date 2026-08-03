@@ -31,6 +31,13 @@ This is the recommended human-led workflow. You provide the product intent and
 make product decisions. The agent translates that intent into a Seed contract,
 implements from the contract, and proves the result against it.
 
+> **Important:** Do not introduce Seed into an existing repository that was
+> built without a Seed contract. Reconstructing authoritative product intent
+> from an already-constructed implementation is much less reliable than
+> starting a fresh project with Seed. This warning does not apply to an existing
+> project that already has a maintained `seed/seed.yml`; use the contract-first
+> change workflow for those projects.
+
 ### 1. Install Seed And The Agent Skill
 
 Install the `seed` CLI, then install the skill for your agent:
