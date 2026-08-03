@@ -3,6 +3,8 @@ Seed is a contract language for specifying bounded software behavior as the sole
 
 ## Quick usage
 - `seed init [--overwrite]`
+- `seed install-skill --codex`
+- `seed install-skill --claude`
 - `seed validate`
 - `seed verify start`
 - `seed verify next`
@@ -17,6 +19,10 @@ Defaults:
 - Session id: `default`
 
 Validation errors exit nonzero; warnings are shown and do not fail valid contracts.
+
+`install-skill` installs the bundled portable `seed-lang` skill. Codex uses
+`${CODEX_HOME:-$HOME/.codex}/skills/seed-lang`; Claude uses
+`${CLAUDE_HOME:-$HOME/.claude}/skills/seed-lang`. Exactly one target is required.
 
 `verify refresh-expired` is a strict automation fast path. It accepts only an
 expiry-only queue caused by changed evidence files with an unchanged Seed

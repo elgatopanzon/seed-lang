@@ -130,6 +130,67 @@ describe('seed cli', () => {
     });
   });
 
+  test('install-skill installs bundled Codex and Claude variants atomically', () => {
+    withTempDir((cwd) => {
+      const originalCodexHome = process.env.CODEX_HOME;
+      const originalClaudeHome = process.env.CLAUDE_HOME;
+      const codexHome = path.join(cwd, 'codex-home');
+      const claudeHome = path.join(cwd, 'claude-home');
+      process.env.CODEX_HOME = codexHome;
+      process.env.CLAUDE_HOME = claudeHome;
+
+      try {
+        const missing = runCli(['install-skill'], cwd);
+        assert.equal(missing.code, 1);
+        assert.ok(missing.stderr.includes('requires exactly one of --codex or --claude'));
+
+        const conflicting = runCli(['install-skill', '--codex', '--claude'], cwd);
+        assert.equal(conflicting.code, 1);
+        assert.ok(conflicting.stderr.includes('requires exactly one of --codex or --claude'));
+
+        const unknown = runCli(['install-skill', '--other'], cwd);
+        assert.equal(unknown.code, 1);
+        assert.ok(unknown.stderr.includes('Unknown option for seed install-skill'));
+
+        const codex = runCli(['install-skill', '--codex'], cwd);
+        assert.equal(codex.code, 0);
+        const codexSkill = path.join(codexHome, 'skills', 'seed-lang');
+        assert.equal(fs.existsSync(path.join(codexSkill, 'SKILL.md')), true);
+        assert.equal(fs.existsSync(path.join(codexSkill, 'references', 'sdd.md')), true);
+        assert.equal(fs.existsSync(path.join(codexSkill, 'references', 'commands.md')), true);
+        assert.equal(fs.existsSync(path.join(codexSkill, 'agents', 'openai.yaml')), true);
+        assert.equal(
+          fs.readFileSync(path.join(codexSkill, 'SKILL.md'), 'utf8'),
+          fs.readFileSync(path.join(__dirname, '..', 'resources', 'skills', 'seed-lang', 'SKILL.md'), 'utf8'),
+        );
+
+        fs.writeFileSync(path.join(codexSkill, 'stale.txt'), 'stale\n', 'utf8');
+        const updated = runCli(['install-skill', '--codex'], cwd);
+        assert.equal(updated.code, 0);
+        assert.equal(fs.existsSync(path.join(codexSkill, 'stale.txt')), false);
+
+        const claude = runCli(['install-skill', '--claude'], cwd);
+        assert.equal(claude.code, 0);
+        const claudeSkill = path.join(claudeHome, 'skills', 'seed-lang');
+        assert.equal(fs.existsSync(path.join(claudeSkill, 'SKILL.md')), true);
+        assert.equal(fs.existsSync(path.join(claudeSkill, 'references', 'sdd.md')), true);
+        assert.equal(fs.existsSync(path.join(claudeSkill, 'references', 'commands.md')), true);
+        assert.equal(fs.existsSync(path.join(claudeSkill, 'agents')), false);
+      } finally {
+        if (originalCodexHome === undefined) {
+          delete process.env.CODEX_HOME;
+        } else {
+          process.env.CODEX_HOME = originalCodexHome;
+        }
+        if (originalClaudeHome === undefined) {
+          delete process.env.CLAUDE_HOME;
+        } else {
+          process.env.CLAUDE_HOME = originalClaudeHome;
+        }
+      }
+    });
+  });
+
 
   test('global --repo runs commands from the provided repository path', () => {
     withTempDir((repo) => {

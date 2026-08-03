@@ -1,0 +1,6 @@
+interface:
+  display_name: "Seed Lang"
+  short_description: "Plan, implement, and verify Seed contracts"
+  default_prompt: "Use $seed-lang to implement this project from seed/seed.yml with standalone Seed Driven Development and continue until Seed verification is satisfied."
+policy:
+  allow_implicit_invocation: true

@@ -37,6 +37,7 @@ const {
   startSession,
   syncSession,
 } = require('./verification-store');
+const { installBundledSkill } = require('./skill-installer');
 
 const DEFAULT_OWNER = 'seed-cli';
 
@@ -45,6 +46,7 @@ function usage() {
     'seed [--repo PATH] <command> [options]',
     '',
     'seed init [--overwrite] [--genome ID] [--genomes ID[,ID...]]',
+    'seed install-skill (--codex | --claude)',
     'seed validate',
     'seed diff [--no-color]',
     'seed genome list [--builtin] [--user] [--repo]',
@@ -169,6 +171,30 @@ function parseInitArgs(args) {
   }
 
   return { options };
+}
+
+function parseInstallSkillArgs(args) {
+  let platform;
+
+  for (const arg of args) {
+    if (arg === '--codex' || arg === '--claude') {
+      const selected = arg.slice(2);
+      if (platform) {
+        return { error: 'seed install-skill requires exactly one of --codex or --claude.' };
+      }
+      platform = selected;
+    } else if (arg.startsWith('-')) {
+      return { error: `Unknown option for seed install-skill: ${arg}` };
+    } else {
+      return { error: `seed install-skill does not take positional arguments: ${arg}` };
+    }
+  }
+
+  if (!platform) {
+    return { error: 'seed install-skill requires exactly one of --codex or --claude.' };
+  }
+
+  return { options: { platform } };
 }
 
 function readOptionValue(args, index, option, command) {
@@ -650,6 +676,21 @@ function handleGenome(cwd, args) {
   }
 
   return exitWithError(`Unknown genome subcommand ${subcommand}.`);
+}
+
+function handleInstallSkill(args) {
+  const parsed = parseInstallSkillArgs(args);
+  if (parsed.error) {
+    return exitWithError(parsed.error);
+  }
+
+  try {
+    const installed = installBundledSkill({ platform: parsed.options.platform });
+    console.log(`${installed.replaced ? 'Updated' : 'Installed'} ${installed.platform} skill at ${installed.path}`);
+    return 0;
+  } catch (error) {
+    return exitWithError(error.message);
+  }
 }
 
 function parseBlueprintArgs(args) {
@@ -1170,6 +1211,10 @@ function run(argv = process.argv.slice(2)) {
     } catch (error) {
       return exitWithError(error.message);
     }
+  }
+
+  if (command === 'install-skill') {
+    return handleInstallSkill(rest);
   }
 
   if (command === 'validate') {
