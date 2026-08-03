@@ -1,3 +1,5 @@
+![Seed banner](assets/seed-banner.png)
+
 # Seed
 
 Seed is a contract language and CLI for specifying bounded software behavior as
