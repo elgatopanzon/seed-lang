@@ -2,6 +2,7 @@
   "name": "seed-lang",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
   "description": "Seed contract language prototype",
   "bin": {
     "seed": "src/cli.js"
