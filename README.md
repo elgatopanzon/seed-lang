@@ -510,7 +510,11 @@ genomes:
 ## Blueprints And Diffs
 
 `seed blueprint` renders the complete model-facing contract after genome
-composition. It includes provenance and places global policies near the top.
+composition as a traditional Markdown specification. Main contract sections use
+second-level headings, address segments become progressively nested headings,
+and every item retains its exact address and provenance. Parent entries do not
+repeat content rendered by their child addresses. Global policies remain near
+the top.
 
 Useful views:
 

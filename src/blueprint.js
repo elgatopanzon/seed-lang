@@ -226,18 +226,155 @@ function compactYaml(value) {
   return stringify(value).replace(/\n+$/, '');
 }
 
-function renderItem(item, { includeSource = true } = {}) {
+const HEADING_TERMS = new Map([
+  ['api', 'API'],
+  ['cli', 'CLI'],
+  ['csv', 'CSV'],
+  ['ecs', 'ECS'],
+  ['grpc', 'gRPC'],
+  ['http', 'HTTP'],
+  ['https', 'HTTPS'],
+  ['id', 'ID'],
+  ['io', 'I/O'],
+  ['json', 'JSON'],
+  ['jsonl', 'JSONL'],
+  ['nodejs', 'Node.js'],
+  ['npm', 'npm'],
+  ['pty', 'PTY'],
+  ['rbac', 'RBAC'],
+  ['sdd', 'SDD'],
+  ['sql', 'SQL'],
+  ['ssh', 'SSH'],
+  ['tui', 'TUI'],
+  ['ui', 'UI'],
+  ['url', 'URL'],
+  ['uuid', 'UUID'],
+  ['yaml', 'YAML'],
+]);
+
+function headingName(value) {
+  return String(value)
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => HEADING_TERMS.get(part.toLowerCase()) ?? `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+    .join(' ');
+}
+
+function itemHeading(item) {
+  if (item.value && typeof item.value === 'object' && !Array.isArray(item.value) && typeof item.value.title === 'string') {
+    return item.value.title.trim().replace(/\s+/g, ' ');
+  }
+
+  return headingName(item.address?.split('.').at(-1) ?? item.id);
+}
+
+function itemHeadingLevel(item) {
+  if (!item.address) {
+    return 3;
+  }
+
+  const addressDepth = Math.max(1, item.address.split('.').length - 1);
+  return Math.min(6, 2 + addressDepth);
+}
+
+function directChildKeys(item, sectionItems) {
+  if (!item.address || !item.value || typeof item.value !== 'object' || Array.isArray(item.value)) {
+    return new Set();
+  }
+
+  const prefix = `${item.address}.`;
+  return new Set(sectionItems
+    .map((candidate) => candidate.address)
+    .filter((address) => address?.startsWith(prefix))
+    .map((address) => address.slice(prefix.length))
+    .filter((remainder) => remainder.length > 0 && !remainder.includes('.')));
+}
+
+function renderField(name, value) {
+  const label = headingName(name);
+
+  if (Array.isArray(value)) {
+    const lines = [`**${label}:**`];
+    value.forEach((entry) => {
+      if (entry && typeof entry === 'object') {
+        lines.push('', '```yaml', compactYaml(entry), '```');
+      } else {
+        lines.push(`- ${entry}`);
+      }
+    });
+    return lines.join('\n');
+  }
+
+  if (value && typeof value === 'object') {
+    return `**${label}:**\n\n\`\`\`yaml\n${compactYaml(value)}\n\`\`\``;
+  }
+
+  return `**${label}:** ${value}`;
+}
+
+function renderItemValue(item, sectionItems) {
+  if (!item.value || typeof item.value !== 'object' || Array.isArray(item.value)) {
+    return item.value === undefined || item.value === null ? '' : String(item.value);
+  }
+
+  const childKeys = directChildKeys(item, sectionItems);
+  const fields = Object.entries(item.value)
+    .filter(([key]) => key !== 'id' && key !== 'title' && !childKeys.has(key));
+  const description = fields.find(([key, value]) => key === 'description' && typeof value === 'string');
+  const remaining = fields.filter(([key]) => key !== 'description');
+  const blocks = [];
+
+  if (description) {
+    blocks.push(description[1]);
+  }
+
+  remaining.forEach(([key, value]) => blocks.push(renderField(key, value)));
+  return blocks.join('\n\n');
+}
+
+function renderItem(item, sectionItems, { includeSource = true } = {}) {
   const lines = [];
   const renderedSource = sourceLabel(item.source);
-  const sourceSuffix = includeSource && renderedSource ? ` [${renderedSource}]` : '';
-  const label = item.address ? `\`${item.address}\`` : `\`${item.id}\``;
-  lines.push(`- ${label}${sourceSuffix}`);
+  const details = [];
+  lines.push(`${'#'.repeat(itemHeadingLevel(item))} ${itemHeading(item)}`, '');
 
-  const rendered = compactYaml(item.value)
-    .split('\n')
-    .map((line) => `  ${line}`);
-  lines.push(...rendered);
+  if (item.address) {
+    details.push(`Address: \`${item.address}\``);
+  }
+  if (includeSource && renderedSource) {
+    details.push(`Source: \`${renderedSource}\``);
+  }
+  if (details.length > 0) {
+    lines.push(`_${details.join(' · ')}_`, '');
+  }
+
+  const rendered = renderItemValue(item, sectionItems);
+  if (rendered) {
+    lines.push(rendered);
+  } else if (lines.at(-1) === '') {
+    lines.pop();
+  }
   return lines.join('\n');
+}
+
+function missingAncestorHeadings(item, renderedAddresses) {
+  if (!item.address) {
+    return [];
+  }
+
+  const segments = item.address.split('.');
+  const lines = [];
+  for (let length = 2; length < segments.length; length += 1) {
+    const address = segments.slice(0, length).join('.');
+    if (renderedAddresses.has(address)) {
+      continue;
+    }
+
+    const level = Math.min(6, length + 1);
+    lines.push(`${'#'.repeat(level)} ${headingName(segments[length - 1])}`, '', `_Address: \`${address}\`_`, '');
+    renderedAddresses.add(address);
+  }
+  return lines;
 }
 
 function renderMarkdown(blueprint, { includeSource = true, includeGenomes = true, includeItemSources = true } = {}) {
@@ -265,8 +402,13 @@ function renderMarkdown(blueprint, { includeSource = true, includeGenomes = true
       return;
     }
 
+    const renderedAddresses = new Set();
     section.items.forEach((item) => {
-      lines.push(renderItem(item, { includeSource: includeItemSources }), '');
+      lines.push(...missingAncestorHeadings(item, renderedAddresses));
+      lines.push(renderItem(item, section.items, { includeSource: includeItemSources }), '');
+      if (item.address) {
+        renderedAddresses.add(item.address);
+      }
     });
   });
 

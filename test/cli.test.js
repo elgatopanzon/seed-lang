@@ -383,7 +383,8 @@ describe('seed cli', () => {
       assert.equal(diff.code, 0);
       assert.ok(diff.stdout.includes('--- .seed/seed.snapshot.yml (blueprint)'));
       assert.ok(diff.stdout.includes('+++ seed/seed.yml (blueprint)'));
-      assert.ok(diff.stdout.includes('## Functional Behavior'));
+      assert.ok(diff.stdout.includes('#### Default Human Output'));
+      assert.ok(diff.stdout.includes('#### Default JSON'));
       assert.ok(diff.stdout.includes('default-human-output'));
       assert.ok(diff.stdout.includes('default-json'));
       assert.ok(diff.stdout.includes('The CLI interface outputs JSON by default'));
@@ -403,9 +404,12 @@ describe('seed cli', () => {
       assert.equal(markdown.code, 0);
       assert.ok(markdown.stdout.includes('# Seed Blueprint'));
       assert.ok(markdown.stdout.includes('## Global Policies'));
+      assert.ok(markdown.stdout.includes('### Repo Local Boundary'));
       assert.ok(markdown.stdout.includes('`security.repo-local-boundary`'));
       assert.ok(markdown.stdout.includes('## Interfaces'));
+      assert.ok(markdown.stdout.includes('### CLI'));
       assert.ok(markdown.stdout.includes('`interfaces.cli`'));
+      assert.equal(markdown.stdout.includes('- `interfaces.cli`'), false);
 
       const json = runCli(['blueprint', '--json'], cwd);
       assert.equal(json.code, 0);
@@ -424,6 +428,7 @@ describe('seed cli', () => {
       const section = runCli(['blueprint', '--section', 'artifacts', '--limit', '1', '--offset', '0'], cwd);
       assert.equal(section.code, 0);
       assert.ok(section.stdout.includes('## Artifacts'));
+      assert.ok(section.stdout.includes('### Baseline Seed'));
       assert.ok(section.stdout.includes('`artifacts.baseline-seed`'));
       assert.equal(section.stdout.includes('## Interfaces'), false);
 
@@ -451,8 +456,21 @@ describe('seed cli', () => {
       const markdown = runCli(['blueprint', '--section', 'interfaces'], cwd);
       assert.equal(markdown.code, 0);
       assert.ok(markdown.stdout.includes('Genomes: cli-interface [builtin], cli-nodejs [builtin], cli-json-output [builtin]'));
-      assert.ok(markdown.stdout.includes('`interfaces.cli` [builtin:cli-nodejs]'));
+      assert.ok(markdown.stdout.includes('### CLI'));
+      assert.ok(markdown.stdout.includes('_Address: `interfaces.cli` · Source: `builtin:cli-nodejs`_'));
       assert.ok(markdown.stdout.includes('User invokes the project from a terminal as a Node.js CLI.'));
+
+      const behaviorMarkdown = runCli(['blueprint', '--section', 'functional-behavior'], cwd);
+      assert.equal(behaviorMarkdown.code, 0);
+      assert.ok(behaviorMarkdown.stdout.includes('### Outputs'));
+      assert.ok(behaviorMarkdown.stdout.includes('#### Default JSON'));
+      assert.ok(behaviorMarkdown.stdout.includes('_Address: `behavior.outputs.default-json` · Source: `builtin:cli-json-output`_'));
+      assert.equal(behaviorMarkdown.stdout.includes('default-json:'), false);
+
+      const filteredMarkdown = runCli(['blueprint', '--section', 'functional-behavior', '--filter', '@behavior.outputs.default-json'], cwd);
+      assert.equal(filteredMarkdown.code, 0);
+      assert.ok(filteredMarkdown.stdout.includes('### Outputs'));
+      assert.ok(filteredMarkdown.stdout.includes('#### Default JSON'));
 
       const json = runCli(['blueprint', '--section', 'functional-behavior', '--json'], cwd);
       assert.equal(json.code, 0);
@@ -576,7 +594,8 @@ describe('seed cli', () => {
       assert.ok(markdown.stdout.includes('# Seed Blueprint'));
       assert.ok(markdown.stdout.includes('Source: '));
       assert.ok(markdown.stdout.includes('repo-blueprint.yml'));
-      assert.ok(markdown.stdout.includes('`constraints.nodejs-cli-runtime` [builtin:cli-nodejs]'));
+      assert.ok(markdown.stdout.includes('### Node.js CLI Runtime'));
+      assert.ok(markdown.stdout.includes('_Address: `constraints.nodejs-cli-runtime` · Source: `builtin:cli-nodejs`_'));
       assert.equal(markdown.stdout.includes('seed/seed.yml'), false);
 
       const json = runCli(['genome', 'blueprint', 'repo-blueprint', '--json'], cwd);
