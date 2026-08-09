@@ -520,6 +520,8 @@ Useful views:
 
 ```sh
 seed blueprint
+seed blueprint --color
+seed blueprint --no-color
 seed blueprint --json
 seed blueprint --section interfaces
 seed blueprint --section verification-plan
@@ -527,6 +529,11 @@ seed blueprint --filter @behavior.outputs
 seed blueprint --head 100
 seed blueprint --pager
 ```
+
+Markdown blueprint output is syntax-colored when written to an interactive
+terminal. Pipes and redirected output remain plain Markdown. Use `--color` to
+force ANSI color or `--no-color` to disable it; `NO_COLOR` and `TERM=dumb` are
+honored by automatic mode.
 
 After a verification session exists, compare the current Seed with its stored
 snapshot:

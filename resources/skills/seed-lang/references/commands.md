@@ -12,7 +12,7 @@ seed --repo PATH COMMAND
 seed init [--overwrite] [--genome ID] [--genomes ID[,ID...]]
 seed validate
 seed diff [--no-color]
-seed blueprint [--json] [--section ID] [--filter @ADDRESS]
+seed blueprint [--json] [--color | --no-color] [--section ID] [--filter @ADDRESS]
                [--limit N] [--offset N] [--head N] [--tail N] [--pager]
 seed blueprint diff [--no-color]
 ```
@@ -27,7 +27,7 @@ YAML changes.
 seed genome list [--builtin] [--user] [--repo]
 seed genome init NAME [--overwrite]
 seed genome validate [--builtin] [--user] [--repo]
-seed genome blueprint NAME [--json] [--section ID] [--filter @ADDRESS]
+seed genome blueprint NAME [--json] [--color | --no-color] [--section ID] [--filter @ADDRESS]
                            [--limit N] [--offset N] [--head N] [--tail N]
                            [--pager]
 ```

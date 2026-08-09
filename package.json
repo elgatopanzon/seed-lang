@@ -17,6 +17,7 @@
     "prototype"
   ],
   "dependencies": {
+    "cli-highlight": "^2.1.11",
     "yaml": "^2.5.1"
   },
   "files": [

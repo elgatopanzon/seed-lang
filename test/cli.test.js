@@ -421,6 +421,25 @@ describe('seed cli', () => {
     });
   });
 
+  test('blueprint colors Markdown on request and preserves plain output', () => {
+    withTempDir((cwd) => {
+      runCli(['init'], cwd);
+
+      const colored = runCli(['blueprint', '--color'], cwd);
+      assert.equal(colored.code, 0);
+      assert.match(colored.stdout, /\u001b\[/);
+
+      const plain = runCli(['blueprint', '--no-color'], cwd);
+      assert.equal(plain.code, 0);
+      assert.doesNotMatch(plain.stdout, /\u001b\[/);
+      assert.ok(plain.stdout.startsWith('# Seed Blueprint'));
+
+      const conflicting = runCli(['blueprint', '--color', '--no-color'], cwd);
+      assert.equal(conflicting.code, 1);
+      assert.ok(conflicting.stderr.includes('--color and --no-color cannot be used together'));
+    });
+  });
+
   test('blueprint supports section, pagination, line windows, and reference filters', () => {
     withTempDir((cwd) => {
       runCli(['init'], cwd);

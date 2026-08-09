@@ -16,6 +16,7 @@ const {
   renderMarkdown,
 } = require('./blueprint');
 const { getBlueprintDiff, getSeedDiff } = require('./diff');
+const { colorMarkdown } = require('./terminal-markdown');
 const {
   compileGenomeDocument,
   initRepoGenome,
@@ -52,8 +53,8 @@ function usage() {
     'seed genome list [--builtin] [--user] [--repo]',
     'seed genome init <name> [--overwrite]',
     'seed genome validate [--builtin] [--user] [--repo]',
-    'seed genome blueprint <name> [--json] [--section ID] [--filter @ADDRESS] [--limit N] [--offset N] [--head N] [--tail N] [--pager]',
-    'seed blueprint [--json] [--section ID] [--filter @ADDRESS] [--limit N] [--offset N] [--head N] [--tail N] [--pager]',
+    'seed genome blueprint <name> [--json] [--color | --no-color] [--section ID] [--filter @ADDRESS] [--limit N] [--offset N] [--head N] [--tail N] [--pager]',
+    'seed blueprint [--json] [--color | --no-color] [--section ID] [--filter @ADDRESS] [--limit N] [--offset N] [--head N] [--tail N] [--pager]',
     'seed blueprint diff [--no-color]',
     'seed verify start',
     'seed verify reset',
@@ -640,10 +641,11 @@ function handleGenomeBlueprint(cwd, args) {
       return 0;
     }
 
-    const rendered = applyLineWindow(renderMarkdown(blueprint), {
+    const markdown = applyLineWindow(renderMarkdown(blueprint), {
       head: parsed.options.head,
       tail: parsed.options.tail,
     });
+    const rendered = colorMarkdown(markdown, { color: parsed.options.color });
 
     if (parsed.options.pager) {
       return pageOutput(rendered);
@@ -705,6 +707,12 @@ function parseBlueprintArgs(args) {
 
     if (arg === '--json') {
       options.json = true;
+    } else if (arg === '--color' || arg === '--no-color') {
+      const color = arg === '--color';
+      if (options.color !== undefined && options.color !== color) {
+        return { error: '--color and --no-color cannot be used together.' };
+      }
+      options.color = color;
     } else if (arg === '--pager') {
       options.pager = true;
     } else if (arg === '--filter') {
@@ -770,10 +778,11 @@ function handleBlueprint(cwd, args) {
       return 0;
     }
 
-    const rendered = applyLineWindow(renderMarkdown(blueprint), {
+    const markdown = applyLineWindow(renderMarkdown(blueprint), {
       head: parsed.options.head,
       tail: parsed.options.tail,
     });
+    const rendered = colorMarkdown(markdown, { color: parsed.options.color });
 
     if (parsed.options.pager) {
       return pageOutput(rendered);
