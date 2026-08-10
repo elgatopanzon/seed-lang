@@ -92,7 +92,10 @@ describe('validation', () => {
       ...normalizeAddressableSection('behavior', {
         counting: {
           description: 'Count input characters.',
-          whitespace: 'Whitespace is counted.',
+          whitespace: {
+            description: 'Whitespace is counted.',
+            artifacts: ['baseline-seed'],
+          },
         },
       }, errors),
       ...normalizeAddressableSection('security', {
@@ -105,6 +108,10 @@ describe('validation', () => {
     assert.ok(items.some((item) => item.address === 'freedom.module-layout'));
     assert.ok(items.some((item) => item.address === 'behavior.counting'));
     assert.ok(items.some((item) => item.address === 'behavior.counting.whitespace'));
+    assert.deepEqual(
+      items.find((item) => item.address === 'behavior.counting.whitespace').value.artifacts,
+      ['baseline-seed'],
+    );
     assert.ok(items.some((item) => item.address === 'security.no-network-access'));
   });
 

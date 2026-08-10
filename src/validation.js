@@ -222,7 +222,7 @@ function normalizeTree(section, value, addressPrefix, pointer, errors, items) {
             }
           });
         } else {
-          normalizeTree(section, childValue, childAddress, childPath, errors, items);
+          normalizeTree(section, { [childKey]: childValue }, address, entryPath, errors, items);
         }
       }
     });
