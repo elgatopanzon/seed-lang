@@ -1,6 +1,7 @@
 const { spawnSync } = require('node:child_process');
 const { stringify } = require('yaml');
 const { collectAddressableItems, collectGlobalPolicyItems, collectPresentAddressableItems } = require('./validation');
+const { REQUIREMENTS_WARNING, inspectRequirements, renderRequirementsWarning } = require('./requirements');
 
 const REFERENCE_PATTERN = /@([A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)*)/g;
 
@@ -168,6 +169,11 @@ function sectionItems(definition, items, selected, options) {
 }
 
 function compileBlueprint({ document, seedPath, genomes = [], provenance = {}, filters = [], section, limit, offset, partial = false } = {}) {
+  const inspectedRequirements = inspectRequirements(document.requirements);
+  if (inspectedRequirements.errors.length > 0) {
+    throw new Error(`Cannot build blueprint from invalid requirements: ${inspectedRequirements.errors.map((entry) => `${entry.path}: ${entry.message}`).join('; ')}`);
+  }
+
   const items = buildItems(document, seedPath, provenance, partial);
   const selected = resolveFilterAddresses(filters, items);
   const options = { limit, offset };
@@ -214,11 +220,14 @@ function compileBlueprint({ document, seedPath, genomes = [], provenance = {}, f
 
   return {
     kind: 'seed-blueprint',
+    requirementsReady: inspectedRequirements.requirements.length === 0,
+    requirementsWarning: inspectedRequirements.requirements.length > 0 ? REQUIREMENTS_WARNING : null,
     source: {
       path: seedPath,
       genomes,
     },
     filters: filters.map(normalizeFilter),
+    requirements: inspectedRequirements.requirements,
     sections,
   };
 }
@@ -379,9 +388,8 @@ function missingAncestorHeadings(item, renderedAddresses) {
 }
 
 function renderMarkdown(blueprint, { includeSource = true, includeGenomes = true, includeItemSources = true } = {}) {
-  const lines = [
-    '# Seed Blueprint',
-  ];
+  const warning = renderRequirementsWarning(blueprint.requirements);
+  const lines = warning ? [warning.replace(/\n+$/, ''), '# Seed Blueprint'] : ['# Seed Blueprint'];
 
   if (includeSource) {
     lines.push('', `Source: ${blueprint.source.path}`);

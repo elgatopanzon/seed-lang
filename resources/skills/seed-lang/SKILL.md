@@ -47,17 +47,20 @@ complete implementation and completion procedure.
 
 When creating or updating a Seed:
 
-1. Inspect available presets with `seed genome list` and targeted
+1. Treat `requirements` as a temporary planning inbox. Convert every entry into
+   the appropriate contract sections, verifications, and artifacts, then remove
+   it. Do not begin implementation while any entry remains.
+2. Inspect available presets with `seed genome list` and targeted
    `seed genome blueprint NAME` commands.
-2. Record observable requirements in the appropriate addressable sections.
-3. Preserve stable IDs when meaning is unchanged.
-4. Put genuine implementation choices in `freedom`; do not use freedom to hide
+3. Record observable requirements in the appropriate addressable sections.
+4. Preserve stable IDs when meaning is unchanged.
+5. Put genuine implementation choices in `freedom`; do not use freedom to hide
    missing product decisions or external contracts.
-5. Add explicit artifacts for schemas, fixtures, samples, golden files,
+6. Add explicit artifacts for schemas, fixtures, samples, golden files,
    protocols, APIs, formats, and other implementation-critical material.
-6. Add item-specific verifications with concrete methods and evidence.
-7. Run `seed validate` and inspect the complete blueprint.
-8. Apply [Seed Readiness Check](references/seed-readiness.md) until the result is
+7. Add item-specific verifications with concrete methods and evidence.
+8. Run `seed validate` and inspect the complete blueprint.
+9. Apply [Seed Readiness Check](references/seed-readiness.md) until the result is
    **Implementation-ready**.
 
 ### External Contract Artifacts
@@ -89,6 +92,7 @@ Valid sections:
 
 - `metadata`: project name and summary.
 - `genomes`: reusable Seed fragments composed before local values.
+- `requirements`: temporary raw planning TODOs; must be empty before implementation.
 - `scope`: included and excluded boundaries.
 - `artifacts`: local relative files or HTTP(S) resources.
 - `interfaces`: CLI, API, UI, files, automation, and integrations.

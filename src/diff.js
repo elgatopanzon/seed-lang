@@ -5,6 +5,7 @@ const { join } = require('node:path');
 const { parse } = require('yaml');
 const { compileBlueprint, renderMarkdown } = require('./blueprint');
 const { loadSeed } = require('./seed-file');
+const { inspectRequirements, renderRequirementsWarning } = require('./requirements');
 
 function snapshotPath(cwd) {
   return join(cwd ?? process.cwd(), '.seed', 'seed.snapshot.yml');
@@ -157,6 +158,11 @@ function getBlueprintDiff({ cwd = process.cwd(), noColor = false } = {}) {
   }
 
   const seed = loadSeed({ cwd });
+  const inspectedRequirements = inspectRequirements(seed.document.requirements);
+  if (inspectedRequirements.errors.length > 0) {
+    throw new Error('Cannot render diff from invalid requirements: ' + inspectedRequirements.errors.map((entry) => `${entry.path}: ${entry.message}`).join('; '));
+  }
+  const warning = renderRequirementsWarning(inspectedRequirements.requirements);
   const beforeText = renderComparableBlueprint(snapshotDocument, '.seed/seed.snapshot.yml');
   const afterText = renderComparableBlueprint(seed.document, 'seed/seed.yml');
   const changes = buildLineDiff(beforeText, afterText);
@@ -164,13 +170,13 @@ function getBlueprintDiff({ cwd = process.cwd(), noColor = false } = {}) {
 
   return {
     changed,
-    text: changed
+    text: warning + (changed
       ? renderDiff(changes, {
         color: !noColor && process.stdout.isTTY,
         oldLabel: '.seed/seed.snapshot.yml (blueprint)',
         newLabel: 'seed/seed.yml (blueprint)',
       })
-      : 'No Blueprint diff.\n',
+      : 'No Blueprint diff.\n'),
   };
 }
 
@@ -182,12 +188,17 @@ function getSeedDiff({ cwd = process.cwd(), noColor = false } = {}) {
 
   const snapshotText = readFileSync(snapPath, 'utf8');
   const seed = loadSeed({ cwd });
+  const inspectedRequirements = inspectRequirements(seed.document.requirements);
+  if (inspectedRequirements.errors.length > 0) {
+    throw new Error('Cannot render diff from invalid requirements: ' + inspectedRequirements.errors.map((entry) => `${entry.path}: ${entry.message}`).join('; '));
+  }
+  const warning = renderRequirementsWarning(inspectedRequirements.requirements);
   const changes = buildLineDiff(snapshotText, seed.text);
   const changed = changes.some((entry) => entry.kind !== 'same');
 
   return {
     changed,
-    text: changed ? renderDiff(changes, { color: !noColor && process.stdout.isTTY }) : 'No Seed diff.\n',
+    text: warning + (changed ? renderDiff(changes, { color: !noColor && process.stdout.isTTY }) : 'No Seed diff.\n'),
   };
 }
 

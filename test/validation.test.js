@@ -14,8 +14,47 @@ describe('validation', () => {
     const document = parse(renderSeedTemplate());
     const result = validateSeedDocument(document);
 
+    assert.deepEqual(document.requirements, []);
     assert.deepEqual(result.errors, []);
     assert.deepEqual(result.warnings, []);
+  });
+
+  test('populated requirements fail readiness for lists and nested objects', () => {
+    const document = parse(renderSeedTemplate());
+    document.requirements = {
+      tui: [
+        'Render an ASCII cat full screen.',
+        'Exit on q.',
+      ],
+      integration: {
+        public_api: 'Use the public catalog API at @undecided-api.',
+      },
+    };
+
+    const result = validateSeedDocument(document);
+    const unresolved = result.errors.filter((entry) => entry.code === 'unresolved-requirement');
+
+    assert.equal(unresolved.length, 3);
+    assert.deepEqual(unresolved.map((entry) => entry.path), [
+      '/requirements/tui/0',
+      '/requirements/tui/1',
+      '/requirements/integration/public_api',
+    ]);
+    assert.equal(result.errors.some((entry) => entry.code === 'invalid-reference'), false);
+  });
+
+  test('requirements reject values outside simple lists and nested string objects', () => {
+    const document = parse(renderSeedTemplate());
+    document.requirements = ['Valid requirement', { description: 'Not a simple list entry' }];
+
+    const result = validateSeedDocument(document);
+
+    assert.ok(result.errors.some((entry) => entry.code === 'invalid-requirements-shape' && entry.path === '/requirements/1'));
+    assert.ok(result.errors.some((entry) => entry.code === 'unresolved-requirement' && entry.path === '/requirements/0'));
+
+    document.requirements = 'A root scalar is not a requirements container.';
+    const scalarResult = validateSeedDocument(document);
+    assert.ok(scalarResult.errors.some((entry) => entry.code === 'invalid-requirements-shape' && entry.path === '/requirements'));
   });
 
   test('reports malformed required structure', () => {

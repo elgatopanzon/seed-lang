@@ -2,6 +2,7 @@ const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 const REFERENCE_PATTERN = /@([A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)*)/g;
 const HTTP_URL_PATTERN = /^https?:\/\//i;
 const URL_SCHEME_PATTERN = /^[A-Za-z][A-Za-z0-9+.-]*:/;
+const { inspectRequirements } = require('./requirements');
 
 const REQUIRED_SECTIONS = [
   'scope',
@@ -460,7 +461,7 @@ function validateReferences(document, items, errors, warnings) {
   const seenReferenceKeys = new Set();
 
   Object.entries(document).forEach(([section, value]) => {
-    if (section === 'metadata' || section === 'artifacts') {
+    if (section === 'metadata' || section === 'artifacts' || section === 'requirements') {
       return;
     }
 
@@ -491,6 +492,16 @@ function validateReferences(document, items, errors, warnings) {
     if (!artifactRefs.has(item.id)) {
       pushWarning(warnings, 'unreferenced-artifact', item.path, `artifact ${item.id} is defined but not referenced by any section`);
     }
+  });
+}
+
+function validateRequirements(document, errors) {
+  const inspected = inspectRequirements(document.requirements);
+  inspected.errors.forEach((entry) => {
+    pushError(errors, 'invalid-requirements-shape', entry.path, entry.message);
+  });
+  inspected.requirements.forEach((entry) => {
+    pushError(errors, 'unresolved-requirement', entry.path, 'requirement must be converted into the appropriate Seed sections, verifications, and artifacts before implementation');
   });
 }
 
@@ -559,6 +570,7 @@ function validateGenomeDocument(document) {
     };
   }
 
+  validateRequirements(document, errors);
   const items = collectPresentAddressableItems(document, errors);
   validateDuplicateAddresses(items, errors);
   validatePolicies(items, errors);
@@ -584,6 +596,7 @@ function validateSeedDocument(document) {
   }
 
   validateMetadata(document, errors);
+  validateRequirements(document, errors);
 
   const items = collectAddressableItems(document, errors);
   validateDuplicateAddresses(items, errors);

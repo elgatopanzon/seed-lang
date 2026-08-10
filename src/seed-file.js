@@ -24,6 +24,7 @@ function seedTemplateDocument({ genomes = [] } = {}) {
       name: 'project-name',
       summary: 'Bounded behavior contract for a local repository.',
     },
+    requirements: [],
     ...(genomes.length > 0 ? { genomes } : {}),
     scope: {
       included: {

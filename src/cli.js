@@ -756,7 +756,7 @@ function handleBlueprint(cwd, args) {
 
   let seed;
   try {
-    seed = ensureSeedReady(cwd);
+    seed = ensureSeedReady(cwd, { allowUnresolvedRequirements: true });
   } catch (error) {
     return exitWithError(error.message);
   }
@@ -815,7 +815,7 @@ function handleBlueprintDiff(cwd, args) {
   }
 }
 
-function ensureSeedReady(cwd) {
+function ensureSeedReady(cwd, { allowUnresolvedRequirements = false } = {}) {
   let seed;
 
   try {
@@ -825,10 +825,17 @@ function ensureSeedReady(cwd) {
   }
 
   const validation = validateSeedDocument(seed.document);
-  printValidationResult(validation);
+  const blockingErrors = allowUnresolvedRequirements
+    ? validation.errors.filter((entry) => entry.code !== 'unresolved-requirement')
+    : validation.errors;
 
-  if (validation.errors.length > 0) {
-    throw new Error(`Seed validation failed with ${validation.errors.length} structural error(s).`);
+  if (blockingErrors.length > 0) {
+    printValidationResult(validation);
+    throw new Error(`Seed validation failed with ${blockingErrors.length} structural error(s).`);
+  }
+
+  if (!allowUnresolvedRequirements || validation.errors.length === 0) {
+    printValidationResult(validation);
   }
 
   return seed;

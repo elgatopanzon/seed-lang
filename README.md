@@ -402,6 +402,7 @@ Seed files are YAML. The main sections are:
 | --- | --- |
 | `metadata` | Project name and summary. |
 | `genomes` | Reusable contract fragments composed before local values. |
+| `requirements` | Temporary inbox of raw requirements that still need conversion into the contract. |
 | `scope` | Included and excluded boundaries. |
 | `artifacts` | Schemas, fixtures, samples, goldens, and external contracts. |
 | `interfaces` | CLI, API, UI, file, automation, and integration surfaces. |
@@ -415,6 +416,37 @@ Seed files are YAML. The main sections are:
 | `constraints` | Binding implementation or non-functional requirements. |
 | `freedom` | Explicit implementation choices left open. |
 | `verifications` | Acceptance methods and required evidence. |
+
+### Requirements Inbox
+
+Use `requirements` to capture raw intent before it has been sorted into the
+contract. It accepts a simple string list or a nested object with string leaves:
+
+```yaml
+requirements:
+  - Print an ASCII cat full screen.
+  - Exit cleanly on q.
+```
+
+```yaml
+requirements:
+  tui:
+    - Render as a real full-screen terminal application.
+    - Restore the terminal on exit.
+  data:
+    public-api: Use a documented public API for catalog records.
+```
+
+Requirements are planning TODOs, not implementation-ready contract items.
+`seed validate` fails and a verification session cannot start while any remain.
+Convert each requirement into the appropriate addressable sections and
+verifications, create and attach any missing artifacts, then remove the
+converted requirement. An absent or empty `requirements` container is valid.
+
+Blueprint and diff views remain available during conversion. They place a
+prominent not-ready warning and the complete unresolved requirements list above
+their normal output. JSON blueprints expose `requirementsReady`,
+`requirementsWarning`, and the same flattened list as `requirements`.
 
 Most sections are addressable. Tree keys form addresses:
 
@@ -514,7 +546,8 @@ composition as a traditional Markdown specification. Main contract sections use
 second-level headings, address segments become progressively nested headings,
 and every item retains its exact address and provenance. Parent entries do not
 repeat content rendered by their child addresses. Global policies remain near
-the top.
+the top. When the requirements inbox is populated, a not-ready warning and all
+unresolved requirements appear before the blueprint.
 
 Useful views:
 

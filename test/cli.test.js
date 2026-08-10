@@ -424,6 +424,71 @@ describe('seed cli', () => {
     });
   });
 
+  test('requirements block validation and verification while remaining visible in blueprints', () => {
+    withTempDir((cwd) => {
+      writeSeedFromTemplate(cwd, (document) => {
+        document.requirements = {
+          tui: [
+            'Render an ASCII cat full screen.',
+            'Exit cleanly on q.',
+          ],
+          api: {
+            catalog: 'Use a documented public catalog API.',
+          },
+        };
+      });
+
+      const validation = runCli(['validate'], cwd);
+      assert.equal(validation.code, 1);
+      assert.ok(validation.stdout.includes('unresolved-requirement'));
+
+      const blueprint = runCli(['blueprint', '--no-color'], cwd);
+      assert.equal(blueprint.code, 0);
+      assert.ok(blueprint.stdout.startsWith('# ⚠ SEED NOT READY: UNRESOLVED REQUIREMENTS'));
+      assert.ok(blueprint.stdout.includes('The Seed is not implementation-ready while any remain.'));
+      assert.ok(blueprint.stdout.includes('`/requirements/tui/0`: Render an ASCII cat full screen.'));
+      assert.ok(blueprint.stdout.includes('`/requirements/api/catalog`: Use a documented public catalog API.'));
+      assert.ok(blueprint.stdout.includes('# Seed Blueprint'));
+
+      const json = runCli(['blueprint', '--json'], cwd);
+      assert.equal(json.code, 0);
+      const parsed = JSON.parse(json.stdout);
+      assert.equal(parsed.requirementsReady, false);
+      assert.ok(parsed.requirementsWarning.includes('not in the correct Seed contract shape'));
+      assert.deepEqual(parsed.requirements.map((entry) => entry.path), [
+        '/requirements/tui/0',
+        '/requirements/tui/1',
+        '/requirements/api/catalog',
+      ]);
+
+      const verification = runCli(['verify', 'start'], cwd);
+      assert.equal(verification.code, 1);
+      assert.ok(verification.stdout.includes('unresolved-requirement'));
+    });
+  });
+
+  test('requirements warnings lead Seed and Blueprint diff output', () => {
+    withTempDir((cwd) => {
+      runCli(['init'], cwd);
+      runCli(['verify', 'start'], cwd);
+      writeSeedFromTemplate(cwd, (document) => {
+        document.requirements = ['Choose a stable public API.'];
+      });
+
+      const seedDiff = runCli(['diff', '--no-color'], cwd);
+      assert.equal(seedDiff.code, 0);
+      assert.ok(seedDiff.stdout.startsWith('# ⚠ SEED NOT READY: UNRESOLVED REQUIREMENTS'));
+      assert.ok(seedDiff.stdout.includes('`/requirements/0`: Choose a stable public API.'));
+      assert.ok(seedDiff.stdout.includes('--- .seed/seed.snapshot.yml'));
+
+      const blueprintDiff = runCli(['blueprint', 'diff', '--no-color'], cwd);
+      assert.equal(blueprintDiff.code, 0);
+      assert.ok(blueprintDiff.stdout.startsWith('# ⚠ SEED NOT READY: UNRESOLVED REQUIREMENTS'));
+      assert.ok(blueprintDiff.stdout.includes('`/requirements/0`: Choose a stable public API.'));
+      assert.ok(blueprintDiff.stdout.includes('--- .seed/seed.snapshot.yml (blueprint)'));
+    });
+  });
+
   test('blueprint colors Markdown on request and preserves plain output', () => {
     withTempDir((cwd) => {
       runCli(['init'], cwd);
