@@ -7,6 +7,7 @@ const REFERENCE_PATTERN = /@([A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9
 const SECTION_DEFINITIONS = [
   { id: 'project-summary', title: 'Project Summary', source: 'metadata', singleton: true },
   { id: 'global-policies', title: 'Global Policies', source: 'global-policies', virtual: true },
+  { id: 'scope', title: 'Scope', source: 'scope' },
   { id: 'interfaces', title: 'Interfaces', source: 'interfaces' },
   { id: 'functional-behavior', title: 'Functional Behavior', source: 'behavior' },
   { id: 'error-semantics', title: 'Error Semantics', source: 'errors' },

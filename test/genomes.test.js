@@ -795,6 +795,48 @@ describe('seed genomes', () => {
     assert.deepEqual(merged.tags, ['override']);
   });
 
+  test('addressable id lists and keyed trees merge without losing items', () => {
+    const genomeMerged = mergeSeedFragments(
+      {
+        verifications: [
+          { id: 'array-only', description: 'array only', method: 'array', evidence_required: ['array'] },
+          { id: 'shared', description: 'base', method: 'base', evidence_required: ['base'] },
+        ],
+      },
+      {
+        verifications: {
+          'tree-only': { description: 'tree only', method: 'tree', evidence_required: ['tree'] },
+          shared: { method: 'tree override' },
+        },
+      },
+    );
+    const seedMerged = mergeSeedFragments(genomeMerged, {
+      verifications: [
+        { id: 'local-only', description: 'local only', method: 'local', evidence_required: ['local'] },
+        { id: 'shared', evidence_required: ['local override'] },
+      ],
+    });
+
+    assert.deepEqual(Object.keys(seedMerged.verifications), [
+      'array-only',
+      'shared',
+      'tree-only',
+      'local-only',
+    ]);
+    assert.equal(seedMerged.verifications.shared.description, 'base');
+    assert.equal(seedMerged.verifications.shared.method, 'tree override');
+    assert.deepEqual(seedMerged.verifications.shared.evidence_required, ['local override']);
+  });
+
+  test('mixed non-addressable values retain replacement semantics', () => {
+    const merged = mergeSeedFragments(
+      { metadata: { owners: { base: { name: 'base' } } } },
+      { metadata: { owners: [{ id: 'override', name: 'override' }] } },
+    );
+
+    assert.deepEqual(merged.metadata.owners, [{ id: 'override', name: 'override' }]);
+  });
+
   test('repo genomes override user genomes and user genomes override builtins for the same id', () => {
     withTempDir((cwd) => {
       const home = tempDir('seed-genome-home-');

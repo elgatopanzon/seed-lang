@@ -406,6 +406,8 @@ describe('seed cli', () => {
       assert.ok(markdown.stdout.includes('## Global Policies'));
       assert.ok(markdown.stdout.includes('### Repo Local Boundary'));
       assert.ok(markdown.stdout.includes('`security.repo-local-boundary`'));
+      assert.ok(markdown.stdout.includes('## Scope'));
+      assert.ok(markdown.stdout.includes('`scope.included.local-filesystem`'));
       assert.ok(markdown.stdout.includes('## Interfaces'));
       assert.ok(markdown.stdout.includes('### CLI'));
       assert.ok(markdown.stdout.includes('`interfaces.cli`'));
@@ -417,6 +419,7 @@ describe('seed cli', () => {
       assert.equal(parsed.kind, 'seed-blueprint');
       assert.equal(parsed.source.path, DEFAULT_SEED_PATH);
       assert.ok(parsed.sections.some((section) => section.id === 'global-policies'));
+      assert.ok(parsed.sections.some((section) => section.id === 'scope'));
       assert.ok(parsed.sections.some((section) => section.id === 'interfaces'));
     });
   });

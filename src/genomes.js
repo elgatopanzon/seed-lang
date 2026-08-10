@@ -7,6 +7,21 @@ const { parseSeedYaml } = require('./seed-yaml');
 const REFERENCE_PATTERN = /@([A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)*)/g;
 const MAX_GENOME_DEPTH = 64;
 const GENOME_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+const ADDRESSABLE_SECTION_NAMES = new Set([
+  'scope',
+  'interfaces',
+  'behavior',
+  'errors',
+  'state',
+  'constraints',
+  'security',
+  'environment',
+  'observability',
+  'compatibility',
+  'freedom',
+  'artifacts',
+  'verifications',
+]);
 
 const BUILTIN_GENOME_DIR = join(__dirname, '..', 'resources', 'genomes');
 
@@ -16,6 +31,17 @@ function isObject(value) {
 
 function arrayHasIds(value) {
   return value.every((entry) => isObject(entry) && typeof entry.id === 'string' && entry.id.length > 0);
+}
+
+function idArrayAsObject(value) {
+  if (!arrayHasIds(value)) {
+    return null;
+  }
+
+  return Object.fromEntries(value.map((entry) => {
+    const { id, ...item } = entry;
+    return [id, structuredClone(item)];
+  }));
 }
 
 function mergeArrays(base, override) {
@@ -40,16 +66,30 @@ function mergeArrays(base, override) {
   return merged;
 }
 
-function mergeSeedFragments(base, override) {
+function mergeSeedFragments(base, override, addressable = false) {
   if (Array.isArray(base) && Array.isArray(override)) {
     return mergeArrays(base, override);
+  }
+
+  if (addressable && Array.isArray(base) && isObject(override)) {
+    const normalized = idArrayAsObject(base);
+    if (normalized) {
+      return mergeSeedFragments(normalized, override, true);
+    }
+  }
+
+  if (addressable && isObject(base) && Array.isArray(override)) {
+    const normalized = idArrayAsObject(override);
+    if (normalized) {
+      return mergeSeedFragments(base, normalized, true);
+    }
   }
 
   if (isObject(base) && isObject(override)) {
     const merged = { ...structuredClone(base) };
     Object.entries(override).forEach(([key, value]) => {
       if (key in merged) {
-        merged[key] = mergeSeedFragments(merged[key], value);
+        merged[key] = mergeSeedFragments(merged[key], value, addressable || ADDRESSABLE_SECTION_NAMES.has(key));
       } else {
         merged[key] = structuredClone(value);
       }
