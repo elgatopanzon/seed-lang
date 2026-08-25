@@ -4,11 +4,29 @@ const { existsSync, readFileSync } = require('node:fs');
 const { join } = require('node:path');
 const { parse } = require('yaml');
 const { compileBlueprint, renderMarkdown } = require('./blueprint');
-const { loadSeed } = require('./seed-file');
+const { loadSeed, seedPaths } = require('./seed-file');
 const { inspectRequirements, renderRequirementsWarning } = require('./requirements');
+const { resolveExternalReferences } = require('./external-references');
 
-function snapshotPath(cwd) {
-  return join(cwd ?? process.cwd(), '.seed', 'seed.snapshot.yml');
+function snapshotPath(cwd, seedName) {
+  return join(cwd ?? process.cwd(), seedPaths(seedName).statePath, 'seed.snapshot.yml');
+}
+
+function dependencySnapshotPath(cwd, seedName) {
+  return join(cwd ?? process.cwd(), seedPaths(seedName).statePath, 'dependencies.snapshot.json');
+}
+
+function externalDependencyDiff(cwd, seedName, document, noColor) {
+  const storedPath = dependencySnapshotPath(cwd, seedName);
+  const before = existsSync(storedPath) ? readFileSync(storedPath, 'utf8') : '[]\n';
+  const current = JSON.stringify(resolveExternalReferences({ cwd, seedName, document }), null, 2) + '\n';
+  const changes = buildLineDiff(before, current);
+  if (!changes.some((entry) => entry.kind !== 'same')) return '';
+  return '\nExternal dependency changes:\n' + renderDiff(changes, {
+    color: !noColor && process.stdout.isTTY,
+    oldLabel: `${seedPaths(seedName).statePath}/dependencies.snapshot.json`,
+    newLabel: 'resolved external dependencies',
+  });
 }
 
 function splitLines(text) {
@@ -143,8 +161,9 @@ function renderComparableBlueprint(document, seedPath) {
   });
 }
 
-function getBlueprintDiff({ cwd = process.cwd(), noColor = false } = {}) {
-  const snapPath = snapshotPath(cwd);
+function getBlueprintDiff({ cwd = process.cwd(), seedName, noColor = false } = {}) {
+  const paths = seedPaths(seedName);
+  const snapPath = snapshotPath(cwd, seedName);
   if (!existsSync(snapPath)) {
     throw new Error('Seed snapshot missing at ' + snapPath + '. Run seed verify start first.');
   }
@@ -157,37 +176,39 @@ function getBlueprintDiff({ cwd = process.cwd(), noColor = false } = {}) {
     throw new Error('Failed to parse Seed snapshot YAML at ' + snapPath + ': ' + error.message);
   }
 
-  const seed = loadSeed({ cwd });
+  const seed = loadSeed({ cwd, seedName });
   const inspectedRequirements = inspectRequirements(seed.document.requirements);
   if (inspectedRequirements.errors.length > 0) {
     throw new Error('Cannot render diff from invalid requirements: ' + inspectedRequirements.errors.map((entry) => `${entry.path}: ${entry.message}`).join('; '));
   }
   const warning = renderRequirementsWarning(inspectedRequirements.requirements);
-  const beforeText = renderComparableBlueprint(snapshotDocument, '.seed/seed.snapshot.yml');
-  const afterText = renderComparableBlueprint(seed.document, 'seed/seed.yml');
+  const beforeText = renderComparableBlueprint(snapshotDocument, `${paths.statePath}/seed.snapshot.yml`);
+  const afterText = renderComparableBlueprint(seed.document, paths.seedPath);
   const changes = buildLineDiff(beforeText, afterText);
   const changed = changes.some((entry) => entry.kind !== 'same');
+  const dependencyDiff = externalDependencyDiff(cwd, seedName, seed.document, noColor);
 
   return {
-    changed,
+    changed: changed || dependencyDiff.length > 0,
     text: warning + (changed
       ? renderDiff(changes, {
         color: !noColor && process.stdout.isTTY,
-        oldLabel: '.seed/seed.snapshot.yml (blueprint)',
-        newLabel: 'seed/seed.yml (blueprint)',
+        oldLabel: `${paths.statePath}/seed.snapshot.yml (blueprint)`,
+        newLabel: `${paths.seedPath} (blueprint)`,
       })
-      : 'No Blueprint diff.\n'),
+      : dependencyDiff ? 'No local Blueprint diff.\n' : 'No Blueprint diff.\n') + dependencyDiff,
   };
 }
 
-function getSeedDiff({ cwd = process.cwd(), noColor = false } = {}) {
-  const snapPath = snapshotPath(cwd);
+function getSeedDiff({ cwd = process.cwd(), seedName, noColor = false } = {}) {
+  const paths = seedPaths(seedName);
+  const snapPath = snapshotPath(cwd, seedName);
   if (!existsSync(snapPath)) {
     throw new Error('Seed snapshot missing at ' + snapPath + '. Run seed verify start first.');
   }
 
   const snapshotText = readFileSync(snapPath, 'utf8');
-  const seed = loadSeed({ cwd });
+  const seed = loadSeed({ cwd, seedName });
   const inspectedRequirements = inspectRequirements(seed.document.requirements);
   if (inspectedRequirements.errors.length > 0) {
     throw new Error('Cannot render diff from invalid requirements: ' + inspectedRequirements.errors.map((entry) => `${entry.path}: ${entry.message}`).join('; '));
@@ -195,10 +216,17 @@ function getSeedDiff({ cwd = process.cwd(), noColor = false } = {}) {
   const warning = renderRequirementsWarning(inspectedRequirements.requirements);
   const changes = buildLineDiff(snapshotText, seed.text);
   const changed = changes.some((entry) => entry.kind !== 'same');
+  const dependencyDiff = externalDependencyDiff(cwd, seedName, seed.document, noColor);
 
   return {
-    changed,
-    text: warning + (changed ? renderDiff(changes, { color: !noColor && process.stdout.isTTY }) : 'No Seed diff.\n'),
+    changed: changed || dependencyDiff.length > 0,
+    text: warning + (changed
+      ? renderDiff(changes, {
+        color: !noColor && process.stdout.isTTY,
+        oldLabel: `${paths.statePath}/seed.snapshot.yml`,
+        newLabel: `${paths.seedPath} (compiled)`,
+      })
+      : dependencyDiff ? 'No local Seed diff.\n' : 'No Seed diff.\n') + dependencyDiff,
   };
 }
 

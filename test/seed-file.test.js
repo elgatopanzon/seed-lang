@@ -11,6 +11,7 @@ const {
   renderSeedTemplate,
   ensureGitignore,
   initSeed,
+  listSeeds,
   loadSeed,
 } = require('../src/seed-file');
 
@@ -93,6 +94,34 @@ describe('seed file primitives', () => {
     assert.equal(fs.existsSync(path.join(cwd, DEFAULT_SEED_SCRIPTS_PATH)), true);
 
     fs.rmSync(cwd, { recursive: true, force: true });
+  });
+
+  test('initSeed creates a named Seed with named contract paths', () => {
+    const cwd = tempDir();
+    const result = initSeed({ cwd, seedName: 'ui' });
+    const document = parse(fs.readFileSync(result.path, 'utf8'));
+
+    assert.equal(result.path, path.join(cwd, 'seed', 'ui', 'seed.yml'));
+    assert.equal(fs.existsSync(path.join(cwd, 'seed', 'ui', 'scripts')), true);
+    assert.equal(document.artifacts['baseline-seed'].path, 'seed/ui/seed.yml');
+    assert.equal(document.state['repo-local-state'].location, '.seed/ui');
+
+    fs.rmSync(cwd, { recursive: true, force: true });
+  });
+
+  test('listSeeds returns master and named Seed contracts in name order', () => {
+    withTempDir((cwd) => {
+      initSeed({ cwd });
+      initSeed({ cwd, seedName: 'ui' });
+      initSeed({ cwd, seedName: 'api' });
+      fs.mkdirSync(path.join(cwd, 'seed', 'not-a-seed'), { recursive: true });
+
+      assert.deepEqual(listSeeds({ cwd }), [
+        { name: 'master', path: 'seed/seed.yml' },
+        { name: 'api', path: 'seed/api/seed.yml' },
+        { name: 'ui', path: 'seed/ui/seed.yml' },
+      ]);
+    });
   });
 
   test('initSeed refuses overwrite unless explicit', () => {

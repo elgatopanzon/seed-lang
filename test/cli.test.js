@@ -244,6 +244,139 @@ describe('seed cli', () => {
     });
   });
 
+  test('named Seeds use isolated contract and verification state paths', () => {
+    withTempDir((cwd) => {
+      const initialized = runCli(['init', '--seed', 'ui'], cwd);
+      assert.equal(initialized.code, 0);
+      assert.equal(fs.existsSync(path.join(cwd, 'seed', 'ui', 'seed.yml')), true);
+      assert.equal(fs.existsSync(path.join(cwd, DEFAULT_SEED_PATH)), false);
+
+      const valid = runCli(['validate', '--seed', 'ui'], cwd);
+      assert.equal(valid.code, 0);
+      assert.ok(valid.stdout.includes(path.join(cwd, 'seed', 'ui', 'seed.yml')));
+
+      assert.equal(runCli(['verify', 'start', '--seed', 'ui'], cwd).code, 0);
+      assert.equal(fs.existsSync(path.join(cwd, '.seed', 'ui', 'seed.snapshot.yml')), true);
+      assert.equal(fs.existsSync(path.join(cwd, '.seed', 'ui', 'sessions', 'default.json')), true);
+      assert.equal(fs.existsSync(path.join(cwd, '.seed', 'seed.snapshot.yml')), false);
+
+      const status = runCli(['verify', 'status', '--seed', 'ui'], cwd);
+      assert.equal(status.code, 0);
+      assert.equal(JSON.parse(status.stdout).total > 0, true);
+
+      const defaultSeed = runCli(['validate'], cwd);
+      assert.equal(defaultSeed.code, 1);
+      assert.ok(defaultSeed.stderr.includes(path.join(cwd, DEFAULT_SEED_PATH)));
+    });
+  });
+
+  test('named Seed selector rejects missing, duplicate, and unsafe names', () => {
+    withTempDir((cwd) => {
+      const missing = runCli(['validate', '--seed'], cwd);
+      assert.equal(missing.code, 1);
+      assert.ok(missing.stderr.includes('--seed requires a seed name'));
+
+      const duplicate = runCli(['validate', '--seed', 'ui', '--seed', 'api'], cwd);
+      assert.equal(duplicate.code, 1);
+      assert.ok(duplicate.stderr.includes('only once'));
+
+      const unsafe = runCli(['validate', '--seed', '../ui'], cwd);
+      assert.equal(unsafe.code, 1);
+      assert.ok(unsafe.stderr.includes('seed name must use letters'));
+
+      const reserved = runCli(['init', '--seed', 'master'], cwd);
+      assert.equal(reserved.code, 1);
+      assert.ok(reserved.stderr.includes('reserved'));
+    });
+  });
+
+  test('list reports master and named Seeds with their contract paths', () => {
+    withTempDir((cwd) => {
+      assert.equal(runCli(['init'], cwd).code, 0);
+      assert.equal(runCli(['init', '--seed', 'ui'], cwd).code, 0);
+      assert.equal(runCli(['init', '--seed', 'api'], cwd).code, 0);
+
+      const listed = runCli(['list'], cwd);
+      assert.equal(listed.code, 0);
+      assert.equal(listed.stdout, [
+        'Name    Path',
+        'master  seed/seed.yml',
+        'api     seed/api/seed.yml',
+        'ui      seed/ui/seed.yml',
+      ].join('\n'));
+
+      const extra = runCli(['list', 'unexpected'], cwd);
+      assert.equal(extra.code, 1);
+      assert.ok(extra.stderr.includes('does not take arguments'));
+    });
+  });
+
+  test('named Seeds resolve cross-Seed and genome-qualified references', () => {
+    withTempDir((cwd) => {
+      assert.equal(runCli(['init', '--genome', 'cli-nodejs'], cwd).code, 0);
+      assert.equal(runCli(['init', '--seed', 'ui'], cwd).code, 0);
+
+      const uiPath = path.join(cwd, 'seed', 'ui', 'seed.yml');
+      const ui = parse(fs.readFileSync(uiPath, 'utf8'));
+      ui.behavior['core-dependencies'] = {
+        description: 'Use @master:behavior.contract-authority, @master:artifacts.baseline-seed, and @master:genome/cli-nodejs:constraints.nodejs-cli-runtime.',
+        artifacts: ['master:artifacts.baseline-seed'],
+      };
+      fs.writeFileSync(uiPath, stringify(ui), 'utf8');
+
+      assert.equal(runCli(['validate', '--seed', 'ui'], cwd).code, 0);
+      const blueprint = runCli(['blueprint', '--seed', 'ui', '--no-color'], cwd);
+      assert.equal(blueprint.code, 0);
+      assert.ok(blueprint.stdout.includes('External Dependencies'));
+      assert.ok(blueprint.stdout.includes('@master:behavior.contract-authority'));
+      assert.ok(blueprint.stdout.includes('@master:genome/cli-nodejs:constraints.nodejs-cli-runtime'));
+      assert.ok(blueprint.stdout.includes('builtin:cli-nodejs'));
+
+      assert.equal(runCli(['verify', 'start', '--seed', 'ui'], cwd).code, 0);
+      const dependencies = JSON.parse(fs.readFileSync(path.join(cwd, '.seed', 'ui', 'dependencies.snapshot.json'), 'utf8'));
+      assert.equal(dependencies.every((entry) => entry.sourcePath === DEFAULT_SEED_PATH), true);
+      assert.equal(dependencies.some((entry) => entry.provenance.path === 'builtin:cli-nodejs'), true);
+      const masterPath = path.join(cwd, DEFAULT_SEED_PATH);
+      const master = parse(fs.readFileSync(masterPath, 'utf8'));
+      master.behavior['contract-authority'].description = 'Changed authoritative core contract.';
+      fs.writeFileSync(masterPath, stringify(master), 'utf8');
+
+      const diff = runCli(['diff', '--seed', 'ui', '--no-color'], cwd);
+      assert.equal(diff.code, 0);
+      assert.ok(diff.stdout.includes('External dependency changes'));
+      assert.ok(diff.stdout.includes('Changed authoritative core contract'));
+
+      const blueprintDiff = runCli(['blueprint', 'diff', '--seed', 'ui', '--no-color'], cwd);
+      assert.equal(blueprintDiff.code, 0);
+      assert.ok(blueprintDiff.stdout.includes('External dependency changes'));
+      assert.ok(blueprintDiff.stdout.includes('Changed authoritative core contract'));
+
+      const status = JSON.parse(runCli(['verify', 'status', '--seed', 'ui'], cwd).stdout);
+      assert.equal(status.expired, 0);
+    });
+  });
+
+  test('cross-Seed references fail for missing addresses and wrong genome provenance', () => {
+    withTempDir((cwd) => {
+      assert.equal(runCli(['init'], cwd).code, 0);
+      assert.equal(runCli(['init', '--seed', 'ui'], cwd).code, 0);
+      const uiPath = path.join(cwd, 'seed', 'ui', 'seed.yml');
+      const ui = parse(fs.readFileSync(uiPath, 'utf8'));
+
+      ui.behavior['missing-core-address'] = 'Uses @master:behavior.missing.';
+      fs.writeFileSync(uiPath, stringify(ui), 'utf8');
+      const missing = runCli(['validate', '--seed', 'ui'], cwd);
+      assert.equal(missing.code, 1);
+      assert.ok(missing.stderr.includes('does not exist'));
+
+      ui.behavior['missing-core-address'] = 'Uses @master:genome/cli-nodejs:artifacts.baseline-seed.';
+      fs.writeFileSync(uiPath, stringify(ui), 'utf8');
+      const provenance = runCli(['validate', '--seed', 'ui'], cwd);
+      assert.equal(provenance.code, 1);
+      assert.ok(provenance.stderr.includes('is not provided by genome cli-nodejs'));
+    });
+  });
+
   test('init writes verified genomes from repeatable and list options', () => {
     withTempDir((cwd) => {
       const result = runCli(['init', '--genome', 'cli-nodejs', '--genomes', 'cli-human-output,cli-json-output'], cwd);

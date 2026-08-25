@@ -10,7 +10,7 @@ const { createHash } = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const { parse } = require('yaml');
 const { dirname, isAbsolute, join, relative, resolve, sep } = require('node:path');
-const { loadSeed } = require('./seed-file');
+const { loadSeed, seedPaths } = require('./seed-file');
 const { collectGlobalPolicyItems, collectPresentAddressableItems, normalizeAddressableSection } = require('./validation');
 
 const REFERENCE_PATTERN = /@([A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)*)/g;
@@ -34,7 +34,6 @@ const DEFAULT_LOCK_RETRY_MS = 50;
 const DEFAULT_TEST_COMMAND_TIMEOUT_MS = 300_000;
 const MAX_TEST_COMMAND_OUTPUT_CHARS = 4_000;
 const SESSION_SCHEMA_VERSION = 1;
-const SESSION_SNAPSHOT_PATH = '.seed/seed.snapshot.yml';
 const SESSION_COMMAND_CWD = '.';
 const VALID_STATUSES = [
   'pending',
@@ -63,28 +62,36 @@ function workspaceRoot(cwd) {
   return resolve(cwd ?? process.cwd());
 }
 
-function seedRootPath(cwd) {
-  return join(workspaceRoot(cwd), '.seed');
+function sessionSnapshotPath(seedName) {
+  return join(seedPaths(seedName).statePath, 'seed.snapshot.yml');
 }
 
-function snapshotPath(cwd) {
-  return join(seedRootPath(cwd), 'seed.snapshot.yml');
+function seedRootPath(cwd, seedName) {
+  return join(workspaceRoot(cwd), seedPaths(seedName).statePath);
 }
 
-function sessionsDir(cwd) {
-  return join(seedRootPath(cwd), 'sessions');
+function snapshotPath(cwd, seedName) {
+  return join(seedRootPath(cwd, seedName), 'seed.snapshot.yml');
 }
 
-function locksDir(cwd) {
-  return join(seedRootPath(cwd), 'locks');
+function dependencySnapshotPath(cwd, seedName) {
+  return join(seedRootPath(cwd, seedName), 'dependencies.snapshot.json');
 }
 
-function sessionPath(cwd, sessionId) {
-  return join(sessionsDir(cwd), `${sessionId}.json`);
+function sessionsDir(cwd, seedName) {
+  return join(seedRootPath(cwd, seedName), 'sessions');
 }
 
-function lockPath(cwd, sessionId) {
-  return join(locksDir(cwd), `${sessionId}.lock`);
+function locksDir(cwd, seedName) {
+  return join(seedRootPath(cwd, seedName), 'locks');
+}
+
+function sessionPath(cwd, seedName, sessionId) {
+  return join(sessionsDir(cwd, seedName), `${sessionId}.json`);
+}
+
+function lockPath(cwd, seedName, sessionId) {
+  return join(locksDir(cwd, seedName), `${sessionId}.lock`);
 }
 
 function ensureStateDir(path) {
@@ -416,6 +423,9 @@ function collectMentionedArtifacts(value) {
   const visit = (entry) => {
     if (typeof entry === 'string') {
       for (const match of entry.matchAll(REFERENCE_PATTERN)) {
+        if (entry[match.index + match[0].length] === ':') {
+          continue;
+        }
         refs.add(match[1]);
       }
       return;
@@ -534,8 +544,8 @@ function assertSeedDocument(seedDocument) {
   });
 }
 
-function normalizeStoredSessionPaths(state, cwd) {
-  state.snapshotPath = SESSION_SNAPSHOT_PATH;
+function normalizeStoredSessionPaths(state, cwd, seedName) {
+  state.snapshotPath = sessionSnapshotPath(seedName);
   const root = workspaceRoot(cwd);
 
   state.items.forEach((item) => {
@@ -551,11 +561,11 @@ function normalizeStoredSessionPaths(state, cwd) {
   });
 }
 
-function readSessionState(cwd, sessionId, sourceLabel) {
-  const state = readJsonFile(sessionPath(cwd, sessionId), sourceLabel);
-  const sourceSnapshotPath = snapshotPath(cwd);
-  assertSessionShape(state, sourceLabel, sessionId, SESSION_SNAPSHOT_PATH, sourceSnapshotPath);
-  normalizeStoredSessionPaths(state, cwd);
+function readSessionState(cwd, seedName, sessionId, sourceLabel) {
+  const state = readJsonFile(sessionPath(cwd, seedName, sessionId), sourceLabel);
+  const sourceSnapshotPath = snapshotPath(cwd, seedName);
+  assertSessionShape(state, sourceLabel, sessionId, sessionSnapshotPath(seedName), sourceSnapshotPath);
+  normalizeStoredSessionPaths(state, cwd, seedName);
 
   if (!existsSync(sourceSnapshotPath)) {
     throw new Error(`Snapshot missing at ${sourceSnapshotPath}.`);
@@ -713,20 +723,20 @@ function globalPoliciesFromDocument(document) {
   }));
 }
 
-function globalPolicies(cwd) {
-  const snapshotText = readFileSync(snapshotPath(cwd), 'utf8');
+function globalPolicies(cwd, seedName) {
+  const snapshotText = readFileSync(snapshotPath(cwd, seedName), 'utf8');
   const document = parse(snapshotText);
   return globalPoliciesFromDocument(document);
 }
 
-function verificationReferences(cwd, item) {
-  const snapshotText = readFileSync(snapshotPath(cwd), 'utf8');
+function verificationReferences(cwd, seedName, item) {
+  const snapshotText = readFileSync(snapshotPath(cwd, seedName), 'utf8');
   const document = parse(snapshotText);
   return verificationReferencesFromDocument(document, item);
 }
 
-function currentSeedEvidence(cwd, item) {
-  const seed = loadSeed({ cwd });
+function currentSeedEvidence(cwd, seedName, item) {
+  const seed = loadSeed({ cwd, seedName });
   const references = verificationReferencesFromDocument(seed.document, item);
   const fingerprints = addressFingerprints(seed.document);
   const referencedAddresses = [
@@ -865,17 +875,17 @@ function currentTestCommandExpiration(item) {
   };
 }
 
-function currentSeedAddressExpiration(cwd, item, changedAddresses) {
+function currentSeedAddressExpiration(cwd, seedName, item, changedAddresses) {
   if (!terminalStatus(item) || changedAddresses.size === 0) {
     return null;
   }
 
-  const references = verificationReferences(cwd, item);
+  const references = verificationReferences(cwd, seedName, item);
   const referencedAddresses = [
     ...references.addresses.map((entry) => entry.address),
     ...references.artifacts.map((entry) => entry.address),
   ];
-  const currentSeed = loadSeed({ cwd });
+  const currentSeed = loadSeed({ cwd, seedName });
   const currentFingerprints = addressFingerprints(currentSeed.document);
   const modifiedAddresses = referencedAddresses
     .filter((address) => changedAddresses.has(address))
@@ -893,10 +903,10 @@ function currentSeedAddressExpiration(cwd, item, changedAddresses) {
   };
 }
 
-function currentItemExpiration(cwd, item, changedAddresses = new Set()) {
+function currentItemExpiration(cwd, seedName, item, changedAddresses = new Set()) {
   const evidence = currentEvidenceExpiration(cwd, item);
   const testCommand = currentTestCommandExpiration(item);
-  const seedAddress = currentSeedAddressExpiration(cwd, item, changedAddresses);
+  const seedAddress = currentSeedAddressExpiration(cwd, seedName, item, changedAddresses);
 
   if (!evidence && !testCommand && !seedAddress) {
     return null;
@@ -913,14 +923,14 @@ function currentItemExpiration(cwd, item, changedAddresses = new Set()) {
   };
 }
 
-function collectExpiredEvidence(cwd, items, changedAddresses = new Set()) {
+function collectExpiredEvidence(cwd, seedName, items, changedAddresses = new Set()) {
   return items
-    .map((item) => currentItemExpiration(cwd, item, changedAddresses))
+    .map((item) => currentItemExpiration(cwd, seedName, item, changedAddresses))
     .filter(Boolean);
 }
 
-function nextExpiredEvidenceItem(cwd, items, changedAddresses = new Set()) {
-  return items.find((item) => currentItemExpiration(cwd, item, changedAddresses));
+function nextExpiredEvidenceItem(cwd, seedName, items, changedAddresses = new Set()) {
+  return items.find((item) => currentItemExpiration(cwd, seedName, item, changedAddresses));
 }
 
 function itemSummary(item, references = { addresses: [], artifacts: [], unresolved: [] }, policies = []) {
@@ -941,9 +951,11 @@ function itemSummary(item, references = { addresses: [], artifacts: [], unresolv
 
 function startSession({
   cwd,
+  seedName,
   sessionId = DEFAULT_SESSION_ID,
   seedDocument,
   seedText,
+  externalReferences = [],
   now,
   lockWaitMs = DEFAULT_LOCK_WAIT_MS,
 } = {}) {
@@ -956,9 +968,9 @@ function startSession({
   assertSeedDocument(seedDocument);
 
   const nowValue = normalizeNow(now);
-  const root = seedRootPath(cwd);
+  const root = seedRootPath(cwd, seedName);
   const items = buildSessionItems(seedDocument);
-  const sourceSnapshotPath = snapshotPath(cwd);
+  const sourceSnapshotPath = snapshotPath(cwd, seedName);
 
   const session = {
     schemaVersion: SESSION_SCHEMA_VERSION,
@@ -966,14 +978,15 @@ function startSession({
     seedHash: seedHash(seedText),
     createdAt: nowValue,
     updatedAt: nowValue,
-    snapshotPath: SESSION_SNAPSHOT_PATH,
+    snapshotPath: sessionSnapshotPath(seedName),
     items,
   };
 
-  withLock(lockPath(cwd, sessionId), () => {
+  withLock(lockPath(cwd, seedName, sessionId), () => {
     ensureStateDir(sourceSnapshotPath);
     writeFileSync(sourceSnapshotPath, seedText, 'utf8');
-    writeJsonAtomically(sessionPath(cwd, sessionId), session);
+    writeFileSync(dependencySnapshotPath(cwd, seedName), JSON.stringify(externalReferences, null, 2) + '\n', 'utf8');
+    writeJsonAtomically(sessionPath(cwd, seedName, sessionId), session);
   }, { waitMs: lockWaitMs });
 
   return { rootPath: root, session };
@@ -981,6 +994,7 @@ function startSession({
 
 function claimNext({
   cwd,
+  seedName,
   sessionId = DEFAULT_SESSION_ID,
   owner = `seed-${Date.now()}`,
   leaseMs = DEFAULT_LEASE_MS,
@@ -995,21 +1009,21 @@ function claimNext({
   }
 
   const nowValue = normalizeNow(now);
-  const path = sessionPath(cwd, sessionId);
+  const path = sessionPath(cwd, seedName, sessionId);
   const label = `session state ${path}`;
-  const lock = lockPath(cwd, sessionId);
+  const lock = lockPath(cwd, seedName, sessionId);
 
   return withLock(lock, () => {
-    const state = readSessionState(cwd, sessionId, label);
+    const state = readSessionState(cwd, seedName, sessionId, label);
     const recovered = recoverStaleClaims(state.items, nowValue);
 
     let seedChanges = new Set();
     try {
-      seedChanges = new Set(modifiedSeedAddresses(cwd));
+      seedChanges = new Set(modifiedSeedAddresses(cwd, seedName));
     } catch (error) {
       seedChanges = new Set();
     }
-    const next = nextPendingItem(state.items) ?? nextExpiredEvidenceItem(cwd, state.items, seedChanges);
+    const next = nextPendingItem(state.items) ?? nextExpiredEvidenceItem(cwd, seedName, state.items, seedChanges);
     if (next) {
       next.status = 'claimed';
       next.claim = {
@@ -1026,7 +1040,7 @@ function claimNext({
     writeJsonAtomically(path, state);
 
     return {
-      item: next ? itemSummary(next, verificationReferences(cwd, next), globalPolicies(cwd)) : null,
+      item: next ? itemSummary(next, verificationReferences(cwd, seedName, next), globalPolicies(cwd, seedName)) : null,
       claim: next ? next.claim : null,
       recoveredIds: recovered.recovered,
       warnings: recovered.recovered.length
@@ -1038,6 +1052,7 @@ function claimNext({
 
 function claimItem({
   cwd,
+  seedName,
   itemId,
   sessionId = DEFAULT_SESSION_ID,
   owner = `seed-${Date.now()}`,
@@ -1056,12 +1071,12 @@ function claimItem({
   }
 
   const nowValue = normalizeNow(now);
-  const path = sessionPath(cwd, sessionId);
+  const path = sessionPath(cwd, seedName, sessionId);
   const label = `session state ${path}`;
-  const lock = lockPath(cwd, sessionId);
+  const lock = lockPath(cwd, seedName, sessionId);
 
   return withLock(lock, () => {
-    const state = readSessionState(cwd, sessionId, label);
+    const state = readSessionState(cwd, seedName, sessionId, label);
     const recovered = recoverStaleClaims(state.items, nowValue);
     const item = state.items.find((entry) => entry.id === itemId);
     if (!item) {
@@ -1069,11 +1084,11 @@ function claimItem({
     }
     let seedChanges = new Set();
     try {
-      seedChanges = new Set(modifiedSeedAddresses(cwd));
+      seedChanges = new Set(modifiedSeedAddresses(cwd, seedName));
     } catch (error) {
       seedChanges = new Set();
     }
-    const expiration = currentItemExpiration(cwd, item, seedChanges);
+    const expiration = currentItemExpiration(cwd, seedName, item, seedChanges);
     const alreadyClaimed = item.status === 'claimed' && item.claim?.owner === owner;
     if (item.status !== 'pending' && !expiration && !alreadyClaimed) {
       throw new Error(`Cannot claim verification ${itemId}: expected pending, found ${item.status}.`);
@@ -1090,7 +1105,7 @@ function claimItem({
     state.updatedAt = nowValue;
     writeJsonAtomically(path, state);
     return {
-      item: itemSummary(item, verificationReferences(cwd, item), globalPolicies(cwd)),
+      item: itemSummary(item, verificationReferences(cwd, seedName, item), globalPolicies(cwd, seedName)),
       claim: item.claim,
       recoveredIds: recovered.recovered,
       warnings: recovered.recovered.length
@@ -1102,6 +1117,7 @@ function claimItem({
 
 function transitionItem({
   cwd,
+  seedName,
   sessionId = DEFAULT_SESSION_ID,
   itemId,
   owner,
@@ -1122,12 +1138,12 @@ function transitionItem({
   }
 
   const nowValue = normalizeNow(now);
-  const path = sessionPath(cwd, sessionId);
+  const path = sessionPath(cwd, seedName, sessionId);
   const label = `session state ${path}`;
-  const lock = lockPath(cwd, sessionId);
+  const lock = lockPath(cwd, seedName, sessionId);
 
   return withLock(lock, () => {
-    const state = readSessionState(cwd, sessionId, label);
+    const state = readSessionState(cwd, seedName, sessionId, label);
     const item = state.items.find((entry) => entry.id === itemId);
 
     if (!item) {
@@ -1173,14 +1189,14 @@ function transitionItem({
     item.evidence_files = evidenceFiles;
     item.test_commands = testCommandResults;
     try {
-      item.seed_evidence = currentSeedEvidence(cwd, item);
+      item.seed_evidence = currentSeedEvidence(cwd, seedName, item);
     } catch (error) {
       item.seed_evidence = null;
     }
     state.updatedAt = nowValue;
 
     writeJsonAtomically(path, state);
-    return itemSummary(item, verificationReferences(cwd, item), globalPolicies(cwd));
+    return itemSummary(item, verificationReferences(cwd, seedName, item), globalPolicies(cwd, seedName));
   }, { waitMs: lockWaitMs });
 }
 
@@ -1194,6 +1210,7 @@ function failItem(options = {}) {
 
 function resetSession({
   cwd,
+  seedName,
   sessionId = DEFAULT_SESSION_ID,
   now,
   lockWaitMs = DEFAULT_LOCK_WAIT_MS,
@@ -1201,13 +1218,13 @@ function resetSession({
   assertSessionId(sessionId);
 
   const nowValue = normalizeNow(now);
-  const path = sessionPath(cwd, sessionId);
+  const path = sessionPath(cwd, seedName, sessionId);
   const label = `session state ${path}`;
-  const lock = lockPath(cwd, sessionId);
+  const lock = lockPath(cwd, seedName, sessionId);
 
   return withLock(lock, () => {
-    const state = readSessionState(cwd, sessionId, label);
-    const snapshotText = readFileSync(snapshotPath(cwd), 'utf8');
+    const state = readSessionState(cwd, seedName, sessionId, label);
+    const snapshotText = readFileSync(snapshotPath(cwd, seedName), 'utf8');
     let seedDocument;
 
     try {
@@ -1243,10 +1260,10 @@ function addressFingerprints(document) {
   return new Map(entries.map((entry) => [entry.address, itemFingerprint(entry)]));
 }
 
-function modifiedSeedAddresses(cwd) {
-  const snapshotText = readFileSync(snapshotPath(cwd), 'utf8');
+function modifiedSeedAddresses(cwd, seedName) {
+  const snapshotText = readFileSync(snapshotPath(cwd, seedName), 'utf8');
   const snapshotDocument = parse(snapshotText);
-  const currentSeed = loadSeed({ cwd });
+  const currentSeed = loadSeed({ cwd, seedName });
   const snapshotItems = addressFingerprints(snapshotDocument);
   const currentItems = addressFingerprints(currentSeed.document);
   const addresses = new Set([...snapshotItems.keys(), ...currentItems.keys()]);
@@ -1256,15 +1273,15 @@ function modifiedSeedAddresses(cwd) {
     .sort();
 }
 
-function summarizeStatus(cwd, state) {
+function summarizeStatus(cwd, seedName, state) {
   let seedChanges = [];
   try {
-    seedChanges = modifiedSeedAddresses(cwd);
+    seedChanges = modifiedSeedAddresses(cwd, seedName);
   } catch (error) {
     seedChanges = [{ error: error.message }];
   }
   const changedAddresses = new Set(seedChanges.filter((entry) => typeof entry === 'string'));
-  const expiredEvidence = collectExpiredEvidence(cwd, state.items, changedAddresses);
+  const expiredEvidence = collectExpiredEvidence(cwd, seedName, state.items, changedAddresses);
   const expiredIds = expiredEvidence.map((entry) => entry.id);
   const expiredIdSet = new Set(expiredIds);
 
@@ -1308,14 +1325,14 @@ function summarizeStatus(cwd, state) {
   };
 }
 
-function getPendingItems({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
+function getPendingItems({ cwd, seedName, sessionId = DEFAULT_SESSION_ID } = {}) {
   assertSessionId(sessionId);
 
-  const path = sessionPath(cwd, sessionId);
+  const path = sessionPath(cwd, seedName, sessionId);
   const label = 'session state ' + path;
-  const state = readSessionState(cwd, sessionId, label);
-  const seedChanges = new Set(modifiedSeedAddresses(cwd));
-  const expirations = collectExpiredEvidence(cwd, state.items, seedChanges);
+  const state = readSessionState(cwd, seedName, sessionId, label);
+  const seedChanges = new Set(modifiedSeedAddresses(cwd, seedName));
+  const expirations = collectExpiredEvidence(cwd, seedName, state.items, seedChanges);
   const expirationById = new Map(expirations.map((entry) => [entry.id, entry]));
 
   return state.items
@@ -1323,7 +1340,7 @@ function getPendingItems({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
       const expiration = expirationById.get(item.id);
       if (expiration) {
         return {
-          ...itemSummary(item, verificationReferences(cwd, item), globalPolicies(cwd)),
+          ...itemSummary(item, verificationReferences(cwd, seedName, item), globalPolicies(cwd, seedName)),
           status: 'expired',
           previousStatus: item.status,
           expiration,
@@ -1331,7 +1348,7 @@ function getPendingItems({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
       }
 
       if (item.status === 'pending') {
-        return itemSummary(item, verificationReferences(cwd, item), globalPolicies(cwd));
+        return itemSummary(item, verificationReferences(cwd, seedName, item), globalPolicies(cwd, seedName));
       }
 
       return null;
@@ -1341,6 +1358,8 @@ function getPendingItems({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
 
 function syncSession({
   cwd,
+  seedName,
+  externalReferences = [],
   sessionId = DEFAULT_SESSION_ID,
   now,
   lockWaitMs = DEFAULT_LOCK_WAIT_MS,
@@ -1348,19 +1367,19 @@ function syncSession({
   assertSessionId(sessionId);
 
   const nowValue = normalizeNow(now);
-  const path = sessionPath(cwd, sessionId);
+  const path = sessionPath(cwd, seedName, sessionId);
   const label = 'session state ' + path;
-  const lock = lockPath(cwd, sessionId);
+  const lock = lockPath(cwd, seedName, sessionId);
 
   return withLock(lock, () => {
-    const state = readSessionState(cwd, sessionId, label);
-    const status = summarizeStatus(cwd, state);
+    const state = readSessionState(cwd, seedName, sessionId, label);
+    const status = summarizeStatus(cwd, seedName, state);
     if (!status.satisfied) {
       throw new Error('seed verify sync requires the current session to be completed, satisfied, and free of expired evidence.');
     }
 
-    const seed = loadSeed({ cwd });
-    const changedAddresses = new Set(modifiedSeedAddresses(cwd));
+    const seed = loadSeed({ cwd, seedName });
+    const changedAddresses = new Set(modifiedSeedAddresses(cwd, seedName));
     const oldById = new Map(state.items.map((item) => [item.id, item]));
     const nextItems = buildSessionItems(seed.document).map((item) => {
       const old = oldById.get(item.id);
@@ -1368,7 +1387,7 @@ function syncSession({
         old
         && old.address === item.address
         && ['confirmed', 'failed'].includes(old.status)
-        && !currentItemExpiration(cwd, old, changedAddresses)
+        && !currentItemExpiration(cwd, seedName, old, changedAddresses)
       ) {
         return {
           ...item,
@@ -1384,7 +1403,8 @@ function syncSession({
       return item;
     });
 
-    writeFileSync(snapshotPath(cwd), seed.text, 'utf8');
+    writeFileSync(snapshotPath(cwd, seedName), seed.text, 'utf8');
+    writeFileSync(dependencySnapshotPath(cwd, seedName), JSON.stringify(externalReferences, null, 2) + '\n', 'utf8');
     state.seedHash = seedHash(seed.text);
     state.updatedAt = nowValue;
     state.items = nextItems;
@@ -1401,17 +1421,17 @@ function syncSession({
   }, { waitMs: lockWaitMs });
 }
 
-function verificationAudit({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
+function verificationAudit({ cwd, seedName, sessionId = DEFAULT_SESSION_ID } = {}) {
   assertSessionId(sessionId);
 
-  const path = sessionPath(cwd, sessionId);
+  const path = sessionPath(cwd, seedName, sessionId);
   const label = 'session state ' + path;
-  const state = readSessionState(cwd, sessionId, label);
-  const status = summarizeStatus(cwd, state);
+  const state = readSessionState(cwd, seedName, sessionId, label);
+  const status = summarizeStatus(cwd, seedName, state);
   const errors = [];
   const warnings = [];
   const commandUsage = new Map();
-  const policies = globalPolicies(cwd);
+  const policies = globalPolicies(cwd, seedName);
   const byAddress = new Map(state.items.map((item) => [item.address, item]));
 
   function addIssue(target, code, item, message, extra = {}) {
@@ -1574,14 +1594,14 @@ function verificationAudit({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
   };
 }
 
-function verificationReport({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
+function verificationReport({ cwd, seedName, sessionId = DEFAULT_SESSION_ID } = {}) {
   assertSessionId(sessionId);
 
-  const path = sessionPath(cwd, sessionId);
+  const path = sessionPath(cwd, seedName, sessionId);
   const label = 'session state ' + path;
-  const state = readSessionState(cwd, sessionId, label);
-  const status = summarizeStatus(cwd, state);
-  const audit = verificationAudit({ cwd, sessionId });
+  const state = readSessionState(cwd, seedName, sessionId, label);
+  const status = summarizeStatus(cwd, seedName, state);
+  const audit = verificationAudit({ cwd, seedName, sessionId });
   const expirationsById = new Map((status.expiredEvidence ?? []).map((entry) => [entry.id, entry]));
   const auditErrorsById = new Map();
   const auditWarningsById = new Map();
@@ -1615,7 +1635,7 @@ function verificationReport({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
     evidence: item.evidence ?? null,
     reason: item.reason ?? null,
     attempts: item.attempts ?? 0,
-    references: itemSummary(item, verificationReferences(cwd, item)).references,
+    references: itemSummary(item, verificationReferences(cwd, seedName, item)).references,
     evidence_files: structuredClone(item.evidence_files ?? []),
     test_commands: structuredClone(item.test_commands ?? []),
     expiration: expirationsById.get(item.id) ?? null,
@@ -1626,7 +1646,7 @@ function verificationReport({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
   return {
     sessionId: state.sessionId,
     status,
-    global_policies: globalPolicies(cwd),
+    global_policies: globalPolicies(cwd, seedName),
     audit,
     global_errors: globalErrors,
     global_warnings: globalWarnings,
@@ -1634,12 +1654,12 @@ function verificationReport({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
   };
 }
 
-function checkSession({ cwd, sessionId = DEFAULT_SESSION_ID, now } = {}) {
+function checkSession({ cwd, seedName, sessionId = DEFAULT_SESSION_ID, now } = {}) {
   assertSessionId(sessionId);
 
-  const path = sessionPath(cwd, sessionId);
+  const path = sessionPath(cwd, seedName, sessionId);
   const label = 'session state ' + path;
-  const state = readSessionState(cwd, sessionId, label);
+  const state = readSessionState(cwd, seedName, sessionId, label);
   const checkedAt = resolveNow(now);
   const terminalItems = state.items.filter((item) => terminalStatus(item));
   const recordedCommands = terminalItems.flatMap((item) => (
@@ -1697,6 +1717,7 @@ function checkSession({ cwd, sessionId = DEFAULT_SESSION_ID, now } = {}) {
 
 function refreshExpiredEvidence({
   cwd,
+  seedName,
   sessionId = DEFAULT_SESSION_ID,
   owner,
   now,
@@ -1705,13 +1726,13 @@ function refreshExpiredEvidence({
   assertSessionId(sessionId);
   assertOwner(owner);
 
-  const path = sessionPath(cwd, sessionId);
+  const path = sessionPath(cwd, seedName, sessionId);
   const label = 'session state ' + path;
-  const lock = lockPath(cwd, sessionId);
+  const lock = lockPath(cwd, seedName, sessionId);
 
   return withLock(lock, () => {
-    const state = readSessionState(cwd, sessionId, label);
-    const status = summarizeStatus(cwd, state);
+    const state = readSessionState(cwd, seedName, sessionId, label);
+    const status = summarizeStatus(cwd, seedName, state);
     const modifiedAddresses = status.modifiedSeedAddresses ?? [];
     const modifiedAddressErrors = modifiedAddresses
       .filter((entry) => entry && typeof entry === 'object' && typeof entry.error === 'string')
@@ -1805,7 +1826,7 @@ function refreshExpiredEvidence({
         structuredClone(resultsByCommand.get(entry.command))
       ));
       try {
-        item.seed_evidence = currentSeedEvidence(cwd, item);
+        item.seed_evidence = currentSeedEvidence(cwd, seedName, item);
       } catch (error) {
         item.seed_evidence = null;
       }
@@ -1825,13 +1846,13 @@ function refreshExpiredEvidence({
   }, { waitMs: lockWaitMs });
 }
 
-function getStatus({ cwd, sessionId = DEFAULT_SESSION_ID } = {}) {
+function getStatus({ cwd, seedName, sessionId = DEFAULT_SESSION_ID } = {}) {
   assertSessionId(sessionId);
 
-  const path = sessionPath(cwd, sessionId);
+  const path = sessionPath(cwd, seedName, sessionId);
   const label = 'session state ' + path;
-  const state = readSessionState(cwd, sessionId, label);
-  return summarizeStatus(cwd, state);
+  const state = readSessionState(cwd, seedName, sessionId, label);
+  return summarizeStatus(cwd, seedName, state);
 }
 
 module.exports = {

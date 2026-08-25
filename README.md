@@ -764,13 +764,56 @@ and verification commands relative to that repository.
 Do not confuse the global option with `seed genome list --repo`, where `--repo`
 filters genome origin.
 
+## Named Seeds
+
+Add `--seed NAME` to any command to select an isolated named Seed. It may appear
+after the command, matching normal command options:
+
+```sh
+seed init --seed ui
+seed validate --seed ui
+seed verify start --seed ui
+seed list
+```
+
+The default remains `seed/seed.yml` with state under `.seed/`. A named Seed such
+as `ui` uses `seed/ui/seed.yml` with its snapshots, sessions, and locks under
+`.seed/ui/`. Named Seeds do not share verification state with the default or
+with one another. `master` is reserved as the name displayed for the default
+Seed.
+
+### Cross-Seed References
+
+A named Seed may depend on a compiled address from another Seed without taking
+ownership of that Seed's validation or verification work:
+
+```yaml
+behavior:
+  core-client:
+    description: Uses @master:interfaces.http and @master:artifacts.openapi.
+    artifacts:
+      - master:artifacts.openapi
+```
+
+Use `@SEED:ADDRESS` for any compiled address or artifact. Use
+`@SEED:genome/GENOME:ADDRESS` when the dependency must also come from a specific
+genome, for example `@master:genome/cli-nodejs:constraints.nodejs-cli-runtime`.
+The genome-qualified form fails if the address exists but its provenance no
+longer matches.
+
+Blueprints include resolved external dependencies with Seed, address, value,
+and provenance. `seed verify start` snapshots them, and `seed diff` plus
+`seed blueprint diff` report later dependency changes separately. These changes
+do not add verification items or expire evidence in the dependent Seed.
+
 ## Command Summary
 
 ```text
-seed [--repo PATH] <command> [options]
+seed [--repo PATH] <command> [options] [--seed NAME]
 
 seed init [--overwrite] [--genome ID] [--genomes ID[,ID...]]
 seed install-skill (--codex | --claude)
+seed list
 seed validate
 seed diff [--no-color]
 

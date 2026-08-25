@@ -1,4 +1,4 @@
-const { existsSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
+const { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } = require('node:fs');
 const { dirname, join, resolve } = require('node:path');
 const { stringify } = require('yaml');
 const { compileSeedDocument } = require('./genomes');
@@ -6,6 +6,8 @@ const { parseSeedYaml } = require('./seed-yaml');
 
 const DEFAULT_SEED_PATH = 'seed/seed.yml';
 const DEFAULT_SEED_SCRIPTS_PATH = 'seed/scripts';
+const DEFAULT_SEED_NAME = 'master';
+const SAFE_SEED_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 const STABLE_VERIFICATION_ID = 'seed-baseline-visibility';
 const GITIGNORE_SECTION_START = '# seed-lang';
 const GITIGNORE_SECTION = `${GITIGNORE_SECTION_START}\n.seed/locks/\n`;
@@ -18,7 +20,71 @@ function renderSeedTemplate(options = {}) {
   );
 }
 
-function seedTemplateDocument({ genomes = [] } = {}) {
+function assertSeedName(seedName) {
+  if (seedName === undefined || seedName === null) {
+    return;
+  }
+
+  if (typeof seedName !== 'string' || !SAFE_SEED_NAME.test(seedName)) {
+    throw new Error('seed name must use letters, numbers, underscores, or hyphens and start with a letter or number.');
+  }
+
+  if (seedName.toLowerCase() === DEFAULT_SEED_NAME) {
+    throw new Error(`seed name '${DEFAULT_SEED_NAME}' is reserved for the default Seed.`);
+  }
+}
+
+function seedPaths(seedName) {
+  assertSeedName(seedName);
+  if (!seedName) {
+    return {
+      seedPath: DEFAULT_SEED_PATH,
+      seedScriptsPath: DEFAULT_SEED_SCRIPTS_PATH,
+      statePath: '.seed',
+    };
+  }
+
+  return {
+    seedPath: `seed/${seedName}/seed.yml`,
+    seedScriptsPath: `seed/${seedName}/scripts`,
+    statePath: `.seed/${seedName}`,
+  };
+}
+
+function listSeeds({ cwd } = {}) {
+  const root = cwd ?? process.cwd();
+  const seeds = [];
+
+  if (existsSync(resolve(root, DEFAULT_SEED_PATH))) {
+    seeds.push({ name: DEFAULT_SEED_NAME, path: DEFAULT_SEED_PATH });
+  }
+
+  const seedDir = resolve(root, 'seed');
+  if (!existsSync(seedDir)) {
+    return seeds;
+  }
+
+  readdirSync(seedDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .filter((entry) => {
+      try {
+        assertSeedName(entry.name);
+        return true;
+      } catch (error) {
+        return false;
+      }
+    })
+    .filter((entry) => existsSync(resolve(seedDir, entry.name, 'seed.yml')))
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .forEach((entry) => {
+      seeds.push({ name: entry.name, path: `seed/${entry.name}/seed.yml` });
+    });
+
+  return seeds;
+}
+
+function seedTemplateDocument({ genomes = [], seedName } = {}) {
+  const paths = seedPaths(seedName);
   const document = {
     metadata: {
       name: 'project-name',
@@ -29,7 +95,7 @@ function seedTemplateDocument({ genomes = [] } = {}) {
     scope: {
       included: {
         'local-filesystem': 'Local filesystem artifacts within the repository root.',
-        'local-state': 'Command-level state under `.seed` and `seed/seed.yml`.',
+        'local-state': `Command-level state under \`${paths.statePath}\` and \`${paths.seedPath}\`.`,
       },
       excluded: {
         'external-services': 'External services outside this repository.',
@@ -38,7 +104,7 @@ function seedTemplateDocument({ genomes = [] } = {}) {
     },
     artifacts: {
       'baseline-seed': {
-        path: 'seed/seed.yml',
+        path: paths.seedPath,
         description: 'The project-local Seed file used as the contract source.',
       },
     },
@@ -63,12 +129,12 @@ function seedTemplateDocument({ genomes = [] } = {}) {
       'missing-seed-file': {
         code: 'seed.missing_file',
         when: 'Required seed contract is absent.',
-        remediation: 'Run seed init to create seed/seed.yml.',
+        remediation: `Run seed init${seedName ? ` --seed ${seedName}` : ''} to create ${paths.seedPath}.`,
       },
     },
     state: {
       'repo-local-state': {
-        location: '.seed',
+        location: paths.statePath,
         persistence: 'local repository',
         semantics: 'verification state and snapshots are ephemeral command history artifacts',
       },
@@ -83,7 +149,7 @@ function seedTemplateDocument({ genomes = [] } = {}) {
       'clear-command-errors': 'Command failures must print clear user-facing errors.',
     },
     compatibility: {
-      'default-seed-path': 'The default Seed file path remains seed/seed.yml.',
+      'seed-path': `The Seed file path is ${paths.seedPath}.`,
     },
     constraints: {
       'repo-local-only': 'Only local filesystem artifacts under repository root are in scope.',
@@ -101,7 +167,7 @@ function seedTemplateDocument({ genomes = [] } = {}) {
         ],
         method: 'Run seed init, then seed validate, then check for zero structural errors using @baseline-seed.',
         evidence_required: [
-          'Initialize and load seed/seed.yml successfully.',
+          `Initialize and load ${paths.seedPath} successfully.`,
           'Fail loudly if YAML cannot be parsed.',
           'Reject overwrite unless requested explicitly.',
         ],
@@ -135,21 +201,22 @@ function ensureGitignore(root) {
 }
 
 
-function initSeed({ cwd, overwrite = false, genomes = [] } = {}) {
+function initSeed({ cwd, seedName, overwrite = false, genomes = [] } = {}) {
   const root = cwd ?? process.cwd();
-  const seedPath = resolve(root, DEFAULT_SEED_PATH);
+  const paths = seedPaths(seedName);
+  const seedPath = resolve(root, paths.seedPath);
   const seedDir = dirname(seedPath);
 
   if (existsSync(seedPath) && !overwrite) {
     throw new Error(`Seed already exists at ${seedPath}. Use overwrite=true to replace it.`);
   }
 
-  compileSeedDocument({ document: { genomes }, cwd: root, seedPath: DEFAULT_SEED_PATH });
+  compileSeedDocument({ document: { genomes }, cwd: root, seedPath: paths.seedPath });
 
   mkdirSync(seedDir, { recursive: true });
-  mkdirSync(resolve(root, DEFAULT_SEED_SCRIPTS_PATH), { recursive: true });
+  mkdirSync(resolve(root, paths.seedScriptsPath), { recursive: true });
 
-  const text = renderSeedTemplate({ genomes });
+  const text = renderSeedTemplate({ genomes, seedName });
   writeFileSync(seedPath, text, 'utf8');
   ensureGitignore(root);
 
@@ -160,9 +227,10 @@ function initSeed({ cwd, overwrite = false, genomes = [] } = {}) {
   };
 }
 
-function loadSeed({ cwd } = {}) {
+function loadSeed({ cwd, seedName } = {}) {
   const root = cwd ?? process.cwd();
-  const seedPath = resolve(root, DEFAULT_SEED_PATH);
+  const paths = seedPaths(seedName);
+  const seedPath = resolve(root, paths.seedPath);
 
   if (!existsSync(seedPath)) {
     throw new Error(`Seed contract missing at ${seedPath}. Run 'seed init' to create it.`);
@@ -172,7 +240,7 @@ function loadSeed({ cwd } = {}) {
 
   try {
     const rawDocument = parseSeedYaml(text);
-    const compiled = compileSeedDocument({ document: rawDocument, cwd: root, seedPath: DEFAULT_SEED_PATH });
+    const compiled = compileSeedDocument({ document: rawDocument, cwd: root, seedPath: paths.seedPath });
     return {
       path: seedPath,
       text: compiled.text ?? text,
@@ -192,6 +260,10 @@ function loadSeed({ cwd } = {}) {
 module.exports = {
   DEFAULT_SEED_PATH,
   DEFAULT_SEED_SCRIPTS_PATH,
+  DEFAULT_SEED_NAME,
+  assertSeedName,
+  listSeeds,
+  seedPaths,
   renderSeedTemplate,
   ensureGitignore,
   initSeed,

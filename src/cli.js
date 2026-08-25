@@ -5,8 +5,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {
   DEFAULT_SEED_PATH,
+  assertSeedName,
   initSeed,
+  listSeeds,
   loadSeed,
+  seedPaths,
 } = require('./seed-file');
 const { validateGenomeDocument, validateSeedDocument } = require('./validation');
 const {
@@ -39,15 +42,17 @@ const {
   syncSession,
 } = require('./verification-store');
 const { installBundledSkill } = require('./skill-installer');
+const { resolveExternalReferences } = require('./external-references');
 
 const DEFAULT_OWNER = 'seed-cli';
 
 function usage() {
   return [
-    'seed [--repo PATH] <command> [options]',
+    'seed [--repo PATH] <command> [options] [--seed NAME]',
     '',
     'seed init [--overwrite] [--genome ID] [--genomes ID[,ID...]]',
     'seed install-skill (--codex | --claude)',
+    'seed list',
     'seed validate',
     'seed diff [--no-color]',
     'seed genome list [--builtin] [--user] [--repo]',
@@ -70,7 +75,7 @@ function usage() {
     'seed verify fail <constraint-id> --owner OWNER --file PATH [--file PATH...] --test-cmd CMD [--test-cmd CMD...] [--reason TEXT]',
     'seed verify status',
     '',
-    `seed source defaults to ${DEFAULT_SEED_PATH} and current working directory unless --repo PATH is provided`,
+    `seed source defaults to ${DEFAULT_SEED_PATH}; --seed NAME uses seed/NAME/seed.yml and .seed/NAME`,
     'default session id is \'default\'',
   ].join('\n');
 }
@@ -78,6 +83,7 @@ function usage() {
 function parseGlobalArgs(argv, invocationCwd = process.cwd()) {
   const rest = [...argv];
   let repoPath = invocationCwd;
+  let seedName;
 
   while (rest[0] === '--repo') {
     const value = rest[1];
@@ -89,6 +95,28 @@ function parseGlobalArgs(argv, invocationCwd = process.cwd()) {
     rest.splice(0, 2);
   }
 
+  for (let index = 0; index < rest.length; index += 1) {
+    if (rest[index] !== '--seed') {
+      continue;
+    }
+
+    const value = rest[index + 1];
+    if (!value || value.startsWith('-')) {
+      return { error: '--seed requires a seed name.' };
+    }
+    if (seedName !== undefined) {
+      return { error: '--seed may be specified only once.' };
+    }
+    try {
+      assertSeedName(value);
+    } catch (error) {
+      return { error: error.message };
+    }
+    seedName = value;
+    rest.splice(index, 2);
+    index -= 1;
+  }
+
   if (!fs.existsSync(repoPath)) {
     return { error: '--repo path does not exist: ' + repoPath };
   }
@@ -97,7 +125,7 @@ function parseGlobalArgs(argv, invocationCwd = process.cwd()) {
     return { error: '--repo path is not a directory: ' + repoPath };
   }
 
-  return { cwd: repoPath, argv: rest };
+  return { cwd: repoPath, seedName, argv: rest };
 }
 
 function printIssues(title, issues) {
@@ -343,11 +371,11 @@ function parseConstraintActionArgs(args, command, optionName) {
   return parsed;
 }
 
-function handleValidate(cwd) {
+function handleValidate(cwd, seedName) {
   let seed;
 
   try {
-    seed = loadSeed({ cwd });
+    seed = loadSeed({ cwd, seedName });
   } catch (error) {
     return exitWithError(error.message);
   }
@@ -359,11 +387,17 @@ function handleValidate(cwd) {
     return exitWithError('Seed validation failed with structural errors.');
   }
 
+  try {
+    resolveExternalReferences({ cwd, seedName, document: seed.document });
+  } catch (error) {
+    return exitWithError(error.message);
+  }
+
   console.log(`Seed contract valid at ${seed.path}`);
   return 0;
 }
 
-function handleDiff(cwd, args) {
+function handleDiff(cwd, seedName, args) {
   let noColor = false;
 
   for (const arg of args) {
@@ -375,7 +409,7 @@ function handleDiff(cwd, args) {
   }
 
   try {
-    const diff = getSeedDiff({ cwd, noColor });
+    const diff = getSeedDiff({ cwd, seedName, noColor });
     process.stdout.write(diff.text);
     return 0;
   } catch (error) {
@@ -695,6 +729,23 @@ function handleInstallSkill(args) {
   }
 }
 
+function handleSeedList(cwd, args) {
+  if (args.length !== 0) {
+    return exitWithError(`seed list does not take arguments: ${args[0]}`);
+  }
+
+  const seeds = listSeeds({ cwd });
+  if (seeds.length === 0) {
+    console.log('No Seeds found.');
+    return 0;
+  }
+
+  const nameWidth = Math.max('Name'.length, ...seeds.map((seed) => seed.name.length));
+  console.log('Name'.padEnd(nameWidth) + '  Path');
+  seeds.forEach((seed) => console.log(seed.name.padEnd(nameWidth) + '  ' + seed.path));
+  return 0;
+}
+
 function parseBlueprintArgs(args) {
   const options = {
     filters: [],
@@ -744,9 +795,9 @@ function parseBlueprintArgs(args) {
   return { options };
 }
 
-function handleBlueprint(cwd, args) {
+function handleBlueprint(cwd, seedName, args) {
   if (args[0] === 'diff') {
-    return handleBlueprintDiff(cwd, args.slice(1));
+    return handleBlueprintDiff(cwd, seedName, args.slice(1));
   }
 
   const parsed = parseBlueprintArgs(args);
@@ -756,21 +807,23 @@ function handleBlueprint(cwd, args) {
 
   let seed;
   try {
-    seed = ensureSeedReady(cwd, { allowUnresolvedRequirements: true });
+    seed = ensureSeedReady(cwd, seedName, { allowUnresolvedRequirements: true });
   } catch (error) {
     return exitWithError(error.message);
   }
 
   try {
+    const externalReferences = resolveExternalReferences({ cwd, seedName, document: seed.document });
     const blueprint = compileBlueprint({
       document: seed.document,
-      seedPath: DEFAULT_SEED_PATH,
+      seedPath: seedPaths(seedName).seedPath,
       genomes: seed.genomes ?? [],
       provenance: seed.provenance ?? {},
       filters: parsed.options.filters,
       section: parsed.options.section,
       limit: parsed.options.limit,
       offset: parsed.options.offset,
+      externalReferences,
     });
 
     if (parsed.options.json) {
@@ -795,7 +848,7 @@ function handleBlueprint(cwd, args) {
   }
 }
 
-function handleBlueprintDiff(cwd, args) {
+function handleBlueprintDiff(cwd, seedName, args) {
   let noColor = false;
 
   for (const arg of args) {
@@ -807,7 +860,7 @@ function handleBlueprintDiff(cwd, args) {
   }
 
   try {
-    const diff = getBlueprintDiff({ cwd, noColor });
+    const diff = getBlueprintDiff({ cwd, seedName, noColor });
     process.stdout.write(diff.text);
     return 0;
   } catch (error) {
@@ -815,11 +868,11 @@ function handleBlueprintDiff(cwd, args) {
   }
 }
 
-function ensureSeedReady(cwd, { allowUnresolvedRequirements = false } = {}) {
+function ensureSeedReady(cwd, seedName, { allowUnresolvedRequirements = false } = {}) {
   let seed;
 
   try {
-    seed = loadSeed({ cwd });
+    seed = loadSeed({ cwd, seedName });
   } catch (error) {
     throw error;
   }
@@ -838,25 +891,31 @@ function ensureSeedReady(cwd, { allowUnresolvedRequirements = false } = {}) {
     printValidationResult(validation);
   }
 
+  resolveExternalReferences({ cwd, seedName, document: seed.document });
+
   return seed;
 }
 
-function handleVerifyStart(cwd) {
-  const seed = ensureSeedReady(cwd);
+function handleVerifyStart(cwd, seedName) {
+  const seed = ensureSeedReady(cwd, seedName);
+  const externalReferences = resolveExternalReferences({ cwd, seedName, document: seed.document });
   const started = startSession({
     cwd,
+    seedName,
     seedDocument: seed.document,
     seedText: seed.text,
+    externalReferences,
   });
 
   console.log(`Started verification session '${started.session.sessionId}'.`);
-  console.log(`Session file: ${path.join(cwd, '.seed', 'sessions', `${started.session.sessionId}.json`)}`);
+  console.log(`Session file: ${path.join(cwd, seedPaths(seedName).statePath, 'sessions', `${started.session.sessionId}.json`)}`);
   return 0;
 }
 
-function handleVerifyNext(cwd, owner = DEFAULT_OWNER) {
+function handleVerifyNext(cwd, seedName, owner = DEFAULT_OWNER) {
   const result = claimNext({
     cwd,
+    seedName,
     owner,
   });
 
@@ -926,16 +985,17 @@ function handleVerifyNext(cwd, owner = DEFAULT_OWNER) {
   return 0;
 }
 
-function handleVerifyClaim(cwd, itemId, owner = DEFAULT_OWNER) {
-  const result = claimItem({ cwd, itemId, owner });
+function handleVerifyClaim(cwd, seedName, itemId, owner = DEFAULT_OWNER) {
+  const result = claimItem({ cwd, seedName, itemId, owner });
   console.log(`Claimed verification ${result.item.id}`);
   return 0;
 }
 
-function handleVerifyConfirm(cwd, constraintId, owner, evidence, files, testCommands) {
+function handleVerifyConfirm(cwd, seedName, constraintId, owner, evidence, files, testCommands) {
   try {
     const item = confirmItem({
       cwd,
+      seedName,
       itemId: constraintId,
       owner,
       evidence,
@@ -951,10 +1011,11 @@ function handleVerifyConfirm(cwd, constraintId, owner, evidence, files, testComm
   }
 }
 
-function handleVerifyFail(cwd, constraintId, owner, reason, files, testCommands) {
+function handleVerifyFail(cwd, seedName, constraintId, owner, reason, files, testCommands) {
   try {
     const item = failItem({
       cwd,
+      seedName,
       itemId: constraintId,
       owner,
       reason,
@@ -970,9 +1031,9 @@ function handleVerifyFail(cwd, constraintId, owner, reason, files, testCommands)
   }
 }
 
-function handleVerifyCheck(cwd) {
+function handleVerifyCheck(cwd, seedName) {
   try {
-    const result = checkSession({ cwd });
+    const result = checkSession({ cwd, seedName });
     console.log('Seed verification check: ' + result.passed + '/' + result.total + ' passed (commands: ' + result.uniqueCommandTotal + ' unique / ' + result.recordedCommandTotal + ' recorded)');
     result.items.forEach((item) => {
       const address = item.address ? ' @' + item.address : '';
@@ -991,9 +1052,9 @@ function handleVerifyCheck(cwd) {
   }
 }
 
-function handleVerifyRefreshExpired(cwd, owner, json) {
+function handleVerifyRefreshExpired(cwd, seedName, owner, json) {
   try {
-    const result = refreshExpiredEvidence({ cwd, owner });
+    const result = refreshExpiredEvidence({ cwd, seedName, owner });
     if (json) {
       console.log(JSON.stringify(result));
     } else if (result.ok) {
@@ -1028,9 +1089,9 @@ function formatCommandResult(command) {
   return '[' + state + '] exit=' + exit + ' cmd=' + command.command;
 }
 
-function handleVerifyAudit(cwd) {
+function handleVerifyAudit(cwd, seedName) {
   try {
-    const result = verificationAudit({ cwd });
+    const result = verificationAudit({ cwd, seedName });
     console.log('Seed verification audit: ' + result.errors.length + ' errors, ' + result.warnings.length + ' warnings');
     console.log('Audited items: ' + result.audited + '/' + result.total);
 
@@ -1064,9 +1125,9 @@ function handleVerifyAudit(cwd) {
   }
 }
 
-function handleVerifyReport(cwd) {
+function handleVerifyReport(cwd, seedName) {
   try {
-    const report = verificationReport({ cwd });
+    const report = verificationReport({ cwd, seedName });
     const status = report.status;
     const audit = report.audit;
 
@@ -1134,14 +1195,19 @@ function handleVerifyReport(cwd) {
   }
 }
 
-function handleVerifyStatus(cwd) {
-  const status = getStatus({ cwd });
-  console.log(JSON.stringify(status, null, 2));
+function handleVerifyStatus(cwd, seedName) {
+  const status = getStatus({ cwd, seedName });
+  const output = JSON.stringify(status, null, 2) + '\n';
+  if (Object.hasOwn(process.stdout, 'write')) {
+    process.stdout.write(output);
+  } else {
+    fs.writeSync(process.stdout.fd, output);
+  }
   return 0;
 }
 
-function handleVerifyPending(cwd) {
-  const items = getPendingItems({ cwd });
+function handleVerifyPending(cwd, seedName) {
+  const items = getPendingItems({ cwd, seedName });
 
   if (items.length === 0) {
     console.log('No pending verification items.');
@@ -1165,9 +1231,9 @@ function handleVerifyPending(cwd) {
   return 0;
 }
 
-function handleVerifyReset(cwd) {
+function handleVerifyReset(cwd, seedName) {
   try {
-    const result = resetSession({ cwd });
+    const result = resetSession({ cwd, seedName });
     console.log(`Reset verification session '${result.sessionId}'.`);
     console.log(`Items reset: ${result.reset}`);
     return 0;
@@ -1176,9 +1242,11 @@ function handleVerifyReset(cwd) {
   }
 }
 
-function handleVerifySync(cwd) {
+function handleVerifySync(cwd, seedName) {
   try {
-    const result = syncSession({ cwd });
+    const seed = loadSeed({ cwd, seedName });
+    const externalReferences = resolveExternalReferences({ cwd, seedName, document: seed.document });
+    const result = syncSession({ cwd, seedName, externalReferences });
     console.log(`Synced verification session '${result.sessionId}'.`);
     console.log(`Preserved results: ${result.preserved}`);
     console.log(`Pending after sync: ${result.pending}`);
@@ -1204,6 +1272,7 @@ function run(argv = process.argv.slice(2)) {
   }
 
   const cwd = parsedGlobals.cwd;
+  const seedName = parsedGlobals.seedName;
   const [command, ...rest] = parsedGlobals.argv;
 
   if (!command) {
@@ -1219,6 +1288,7 @@ function run(argv = process.argv.slice(2)) {
     try {
       const created = initSeed({
         cwd,
+        seedName,
         overwrite: parsed.options.overwrite,
         genomes: parsed.options.genomes,
       });
@@ -1233,20 +1303,24 @@ function run(argv = process.argv.slice(2)) {
     return handleInstallSkill(rest);
   }
 
+  if (command === 'list') {
+    return handleSeedList(cwd, rest);
+  }
+
   if (command === 'validate') {
     if (rest.length !== 0) {
       return exitWithError('seed validate does not take positional arguments.');
     }
 
-    return handleValidate(cwd);
+    return handleValidate(cwd, seedName);
   }
 
   if (command === 'diff') {
-    return handleDiff(cwd, rest);
+    return handleDiff(cwd, seedName, rest);
   }
 
   if (command === 'blueprint') {
-    return handleBlueprint(cwd, rest);
+    return handleBlueprint(cwd, seedName, rest);
   }
 
   if (command === 'genome') {
@@ -1266,7 +1340,7 @@ function run(argv = process.argv.slice(2)) {
       }
 
       try {
-        return handleVerifyStart(cwd);
+        return handleVerifyStart(cwd, seedName);
       } catch (error) {
         return exitWithError(error.message);
       }
@@ -1277,7 +1351,7 @@ function run(argv = process.argv.slice(2)) {
         return exitWithError('seed verify reset does not take arguments.');
       }
 
-      return handleVerifyReset(cwd);
+      return handleVerifyReset(cwd, seedName);
     }
 
     if (subcommand === 'sync') {
@@ -1285,7 +1359,7 @@ function run(argv = process.argv.slice(2)) {
         return exitWithError('seed verify sync does not take arguments.');
       }
 
-      return handleVerifySync(cwd);
+      return handleVerifySync(cwd, seedName);
     }
 
     if (subcommand === 'pending') {
@@ -1294,7 +1368,7 @@ function run(argv = process.argv.slice(2)) {
       }
 
       try {
-        return handleVerifyPending(cwd);
+        return handleVerifyPending(cwd, seedName);
       } catch (error) {
         return exitWithError(error.message);
       }
@@ -1305,7 +1379,7 @@ function run(argv = process.argv.slice(2)) {
         return exitWithError('seed verify check does not take arguments.');
       }
 
-      return handleVerifyCheck(cwd);
+      return handleVerifyCheck(cwd, seedName);
     }
 
     if (subcommand === 'refresh-expired') {
@@ -1313,7 +1387,7 @@ function run(argv = process.argv.slice(2)) {
       if (parsed.error) {
         return exitWithError(parsed.error);
       }
-      return handleVerifyRefreshExpired(cwd, parsed.options.owner, parsed.options.json);
+      return handleVerifyRefreshExpired(cwd, seedName, parsed.options.owner, parsed.options.json);
     }
 
     if (subcommand === 'audit') {
@@ -1321,7 +1395,7 @@ function run(argv = process.argv.slice(2)) {
         return exitWithError('seed verify audit does not take arguments.');
       }
 
-      return handleVerifyAudit(cwd);
+      return handleVerifyAudit(cwd, seedName);
     }
 
     if (subcommand === 'report') {
@@ -1329,7 +1403,7 @@ function run(argv = process.argv.slice(2)) {
         return exitWithError('seed verify report does not take arguments.');
       }
 
-      return handleVerifyReport(cwd);
+      return handleVerifyReport(cwd, seedName);
     }
 
     if (subcommand === 'next') {
@@ -1339,7 +1413,7 @@ function run(argv = process.argv.slice(2)) {
       }
 
       try {
-        return handleVerifyNext(cwd, parsed.options.owner);
+        return handleVerifyNext(cwd, seedName, parsed.options.owner);
       } catch (error) {
         return exitWithError(error.message);
       }
@@ -1350,7 +1424,7 @@ function run(argv = process.argv.slice(2)) {
         return exitWithError(parsed.error);
       }
       try {
-        return handleVerifyClaim(cwd, parsed.options.itemId, parsed.options.owner);
+        return handleVerifyClaim(cwd, seedName, parsed.options.itemId, parsed.options.owner);
       } catch (error) {
         return exitWithError(error.message);
       }
@@ -1362,7 +1436,7 @@ function run(argv = process.argv.slice(2)) {
         return exitWithError(parsed.error);
       }
 
-      return handleVerifyConfirm(cwd, parsed.constraintId, parsed.owner, parsed.payload, parsed.files, parsed.testCommands);
+      return handleVerifyConfirm(cwd, seedName, parsed.constraintId, parsed.owner, parsed.payload, parsed.files, parsed.testCommands);
     }
 
     if (subcommand === 'fail') {
@@ -1371,7 +1445,7 @@ function run(argv = process.argv.slice(2)) {
         return exitWithError(parsed.error);
       }
 
-      return handleVerifyFail(cwd, parsed.constraintId, parsed.owner, parsed.payload, parsed.files, parsed.testCommands);
+      return handleVerifyFail(cwd, seedName, parsed.constraintId, parsed.owner, parsed.payload, parsed.files, parsed.testCommands);
     }
 
     if (subcommand === 'status') {
@@ -1380,7 +1454,7 @@ function run(argv = process.argv.slice(2)) {
       }
 
       try {
-        return handleVerifyStatus(cwd);
+        return handleVerifyStatus(cwd, seedName);
       } catch (error) {
         return exitWithError(error.message);
       }

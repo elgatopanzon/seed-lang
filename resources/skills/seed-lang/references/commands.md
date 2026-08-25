@@ -1,15 +1,18 @@
 # Seed Commands
 
-Put the global repository option before the command:
+Put the global repository option before the command. Add `--seed NAME` to any
+command to select `seed/NAME/seed.yml` and `.seed/NAME` state:
 
 ```text
 seed --repo PATH COMMAND
+seed validate --seed ui
 ```
 
 ## Contract And Blueprint
 
 ```text
 seed init [--overwrite] [--genome ID] [--genomes ID[,ID...]]
+seed list
 seed validate
 seed diff [--no-color]
 seed blueprint [--json] [--color | --no-color] [--section ID] [--filter @ADDRESS]
@@ -20,6 +23,16 @@ seed blueprint diff [--no-color]
 `blueprint diff` compares the previous verification snapshot and current fully
 constructed blueprints, including genomes. `diff` shows lower-level compiled
 YAML changes.
+
+`list` reports each discovered contract: `master` for `seed/seed.yml`, then
+named Seeds found at `seed/NAME/seed.yml`.
+
+Named Seeds may reference compiled addresses, including artifacts, with
+`@SEED:ADDRESS`. The provenance-qualified form
+`@SEED:genome/GENOME:ADDRESS` requires the source address to come from that
+genome. Blueprints resolve and annotate these dependencies; Seed and Blueprint
+diffs report changes since the selected Seed's verification snapshot without
+adding source-Seed verification work.
 
 ## Genomes
 

@@ -22,10 +22,11 @@ as freedom only where the Seed leaves them unconstrained.
 
 1. Confirm `seed` is available on `PATH`.
 2. Work from the project root or put `--repo PATH` immediately after `seed`.
-3. If `seed/seed.yml` exists, default to Seed Driven Development.
-4. Run `seed validate` and stop on structural errors.
-5. Read `seed blueprint`, including `Global Policies` and applicable artifacts.
-6. Use `seed blueprint diff --no-color` for the complete constructed contract
+3. Add `--seed NAME` to select `seed/NAME/seed.yml` and its isolated `.seed/NAME` state; omit it for `seed/seed.yml` and `.seed/`.
+4. If the selected Seed file exists, default to Seed Driven Development.
+5. Run `seed validate` and stop on structural errors.
+6. Read `seed blueprint`, including `Global Policies` and applicable artifacts.
+7. Use `seed blueprint diff --no-color` for the complete constructed contract
    change. Use `seed diff --no-color` for lower-level compiled YAML diagnostics.
 
 ## Seed Driven Development
@@ -87,6 +88,12 @@ The address is `constraints.no-network`; reference it as
 `@constraints.no-network`. Artifact IDs may be referenced as `@sample-input` or
 `@artifacts.sample-input`. Any item mentioning an artifact must also list that
 artifact ID in its `artifacts:` field.
+
+Named Seeds can reference another Seed's compiled addresses with
+`@SEED:ADDRESS`. Use `@SEED:genome/GENOME:ADDRESS` to additionally require that
+the address came from a specific genome. External references are dependencies,
+not verification ownership: inspect them in blueprints and diffs, but do not
+claim or verify the source Seed's items from the dependent Seed.
 
 Valid sections:
 

@@ -32,6 +32,9 @@ function collectReferences(value) {
   const visit = (entry) => {
     if (typeof entry === 'string') {
       for (const match of entry.matchAll(REFERENCE_PATTERN)) {
+        if (entry[match.index + match[0].length] === ':') {
+          continue;
+        }
         refs.push(match[1]);
       }
       return;
@@ -168,7 +171,7 @@ function sectionItems(definition, items, selected, options) {
   return entries;
 }
 
-function compileBlueprint({ document, seedPath, genomes = [], provenance = {}, filters = [], section, limit, offset, partial = false } = {}) {
+function compileBlueprint({ document, seedPath, genomes = [], provenance = {}, externalReferences = [], filters = [], section, limit, offset, partial = false } = {}) {
   const inspectedRequirements = inspectRequirements(document.requirements);
   if (inspectedRequirements.errors.length > 0) {
     throw new Error(`Cannot build blueprint from invalid requirements: ${inspectedRequirements.errors.map((entry) => `${entry.path}: ${entry.message}`).join('; ')}`);
@@ -228,6 +231,7 @@ function compileBlueprint({ document, seedPath, genomes = [], provenance = {}, f
     },
     filters: filters.map(normalizeFilter),
     requirements: inspectedRequirements.requirements,
+    externalReferences,
     sections,
   };
 }
@@ -401,6 +405,15 @@ function renderMarkdown(blueprint, { includeSource = true, includeGenomes = true
 
   if (blueprint.filters.length > 0) {
     lines.push(`Filters: ${blueprint.filters.map((entry) => `@${entry}`).join(', ')}`);
+  }
+
+  if (blueprint.externalReferences?.length > 0) {
+    lines.push('', '## External Dependencies', '');
+    blueprint.externalReferences.forEach((reference) => {
+      const origin = sourceLabel(reference.provenance);
+      const genome = reference.genomeId ? ` · Genome: \`${reference.genomeId}\`` : '';
+      lines.push(`### ${reference.raw}`, '', `_Seed: \`${reference.seedName}\` · Address: \`${reference.resolvedAddress}\` · Source: \`${origin || reference.sourcePath}\`${genome}_`, '', compactYaml(reference.value), '');
+    });
   }
 
   blueprint.sections.forEach((section) => {

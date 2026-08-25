@@ -384,6 +384,9 @@ function collectReferences(value, path = '/') {
 
   if (typeof value === 'string') {
     for (const match of value.matchAll(REFERENCE_PATTERN)) {
+      if (value[match.index + match[0].length] === ':') {
+        continue;
+      }
       refs.push({ id: match[1], path });
     }
     return refs;
@@ -446,7 +449,7 @@ function validateBlockArtifactReferences(item, artifactIds, errors) {
       const declarationPath = joinPointer(joinPointer(item.path, 'artifacts'), index);
       if (!isString(id)) {
         pushError(errors, 'invalid-artifact-declaration', declarationPath, `${item.address} artifacts entries must be non-empty strings`);
-      } else if (!artifactIds.has(id)) {
+      } else if (!id.includes(':') && !artifactIds.has(id)) {
         pushError(errors, 'missing-artifact', declarationPath, `${item.address} references missing artifact ${id}`);
       }
     });
