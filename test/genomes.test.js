@@ -55,6 +55,11 @@ describe('seed genomes', () => {
       'architecture-single-component',
       'architecture-state-machine',
       'architecture-worker-queue',
+      'deploy-docker-compose',
+      'deploy-docker-compose-development',
+      'deploy-docker-compose-production',
+      'deploy-dockerfile',
+      'deploy-dockerfile-dotnet',
       'desktop-client',
       'desktop-dotnet',
       'desktop-electron',
@@ -363,6 +368,86 @@ describe('seed genomes', () => {
     const docker = compileGenomeDocument({ id: 'package-docker', cwd: process.cwd(), home: '' });
     assert.equal(docker.provenance['environment.docker-image'].path, 'builtin:package-docker');
     assert.equal(docker.provenance['constraints.docker-distribution'].path, 'builtin:package-docker');
+
+    const dockerfile = compileGenomeDocument({ id: 'deploy-dockerfile', cwd: process.cwd(), home: '' });
+    assert.equal(dockerfile.document.artifacts['deploy-dockerfile'].path, 'Dockerfile');
+    assert.equal(dockerfile.document.artifacts['deploy-dockerignore'].path, '.dockerignore');
+    assert.equal(dockerfile.document.constraints['dockerfile-build-contract'].policy, 'global');
+    assert.equal(dockerfile.document.constraints['dockerfile-build-runtime-separation'].policy, 'global');
+    assert.match(dockerfile.document.constraints['dockerfile-non-root-runtime'].description, /PUID.*PGID.*1000/i);
+    assert.match(dockerfile.document.constraints['dockerfile-linuxserver-runtime-parameters'].description, /TZ=Etc\/UTC.*UMASK=022/i);
+    assert.match(dockerfile.document.constraints['dockerfile-secret-file-environment'].description, /FILE__<NAME>/i);
+    assert.match(dockerfile.document.constraints['dockerfile-persistent-config-layout'].description, /\/config/i);
+    assert.match(dockerfile.document.constraints['dockerfile-exec-signal-contract'].description, /exec form/i);
+    assert.equal(dockerfile.provenance['verifications.deploy-dockerfile'].path, 'builtin:deploy-dockerfile');
+
+    const dockerfileDotnet = compileGenomeDocument({ id: 'deploy-dockerfile-dotnet', cwd: process.cwd(), home: '' });
+    assert.equal(dockerfileDotnet.provenance['artifacts.deploy-dockerfile'].path, 'builtin:deploy-dockerfile');
+    assert.match(dockerfileDotnet.document.constraints['dotnet-container-stages'].description, /SDK build stage/i);
+    assert.match(dockerfileDotnet.document.constraints['dotnet-container-command'].description, /exec-form dotnet/i);
+    assert.match(dockerfileDotnet.document.constraints['dotnet-container-identity-paths'].description, /PUID=1000.*PGID=1000/i);
+    assert.equal(dockerfileDotnet.provenance['verifications.deploy-dockerfile-dotnet'].path, 'builtin:deploy-dockerfile-dotnet');
+
+    const composeDevelopment = compileGenomeDocument({ id: 'deploy-docker-compose-development', cwd: process.cwd(), home: '' });
+    assert.equal(composeDevelopment.document.artifacts['compose-development'].path, 'compose.development.yml');
+    assert.equal(composeDevelopment.provenance['artifacts.deploy-dockerfile'].path, 'builtin:deploy-dockerfile');
+    assert.equal(composeDevelopment.provenance['artifacts.repo-gitignore'].path, 'builtin:repo-gitignore');
+    assert.match(composeDevelopment.document.constraints['compose-development-storage'].description, /host bind mounts/i);
+    assert.match(composeDevelopment.document.constraints['compose-development-gitignore'].description, /mutable repo-local.*covered by @repo-gitignore/i);
+    assert.match(composeDevelopment.document.behavior['compose-development-runtime-defaults'].description, /PUID.*PGID.*TZ.*UMASK/i);
+
+    const composeProduction = compileGenomeDocument({ id: 'deploy-docker-compose-production', cwd: process.cwd(), home: '' });
+    assert.equal(composeProduction.document.artifacts['compose-production'].path, 'compose.production.yml');
+    assert.equal(composeProduction.provenance['artifacts.deploy-dockerfile'].path, 'builtin:deploy-dockerfile');
+    assert.match(composeProduction.document.constraints['compose-production-source-boundary'].description, /source code/i);
+    assert.match(composeProduction.document.constraints['compose-production-storage'].description, /Compose-managed named volumes/i);
+    assert.match(composeProduction.document.constraints['compose-production-storage'].description, /backup and restore support status/i);
+    assert.match(composeProduction.document.constraints['compose-production-storage'].description, /unsupported or deferred/i);
+    assert.match(composeProduction.document.verifications['deploy-docker-compose-production'].evidence_required.join(' '), /raw copying of live managed database files/i);
+    assert.match(composeProduction.document.constraints['compose-production-runtime-hardening'].description, /non-root/i);
+    assert.match(composeProduction.document.constraints['compose-production-privileges'].description, /drop all Linux capabilities/i);
+    assert.match(composeProduction.document.constraints['compose-production-log-rotation'].description, /bounded container log rotation/i);
+    assert.match(composeProduction.document.constraints['compose-production-writable-paths'].description, /named volume.*bounded tmpfs/i);
+    assert.match(composeProduction.document.behavior['compose-production-runtime-defaults'].description, /PUID.*PGID.*TZ.*UMASK/i);
+
+    const composeProductionDeferredBackup = compileSeedDocument({
+      document: {
+        metadata: {
+          name: 'deferred-backup-compose',
+          summary: 'Production Compose contract with deferred backup and restore support.',
+        },
+        genomes: ['deploy-docker-compose-production'],
+        scope: {
+          included: 'Production Compose deployment.',
+          excluded: 'Built-in application backup and restore workflows during Phase 0.',
+        },
+        state: {
+          'backup-restore-support': 'Supported backup and restore procedures are deferred.',
+          'live-managed-file-copy': 'Raw copying of live managed database files is unsupported.',
+          'external-snapshot-quiescence': 'External snapshots require the application and database writer to be quiescent.',
+          'schema-compatibility': 'Schema migrations are unsupported and incompatible schemas fail visibly.',
+        },
+        errors: {
+          'incompatible-schema': 'Startup fails visibly when persisted schema data is incompatible.',
+        },
+        freedom: {
+          'future-backup-design': 'A supported backup and restore workflow may be designed in a later phase.',
+        },
+      },
+      cwd: process.cwd(),
+      home: '',
+    });
+    assert.equal(validateSeedDocument(composeProductionDeferredBackup.document).errors.length, 0);
+
+    const compose = compileGenomeDocument({ id: 'deploy-docker-compose', cwd: process.cwd(), home: '' });
+    assert.equal(compose.document.artifacts['compose-default'].path, 'compose.yml');
+    assert.equal(compose.document.artifacts['compose-development'].path, 'compose.development.yml');
+    assert.equal(compose.document.artifacts['compose-production'].path, 'compose.production.yml');
+    assert.match(compose.document.behavior['compose-default-development'].description, /top-level include/i);
+    assert.equal(compose.document.constraints['compose-default-thin-entrypoint'].policy, 'global');
+    assert.equal(compose.provenance['verifications.deploy-docker-compose-default'].path, 'builtin:deploy-docker-compose');
+    assert.equal(compose.provenance['verifications.deploy-docker-compose-development'].path, 'builtin:deploy-docker-compose-development');
+    assert.equal(compose.provenance['verifications.deploy-docker-compose-production'].path, 'builtin:deploy-docker-compose-production');
 
     const apiWeb = compileGenomeDocument({ id: 'monorepo-api-web', cwd: process.cwd(), home: '' });
     assert.equal(apiWeb.provenance['interfaces.http'].path, 'builtin:api-http');

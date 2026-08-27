@@ -1,0 +1,67 @@
+metadata:
+  name: deploy-docker-compose-development
+  summary: Docker Compose development deployment contract.
+  description: Requires a development Compose stack built from the canonical repository Dockerfile.
+genomes:
+  - deploy-dockerfile
+  - repo-gitignore
+artifacts:
+  compose-development:
+    path: compose.development.yml
+    description: Canonical Docker Compose configuration for local development.
+interfaces:
+  compose-development:
+    purpose: Developers build, start, inspect, and stop the local stack through Docker Compose.
+    examples:
+      - docker compose -f compose.development.yml config
+      - docker compose -f compose.development.yml up --build
+      - docker compose -f compose.development.yml down
+behavior:
+  compose-development-build:
+    description: The @compose-development stack builds services implemented by this repository from @deploy-dockerfile rather than an unrelated image definition.
+    artifacts:
+      - deploy-dockerfile
+      - compose-development
+  compose-development-feedback:
+    description: The @compose-development stack exposes the logs, ports, commands, and local configuration needed to exercise Seed-critical development workflows.
+    artifacts:
+      - compose-development
+  compose-development-runtime-defaults:
+    description: The @compose-development stack exposes PUID, PGID, TZ, and UMASK with defaults of 1000, 1000, Etc/UTC, and 022, and uses explicit FILE__ variables or secret mounts for file-backed secrets.
+    artifacts:
+      - compose-development
+constraints:
+  compose-development-storage:
+    description: Persistent development data uses explicit host bind mounts such as repo-local config or data directories; named volumes require an image or migration constraint documented by the Seed.
+    artifacts:
+      - compose-development
+    policy: global
+  compose-development-gitignore:
+    description: Every mutable repo-local directory bind-mounted by @compose-development is covered by @repo-gitignore so generated configuration, databases, caches, logs, uploads, and other runtime state cannot be committed; intentional examples, defaults, fixtures, and keep files remain trackable.
+    artifacts:
+      - compose-development
+      - repo-gitignore
+    policy: global
+  compose-development-secrets:
+    description: Development credentials and machine-specific values use environment references or ignored local env files and are not embedded as real values in the Compose file.
+    artifacts:
+      - compose-development
+    policy: global
+observability:
+  compose-development-diagnostics: Configuration, build, startup, and service failures remain visible through Docker Compose command output and service logs.
+verifications:
+  deploy-docker-compose-development:
+    title: Development Compose stack is valid and usable
+    description: Verify the development Compose file resolves, builds the repository services, and exercises a representative local workflow.
+    artifacts:
+      - compose-development
+      - deploy-dockerfile
+    method: Run docker compose config, start the development stack with a clean project name, exercise a representative Seed-critical workflow, inspect logs, then stop the stack and its created resources.
+    evidence_required:
+      - Exact Compose config command and successful result.
+      - Exact isolated startup and cleanup commands.
+      - Repository services and Dockerfile build paths exercised.
+      - Persistent bind mounts, published ports, and environment inputs reviewed.
+      - Git ignore diagnostics proving every mutable repo-local mount path is ignored while intentional examples, defaults, fixtures, and keep files remain trackable.
+      - Representative workflow and relevant service log results.
+      - Resolved PUID, PGID, TZ, UMASK, and FILE__ secret-file inputs without disclosed secret values.

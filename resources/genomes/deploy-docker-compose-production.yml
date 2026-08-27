@@ -1,0 +1,99 @@
+metadata:
+  name: deploy-docker-compose-production
+  summary: Docker Compose production deployment contract.
+  description: Requires a production Compose stack built from the canonical repository Dockerfile.
+genomes:
+  - deploy-dockerfile
+artifacts:
+  compose-production:
+    path: compose.production.yml
+    description: Canonical Docker Compose configuration for production deployment.
+interfaces:
+  compose-production:
+    purpose: Operators validate, deploy, inspect, restart, and stop the production stack through Docker Compose.
+    examples:
+      - docker compose -f compose.production.yml config
+      - docker compose -f compose.production.yml up -d --build
+      - docker compose -f compose.production.yml ps
+behavior:
+  compose-production-build:
+    description: The @compose-production stack builds services implemented by this repository from @deploy-dockerfile or uses an explicitly versioned image produced from that Dockerfile.
+    artifacts:
+      - deploy-dockerfile
+      - compose-production
+  compose-production-lifecycle:
+    description: Long-running services in @compose-production declare restart, dependency, and health behavior appropriate to their Seed-critical production workflows.
+    artifacts:
+      - compose-production
+  compose-production-runtime-defaults:
+    description: The @compose-production stack exposes PUID, PGID, TZ, and UMASK with explicit defaults of 1000, 1000, Etc/UTC, and 022, and injects file-backed secrets through FILE__ variables or an equivalent declared secret mount.
+    artifacts:
+      - compose-production
+constraints:
+  compose-production-storage:
+    description: Persistent production storage uses explicitly declared Compose-managed named volumes by default, with documented ownership, persistence boundaries, backup and restore support status, quiescence requirements, retention, and migration expectations. Bind mounts require a declared host-integration or operational constraint. Backup or restore capability must never be inferred from persistent storage. When backup or restore is supported, exact procedures and executable verification evidence are required. When either capability is unsupported or deferred, the contract must state its limitations, required quiescence, and prohibited unsafe operations.
+    artifacts:
+      - compose-production
+    policy: global
+  compose-production-source-boundary:
+    description: Production services must not depend on writable bind mounts of repository source code or development-only tooling.
+    artifacts:
+      - compose-production
+    policy: global
+  compose-production-secrets:
+    description: Secrets and host-specific values use runtime environment references, secret files, or an external secret mechanism and are never committed as real values.
+    artifacts:
+      - compose-production
+    policy: global
+  compose-production-exposure:
+    description: Published ports, networks, privileges, capabilities, and host mounts expose only the access required by declared production interfaces.
+    artifacts:
+      - compose-production
+    policy: global
+  compose-production-runtime-hardening:
+    description: Every long-running service in @compose-production enforces a non-root runtime user, enables init handling, declares a bounded stop grace period, and defines a reliable health check for its Seed-critical availability contract.
+    artifacts:
+      - compose-production
+    policy: global
+  compose-production-privileges:
+    description: Production services enable no-new-privileges, drop all Linux capabilities by default, add back only individually documented required capabilities, and do not use privileged mode.
+    artifacts:
+      - compose-production
+    policy: global
+  compose-production-writable-paths:
+    description: Production services use a read-only root filesystem when compatible and declare every writable data, configuration, cache, upload, log, or database path as a named volume and every ephemeral temporary path as a bounded tmpfs; bind mounts are limited to explicitly required host integration.
+    artifacts:
+      - compose-production
+    policy: global
+  compose-production-log-rotation:
+    description: Each long-running service configures bounded container log rotation appropriate to its expected output volume and operational retention needs.
+    artifacts:
+      - compose-production
+    policy: global
+observability:
+  compose-production-diagnostics: Operators can inspect service state, health, startup failures, and Seed-critical runtime diagnostics using Compose status and logs.
+verifications:
+  deploy-docker-compose-production:
+    title: Production Compose stack is valid and deployable
+    description: Verify the production Compose file resolves without embedded secrets and supports an isolated deployment smoke test of Seed-critical services.
+    artifacts:
+      - compose-production
+      - deploy-dockerfile
+    method: Resolve the production configuration with docker compose config, review its security and persistence boundaries, deploy it under an isolated project name, exercise health and representative runtime checks, then remove the test deployment.
+    evidence_required:
+      - Exact Compose config command and successful result without disclosed secret values.
+      - Exact isolated deployment, status, log, and cleanup commands.
+      - Image tags or Dockerfile build paths and resolved service commands.
+      - Named-volume declarations, service mount targets, effective ownership, persistence boundaries, retention, and migration expectations reviewed.
+      - Explicit backup and restore support status for every persistent store without inferring capability from storage existence.
+      - For supported backup or restore, exact procedures and successful executable verification evidence covering required quiescence and restored-data validation.
+      - For unsupported or deferred backup or restore, explicit limitations, required quiescence for any external snapshot, and prohibited unsafe operations such as raw copying of live managed database files.
+      - Schema migration support status, including visible failure behavior for incompatible schemas when migrations are unsupported.
+      - Port, network, privilege, capability, and host-mount exposure reviewed.
+      - Health and representative Seed-critical runtime results.
+      - Non-root user, init, stop grace period, and graceful shutdown results for each long-running service.
+      - Health-check transition and dependency-readiness results.
+      - Capability, no-new-privileges, privileged-mode, read-only-root, and writable-path review.
+      - Resolved logging driver and bounded rotation settings.
+      - Resolved PUID, PGID, TZ, UMASK, and FILE__ secret-file inputs without disclosed secret values.
+      - Every production bind mount justified by a declared host-integration or operational constraint.

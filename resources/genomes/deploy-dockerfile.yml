@@ -1,0 +1,119 @@
+metadata:
+  name: deploy-dockerfile
+  summary: Dockerfile deployment contract.
+  description: Requires a repository Dockerfile that builds a runnable Docker or OCI image.
+artifacts:
+  deploy-dockerfile:
+    path: Dockerfile
+    description: Canonical container image build definition.
+  deploy-dockerignore:
+    path: .dockerignore
+    description: Canonical Docker build-context exclusion file.
+interfaces:
+  docker-image-build:
+    purpose: Operators build the project image through the repository Dockerfile.
+    examples:
+      - docker build --file Dockerfile --tag <image>:<tag> .
+environment:
+  docker-engine: Image build and runtime verification require a Docker-compatible engine.
+  container-runtime-identity: PUID and PGID select the application process identity and default independently to 1000 and 1000.
+  container-timezone: TZ selects the container timezone and defaults to Etc/UTC.
+  container-umask: UMASK selects the application file-creation mask and defaults to "022".
+  container-secret-files: FILE__<NAME> may point to a readable secret file whose contents initialize environment variable <NAME> without embedding its value in the image or Compose file.
+constraints:
+  dockerfile-base-image-contract:
+    description: Base images use explicit project-compatible versions or immutable digests; floating latest tags are not permitted.
+    artifacts:
+      - deploy-dockerfile
+    policy: global
+  dockerfile-build-runtime-separation:
+    description: When compilation, publishing, asset generation, or other build tooling is required, @deploy-dockerfile uses separate build and runtime stages and copies only runtime outputs into the final image.
+    artifacts:
+      - deploy-dockerfile
+    policy: global
+  dockerfile-build-contract:
+    description: The @deploy-dockerfile and @deploy-dockerignore artifacts provide a deterministic repository-root build context containing every file required for Seed-critical runtime behavior.
+    artifacts:
+      - deploy-dockerfile
+      - deploy-dockerignore
+    policy: global
+  dockerfile-runtime-contract:
+    description: The image built from @deploy-dockerfile declares the runtime command, working directory, exposed interfaces, and runtime dependencies required by the Seed.
+    artifacts:
+      - deploy-dockerfile
+    policy: global
+  dockerfile-non-root-runtime:
+    description: The final image creates or selects a non-root application identity, defaults its effective PUID and PGID to 1000 and 1000, permits runtime PUID and PGID overrides, grants it ownership only of explicitly writable runtime paths, and never runs the application process as UID or GID 0.
+    artifacts:
+      - deploy-dockerfile
+    policy: global
+  dockerfile-identity-init-boundary:
+    description: If runtime identity remapping requires a privileged initialization phase, that phase validates numeric non-root PUID and PGID values, changes only the designated application account and declared writable-path ownership, then irreversibly drops privileges before starting the application.
+    artifacts:
+      - deploy-dockerfile
+    policy: global
+  dockerfile-linuxserver-runtime-parameters:
+    description: The runtime supports LinuxServer-style PUID=1000, PGID=1000, TZ=Etc/UTC, and UMASK=022 defaults, applies overrides before application startup, and reports effective identity, timezone, umask, and writable paths without exposing secret values.
+    artifacts:
+      - deploy-dockerfile
+    policy: global
+  dockerfile-persistent-config-layout:
+    description: Persistent application configuration uses /config by default; additional data, cache, log, upload, media, database, and temporary paths are explicit rather than hidden in the image writable layer.
+    artifacts:
+      - deploy-dockerfile
+    policy: global
+  dockerfile-secret-file-environment:
+    description: For each FILE__<NAME> runtime variable, initialization reads the referenced file into environment variable <NAME>, fails clearly when the file is missing or unreadable, and never logs the resulting secret value.
+    artifacts:
+      - deploy-dockerfile
+    policy: global
+  dockerfile-exec-signal-contract:
+    description: The final entrypoint or command uses exec form, preserves operating-system signal delivery, and permits graceful application shutdown.
+    artifacts:
+      - deploy-dockerfile
+    policy: global
+  dockerfile-copy-boundary:
+    description: The final image excludes repository metadata, source files not required at runtime, tests, local data, secrets, build outputs outside the canonical publish result, and other development-only content; @deploy-dockerignore explicitly excludes irrelevant build-context content.
+    artifacts:
+      - deploy-dockerfile
+      - deploy-dockerignore
+    policy: global
+  dockerfile-runtime-configuration:
+    description: Environment-specific configuration and secrets are injected at runtime rather than copied or assigned as real values in image layers.
+    artifacts:
+      - deploy-dockerfile
+    policy: global
+  dockerfile-final-image-hygiene:
+    description: The final image contains only required runtime libraries and application outputs, without compiler toolchains, package-manager caches, temporary build files, or unnecessary package indexes.
+    artifacts:
+      - deploy-dockerfile
+    policy: global
+  dockerfile-secret-boundary:
+    description: Image layers and build arguments produced by @deploy-dockerfile must not contain committed credentials, secret values, or private runtime configuration.
+    artifacts:
+      - deploy-dockerfile
+    policy: global
+observability:
+  docker-build-startup-errors: Image build and container startup failures expose actionable diagnostics through command output or container logs.
+verifications:
+  deploy-dockerfile:
+    title: Dockerfile builds a runnable project image
+    description: Verify the canonical Dockerfile builds from a clean repository context and the resulting image exercises a representative Seed-critical runtime path.
+    artifacts:
+      - deploy-dockerfile
+      - deploy-dockerignore
+    method: Build the image with docker build using Dockerfile, inspect the resolved image configuration, then run a representative smoke command or service startup check.
+    evidence_required:
+      - Exact docker build command and successful result.
+      - Built image identifier and resolved entrypoint or command.
+      - Representative container runtime command and result.
+      - Confirmation that no credential or secret value is baked into image history or configuration.
+      - Final image user, working directory, exposed interfaces, writable paths, and exec-form command.
+      - Build-stage versus runtime-stage contents and final image dependency review.
+      - Docker build-context and .dockerignore review covering source, tests, VCS data, local data, secrets, and generated output.
+      - Graceful stop result showing the application receives and handles the container stop signal.
+      - Default PUID=1000 and PGID=1000 application-process identity and writable-path ownership result.
+      - Overridden non-root PUID and PGID result proving bind-mounted files use the selected host-compatible ownership.
+      - Default and overridden TZ and UMASK behavior.
+      - FILE__ secret-file success, missing-file failure, and secret-redaction results.
+      - /config persistence plus every additional writable runtime path reviewed.

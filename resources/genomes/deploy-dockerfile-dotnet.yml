@@ -1,0 +1,60 @@
+metadata:
+  name: deploy-dockerfile-dotnet
+  summary: Optimized .NET Dockerfile deployment contract.
+  description: Adds concrete multi-stage .NET SDK, publish, runtime, native dependency, and non-root image requirements.
+genomes:
+  - deploy-dockerfile
+environment:
+  dotnet-container-runtime: The application runs from an official or explicitly compatible .NET runtime image matching the repository's pinned target framework and SDK contract.
+constraints:
+  dotnet-container-stages:
+    description: The @deploy-dockerfile uses a .NET SDK build stage and a runtime-only final stage; ASP.NET Core applications use the matching ASP.NET runtime image, while non-web executables use the matching .NET runtime image.
+    artifacts:
+      - deploy-dockerfile
+    policy: global
+  dotnet-container-version-alignment:
+    description: SDK and runtime image versions match each other and the target framework, global.json, project files, and other pinned .NET version authorities declared by the repository.
+    artifacts:
+      - deploy-dockerfile
+    policy: global
+  dotnet-container-restore-cache:
+    description: The build stage copies solution files, project files, central build and package properties, NuGet configuration, and lock files before source code so dotnet restore remains a reusable cache layer without changing dependency semantics.
+    artifacts:
+      - deploy-dockerfile
+    policy: global
+  dotnet-container-publish:
+    description: The build stage performs a configuration-explicit dotnet publish and copies only the canonical publish output into the final runtime image.
+    artifacts:
+      - deploy-dockerfile
+    policy: global
+  dotnet-container-native-dependencies:
+    description: The final image installs only native runtime packages required by declared behavior, including ICU globalization, timezone data, certificates, or native SQLite support when the selected base image and application actually require them.
+    artifacts:
+      - deploy-dockerfile
+    policy: global
+  dotnet-container-identity-paths:
+    description: The final application process defaults to PUID=1000 and PGID=1000, accepts validated non-root overrides through the inherited runtime identity contract, and explicitly declares and owns /config plus application data, cache, logs, uploads, and database paths without granting broad filesystem write access.
+    artifacts:
+      - deploy-dockerfile
+    policy: global
+  dotnet-container-command:
+    description: The final image starts the published application through an exec-form dotnet <assembly>.dll command or an exec-form published apphost, with no shell wrapper that interferes with signals or exit status.
+    artifacts:
+      - deploy-dockerfile
+    policy: global
+verifications:
+  deploy-dockerfile-dotnet:
+    title: .NET image is optimized, compatible, and runnable
+    description: Verify the Dockerfile restores and publishes in an SDK stage, produces a runtime-only non-root final image, supplies required native libraries, and starts the published .NET application correctly.
+    artifacts:
+      - deploy-dockerfile
+      - deploy-dockerignore
+    method: Inspect the resolved Dockerfile stages and version authorities, build the image from a clean context, inspect its files, packages, user, ownership, and command, then exercise application startup, native dependency behavior, persistence paths, and graceful shutdown.
+    evidence_required:
+      - SDK, runtime, target-framework, and global.json or project-file version mapping.
+      - Restore-layer inputs and cache-boundary review.
+      - Exact dotnet publish command and canonical publish output copied to the final stage.
+      - Final image package inventory showing no SDK, compiler, NuGet cache, or build outputs outside the publish result.
+      - ICU, timezone, certificate, and native SQLite requirement disposition with runtime proof where applicable.
+      - Default and overridden effective PUID and PGID plus owned writable-path inspection.
+      - Exec-form dotnet assembly or apphost command, startup result, exit status, and graceful shutdown result.

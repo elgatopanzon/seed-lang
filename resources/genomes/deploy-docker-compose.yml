@@ -1,0 +1,44 @@
+metadata:
+  name: deploy-docker-compose
+  summary: Complete Docker Compose deployment contract.
+  description: Composes development and production contracts with development as the default Compose entrypoint.
+genomes:
+  - deploy-docker-compose-development
+  - deploy-docker-compose-production
+artifacts:
+  compose-default:
+    path: compose.yml
+    description: Default Docker Compose entrypoint importing the development stack.
+interfaces:
+  compose-default:
+    purpose: Developers use ordinary Docker Compose commands without selecting a file explicitly.
+    examples:
+      - docker compose config
+      - docker compose up --build
+      - docker compose down
+behavior:
+  compose-default-development:
+    description: The @compose-default file uses the Compose top-level include mechanism to import @compose-development as its default stack, so docker compose up runs the development deployment.
+    artifacts:
+      - compose-default
+      - compose-development
+constraints:
+  compose-default-thin-entrypoint:
+    description: The @compose-default file remains a thin import of @compose-development and must not duplicate or override the development service model.
+    artifacts:
+      - compose-default
+      - compose-development
+    policy: global
+verifications:
+  deploy-docker-compose-default:
+    title: Default Compose entrypoint resolves to development
+    description: Verify compose.yml imports the development Compose file and zero-argument Compose commands resolve the development stack.
+    artifacts:
+      - compose-default
+      - compose-development
+    method: Inspect compose.yml for a top-level include of compose.development.yml, then compare docker compose config with docker compose -f compose.development.yml config and run the default development startup and cleanup path.
+    evidence_required:
+      - compose.yml top-level include declaration.
+      - Successful zero-argument docker compose config result.
+      - Resolved default and explicit development configuration comparison.
+      - Successful default docker compose up and docker compose down smoke results.
