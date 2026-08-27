@@ -7,6 +7,7 @@ const { compileBlueprint, renderMarkdown } = require('./blueprint');
 const { loadSeed, seedPaths } = require('./seed-file');
 const { inspectRequirements, renderRequirementsWarning } = require('./requirements');
 const { resolveExternalReferences } = require('./external-references');
+const { canonicalJson } = require('./canonical-json');
 
 function snapshotPath(cwd, seedName) {
   return join(cwd ?? process.cwd(), seedPaths(seedName).statePath, 'seed.snapshot.yml');
@@ -18,8 +19,9 @@ function dependencySnapshotPath(cwd, seedName) {
 
 function externalDependencyDiff(cwd, seedName, document, noColor) {
   const storedPath = dependencySnapshotPath(cwd, seedName);
-  const before = existsSync(storedPath) ? readFileSync(storedPath, 'utf8') : '[]\n';
-  const current = JSON.stringify(resolveExternalReferences({ cwd, seedName, document }), null, 2) + '\n';
+  const stored = existsSync(storedPath) ? JSON.parse(readFileSync(storedPath, 'utf8')) : [];
+  const before = canonicalJson(stored, 2) + '\n';
+  const current = canonicalJson(resolveExternalReferences({ cwd, seedName, document }), 2) + '\n';
   const changes = buildLineDiff(before, current);
   if (!changes.some((entry) => entry.kind !== 'same')) return '';
   return '\nExternal dependency changes:\n' + renderDiff(changes, {

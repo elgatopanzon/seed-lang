@@ -316,6 +316,14 @@ describe('seed cli', () => {
       assert.equal(runCli(['init', '--genome', 'cli-nodejs'], cwd).code, 0);
       assert.equal(runCli(['init', '--seed', 'ui'], cwd).code, 0);
 
+      const masterPath = path.join(cwd, DEFAULT_SEED_PATH);
+      const master = parse(fs.readFileSync(masterPath, 'utf8'));
+      master.behavior['contract-authority'].presentation = {
+        zebra: 'last',
+        alpha: 'first',
+      };
+      fs.writeFileSync(masterPath, stringify(master), 'utf8');
+
       const uiPath = path.join(cwd, 'seed', 'ui', 'seed.yml');
       const ui = parse(fs.readFileSync(uiPath, 'utf8'));
       ui.behavior['core-dependencies'] = {
@@ -336,8 +344,19 @@ describe('seed cli', () => {
       const dependencies = JSON.parse(fs.readFileSync(path.join(cwd, '.seed', 'ui', 'dependencies.snapshot.json'), 'utf8'));
       assert.equal(dependencies.every((entry) => entry.sourcePath === DEFAULT_SEED_PATH), true);
       assert.equal(dependencies.some((entry) => entry.provenance.path === 'builtin:cli-nodejs'), true);
-      const masterPath = path.join(cwd, DEFAULT_SEED_PATH);
-      const master = parse(fs.readFileSync(masterPath, 'utf8'));
+
+      master.behavior['contract-authority'] = {
+        presentation: {
+          alpha: 'first',
+          zebra: 'last',
+        },
+        description: master.behavior['contract-authority'].description,
+      };
+      fs.writeFileSync(masterPath, stringify(master), 'utf8');
+      const reorderedDiff = runCli(['diff', '--seed', 'ui', '--no-color'], cwd);
+      assert.equal(reorderedDiff.code, 0);
+      assert.equal(reorderedDiff.stdout.includes('External dependency changes'), false);
+
       master.behavior['contract-authority'].description = 'Changed authoritative core contract.';
       fs.writeFileSync(masterPath, stringify(master), 'utf8');
 

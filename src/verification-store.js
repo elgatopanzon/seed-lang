@@ -11,6 +11,7 @@ const { spawnSync } = require('node:child_process');
 const { parse } = require('yaml');
 const { dirname, isAbsolute, join, relative, resolve, sep } = require('node:path');
 const { loadSeed, seedPaths } = require('./seed-file');
+const { canonicalJson } = require('./canonical-json');
 const { collectGlobalPolicyItems, collectPresentAddressableItems, normalizeAddressableSection } = require('./validation');
 
 const REFERENCE_PATTERN = /@([A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)*)/g;
@@ -575,7 +576,7 @@ function readSessionState(cwd, seedName, sessionId, sourceLabel) {
   if (seedHash(snapshotText) !== state.seedHash) {
     throw new Error(`Corrupt session state at ${sourceLabel}: seedHash does not match snapshot.`);
   }
-  return state;
+  return reconcileSessionState(cwd, seedName, state);
 }
 
 function normalizeNow(now) {
@@ -590,6 +591,44 @@ function buildSessionItems(seedDocument) {
   ];
   assertUniqueSessionItems(items);
   return items;
+}
+
+function reconcileSessionState(cwd, seedName, state) {
+  const root = workspaceRoot(cwd);
+  const currentSeedPath = resolve(root, seedPaths(seedName).seedPath);
+  if (!existsSync(currentSeedPath)) {
+    return state;
+  }
+
+  const currentSeed = loadSeed({ cwd, seedName });
+  const currentItems = buildSessionItems(currentSeed.document);
+  const storedById = new Map(state.items.map((item) => [item.id, item]));
+  const preservedFields = [
+    'status',
+    'claim',
+    'attempts',
+    'evidence',
+    'reason',
+    'evidence_files',
+    'test_commands',
+    'seed_evidence',
+  ];
+
+  state.items = currentItems.map((current) => {
+    const stored = storedById.get(current.id);
+    if (!stored || stored.address !== current.address || stored.source !== current.source) {
+      return current;
+    }
+
+    const reconciled = { ...current };
+    preservedFields.forEach((field) => {
+      if (stored[field] !== undefined) {
+        reconciled[field] = structuredClone(stored[field]);
+      }
+    });
+    return reconciled;
+  });
+  return state;
 }
 
 function isClaimStale(claim, now) {
@@ -985,7 +1024,7 @@ function startSession({
   withLock(lockPath(cwd, seedName, sessionId), () => {
     ensureStateDir(sourceSnapshotPath);
     writeFileSync(sourceSnapshotPath, seedText, 'utf8');
-    writeFileSync(dependencySnapshotPath(cwd, seedName), JSON.stringify(externalReferences, null, 2) + '\n', 'utf8');
+    writeFileSync(dependencySnapshotPath(cwd, seedName), canonicalJson(externalReferences, 2) + '\n', 'utf8');
     writeJsonAtomically(sessionPath(cwd, seedName, sessionId), session);
   }, { waitMs: lockWaitMs });
 
@@ -1247,7 +1286,7 @@ function resetSession({
 }
 
 function itemFingerprint(item) {
-  return JSON.stringify(item.value ?? null);
+  return canonicalJson(item.value ?? null);
 }
 
 function addressFingerprints(document) {
@@ -1404,7 +1443,7 @@ function syncSession({
     });
 
     writeFileSync(snapshotPath(cwd, seedName), seed.text, 'utf8');
-    writeFileSync(dependencySnapshotPath(cwd, seedName), JSON.stringify(externalReferences, null, 2) + '\n', 'utf8');
+    writeFileSync(dependencySnapshotPath(cwd, seedName), canonicalJson(externalReferences, 2) + '\n', 'utf8');
     state.seedHash = seedHash(seed.text);
     state.updatedAt = nowValue;
     state.items = nextItems;

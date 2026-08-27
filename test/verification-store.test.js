@@ -1052,6 +1052,118 @@ describe('verification store', () => {
     });
   });
 
+  test('Seed address fingerprints ignore mapping key order but preserve array order', () => {
+    withTempDir((cwd) => {
+      fs.mkdirSync(path.join(cwd, 'seed'), { recursive: true });
+      const seedPath = path.join(cwd, 'seed', 'seed.yml');
+      const originalDocument = {
+        behavior: {
+          settings: {
+            description: 'Ordered settings contract.',
+            options: {
+              zebra: {
+                enabled: true,
+                limits: { min: 1, max: 2 },
+              },
+              alpha: 'first',
+            },
+            examples: ['first', 'second'],
+          },
+        },
+        verifications: [{
+          id: 'verify-settings',
+          title: 'Verify settings',
+          description: 'Verify @behavior.settings.',
+          method: 'Inspect settings behavior.',
+          evidence_required: ['Settings evidence.'],
+        }],
+      };
+      const seedText = stringify(originalDocument);
+      fs.writeFileSync(seedPath, seedText, 'utf8');
+      startSession({ cwd, seedDocument: originalDocument, seedText });
+
+      const reorderedMappings = {
+        behavior: {
+          settings: {
+            examples: ['first', 'second'],
+            options: {
+              alpha: 'first',
+              zebra: {
+                limits: { max: 2, min: 1 },
+                enabled: true,
+              },
+            },
+            description: 'Ordered settings contract.',
+          },
+        },
+        verifications: originalDocument.verifications,
+      };
+      fs.writeFileSync(seedPath, stringify(reorderedMappings), 'utf8');
+      assert.deepEqual(getStatus({ cwd }).modifiedSeedAddresses, []);
+
+      reorderedMappings.behavior.settings.examples = ['second', 'first'];
+      fs.writeFileSync(seedPath, stringify(reorderedMappings), 'utf8');
+      assert.deepEqual(getStatus({ cwd }).modifiedSeedAddresses, ['behavior.settings']);
+    });
+  });
+
+  test('incremental sessions add newly compiled genome verification items as pending', () => {
+    withTempDir((cwd) => {
+      fs.mkdirSync(path.join(cwd, 'seed'), { recursive: true });
+      const seedPath = path.join(cwd, 'seed', 'seed.yml');
+      const document = {
+        behavior: {
+          counts: 'Count every character exactly.',
+        },
+        verifications: [{
+          id: 'manual-counts',
+          title: 'Manual counts',
+          description: 'Verify @behavior.counts manually.',
+          method: 'Inspect implementation.',
+          evidence_required: ['Manual evidence.'],
+        }],
+      };
+      const seedText = stringify(document);
+      fs.writeFileSync(seedPath, seedText, 'utf8');
+      startSession({ cwd, seedDocument: document, seedText });
+
+      ['manual-counts', 'implicit-behavior-counts'].forEach((itemId, index) => {
+        claimItem({ cwd, itemId, owner: 'worker-A', now: () => 1_000 + index * 2_000 });
+        confirmItem({
+          cwd,
+          itemId,
+          owner: 'worker-A',
+          files: ['implementation.js'],
+          testCommands: [PASS_CMD],
+          evidence: `${itemId} verified before genome addition`,
+          now: () => 2_000 + index * 2_000,
+        });
+      });
+      assert.equal(getStatus({ cwd }).satisfied, true);
+
+      document.genomes = ['verify-unit-tests'];
+      fs.writeFileSync(seedPath, stringify(document), 'utf8');
+
+      const status = getStatus({ cwd });
+      assert.equal(status.total, 4);
+      assert.equal(status.verified, 2);
+      assert.equal(status.pending, 2);
+      assert.equal(status.completed, false);
+      assert.equal(status.satisfied, false);
+      assert.ok(status.modifiedSeedAddresses.includes('constraints.unit-test-coverage'));
+      assert.ok(status.modifiedSeedAddresses.includes('verifications.unit-tests'));
+
+      const pendingIds = getPendingItems({ cwd }).map((item) => item.id);
+      assert.ok(pendingIds.includes('unit-tests'));
+      assert.ok(pendingIds.includes('implicit-constraints-unit-test-coverage'));
+
+      const claimed = claimItem({ cwd, itemId: 'unit-tests', owner: 'worker-B', now: () => 6_000 });
+      assert.equal(claimed.item.status, 'claimed');
+      const persisted = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      assert.equal(persisted.items.length, 4);
+    });
+  });
+
   test('legacy terminal evidence without test commands expires and check reruns stored commands', () => {
     withTempDir((cwd) => {
       startSession({
