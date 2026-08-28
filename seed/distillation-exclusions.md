@@ -116,7 +116,7 @@ All entries below are `UiDeferred`, never master or polish work for this Seed.
 
 | Genome or family | Current relation | Deferred reason |
 | --- | --- | --- |
-| `cli-color-output`, `cli-no-color` | ANSI and plain modes exist | Palette, detection presentation, and style acceptance are visual. |
+| `cli-color-output`, `cli-no-color` | ANSI and plain modes exist | Palette, detection presentation, and style acceptance are visual. Master separately preserves ANSI-free semantic accessibility without adopting either UI genome. |
 | `cli-table-output` | Genome listing uses a wrapped table | Geometry, column allocation, and wrapping are visual. |
 | `cli-progress-output` | Some status/report labels resemble progress | No stable progress interaction contract exists. |
 | `ui-visual-regression` | Deterministic rendering exists in parts | No approved frames, comparator, visual diffs, mutation proof, or baseline workflow. |

@@ -73,6 +73,9 @@ artifacts:
   distillation-exclusions:
     path: seed/distillation-exclusions.md
     description: Complete deferred visual-interface inventory and near-fit non-UI genome review.
+  seed-evidence-scripts:
+    path: seed/scripts
+    description: Deterministic disposable-state checks needed beyond the existing test suite.
 
 interfaces:
   cli:
@@ -178,6 +181,14 @@ interfaces:
         - seed --help
 
 behavior:
+  readme-content:
+    description: >-
+      The root README states product purpose and prototype status, prerequisites,
+      repository and skill installation, quick-start usage, Seed structure,
+      genomes, blueprints and diffs, standalone verification workflow, command
+      summary, repository layout, development checks, and current boundaries.
+    artifacts:
+      - repo-readme
   contract-language:
     document-model:
       description: >-
@@ -318,6 +329,11 @@ behavior:
         Normal human and machine result data is written to stdout. Parser and
         caught operational exceptions use concise Error-prefixed stderr text;
         validation and verification result diagnostics may remain on stdout.
+    accessible-plain-output:
+      description: >-
+        Human-readable output remains usable without ANSI decoration. Non-TTY
+        output is plain by default; NO_COLOR, TERM=dumb, and supported
+        --no-color paths suppress ANSI without removing semantic content.
 
 errors:
   contract-input:
@@ -332,9 +348,11 @@ errors:
       without silently selecting another location.
   genomes:
     description: >-
-      Unknown genomes, malformed definitions or selectors, unmatched selectors
-      or exclusions, broken references, cycles, and recursion overflow fail with
-      the relevant genome or source context.
+      Operations that load, compile, blueprint, or validate genomes fail for
+      unknown or malformed definitions, malformed or unmatched selectors and
+      exclusions, broken references, cycles, and recursion overflow with relevant
+      genome or source context. Genome listing may retain a malformed entry with
+      an empty description instead of failing while reading presentation metadata.
   cross-seed-references:
     description: >-
       Missing source Seeds or addresses, self-reference, and genome provenance
@@ -510,6 +528,48 @@ freedom:
       require explicit contract changes rather than inference from this freedom.
 
 verifications:
+  unit-tests:
+    title: Unit tests pass
+    description: Verify isolated Seed-critical behavior through the repository test suite.
+    method: Run npm test from the repository root as the shared test producer.
+    evidence_required:
+      - Exact npm test command and exit status.
+      - Complete passing summary or failing diagnostics from all test files.
+      - Confirmation that fixture repositories and homes were disposable and cleaned.
+    artifacts:
+      - test-contract
+  integration-tests:
+    title: Integration tests pass
+    description: Verify integrated CLI and filesystem workflows through the repository test suite.
+    method: Run npm test from the repository root as the shared test producer.
+    evidence_required:
+      - Exact npm test command and exit status.
+      - Complete passing summary or failing diagnostics from all test files.
+      - Confirmation that fixture repositories and homes were disposable and cleaned.
+    artifacts:
+      - test-contract
+  repo-readme:
+    title: Repository README is accurate and safely executable
+    description: >-
+      Verify @repo-readme contains the actual project entrypoint information,
+      inventory every shell command, and use @seed-evidence-scripts to exercise
+      safe real CLI paths only in disposable repository and user-home locations.
+    method: >-
+      Reuse npm test as the shared test producer, then run node
+      seed/scripts/verify-readme.js from the repository root. The verifier
+      classifies every README shell command, rejects unknown command forms, and
+      executes representative project, genome, verification, named-Seed, and
+      skill-installation paths under a temporary repository, HOME, CODEX_HOME,
+      and CLAUDE_HOME that it removes in a finally block. Network/global-install,
+      placeholder, interactive pager, and terminal evidence-transition examples
+      are inspected but not executed.
+    evidence_required:
+      - Exact npm test and README verifier commands with exit statuses.
+      - Complete command-inventory diagnostics on failure.
+      - Confirmation that repository files and real user skill homes were unchanged.
+    artifacts:
+      - repo-readme
+      - seed-evidence-scripts
   contract-language-behavior:
     title: Seed language and reference behavior passes
     description: >-
@@ -548,16 +608,44 @@ verifications:
       verification transitions, large machine output, and @portable-skill
       installation without treating terminal presentation assertions as master
       acceptance.
-    method: >-
-      Run node --test --test-name-pattern='global --repo|named Seed|cross-Seed|validate|verify|install-skill|large status output'
-      test/cli.test.js from the repository root.
+    method: Run npm test from the repository root as the shared test producer.
     evidence_required:
-      - Exact focused command and selected test names.
-      - Passing summary or complete failure diagnostics.
-      - Confirmation that temporary homes and repositories were cleaned.
+      - Exact npm test command and exit status.
+      - Passing summary or complete CLI workflow diagnostics.
+      - Confirmation that temporary homes and repositories were disposable and cleaned.
     artifacts:
       - test-contract
       - portable-skill
+  accessible-plain-output:
+    title: ANSI-free output preserves semantic content
+    description: >-
+      Exercise non-TTY, NO_COLOR, TERM=dumb, and supported --no-color paths and
+      confirm they suppress ANSI without losing readable command content.
+    method: Run npm test from the repository root as the shared test producer.
+    evidence_required:
+      - Exact npm test command and exit status.
+      - Passing terminal-markdown and CLI assertions for every ANSI-suppression path.
+      - Complete diagnostics if plain output loses content or contains unexpected ANSI.
+    artifacts:
+      - source-contract
+      - test-contract
+  skill-installation-rollback:
+    title: Failed skill replacement restores the prior installation
+    description: >-
+      Use @seed-evidence-scripts to inject a controlled failure after the existing
+      skill has been moved to its backup and prove the real CLI fails nonzero
+      without losing prior content or leaving a partial staged target.
+    method: >-
+      Run node seed/scripts/verify-skill-installer-rollback.js from the repository
+      root using only the disposable CODEX_HOME created and removed by the script.
+    evidence_required:
+      - Exact verifier command and exit status.
+      - Nonzero nested CLI result and preserved controlled-failure diagnostics.
+      - Intact prior marker plus absence of partial target, backup, and staging paths.
+    artifacts:
+      - source-contract
+      - portable-skill
+      - seed-evidence-scripts
   verification-lifecycle-behavior:
     title: Verification ledger behavior passes
     description: >-
