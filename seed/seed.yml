@@ -1,0 +1,600 @@
+metadata:
+  name: seed-lang
+  summary: >-
+    Private Node.js CLI and contract language for authoring, composing,
+    inspecting, diffing, and verifying Seed software contracts.
+  description: >-
+    Defines the as-built Seed document model, reusable genome compiler,
+    constructed blueprint and diff views, executable verification ledger, and
+    private package and portable-skill distribution surfaces.
+
+genomes:
+  - cli-nodejs[environment.npm-install,constraints.nodejs-cli-runtime,freedom.nodejs-cli-structure]
+  - cli-subcommands
+  - cli-exit-codes
+  - package-npm
+  - state-filesystem
+  - verify-unit-tests
+  - verify-integration-tests
+  - repo-readme
+  - repo-license
+  - policy-dependency-minimal
+
+requirements: []
+
+scope:
+  included:
+    contract-language:
+      description: >-
+        YAML Seed contracts, their addressable sections, requirements readiness,
+        artifacts, policies, references, genomes, and validation rules.
+    repository-workflows:
+      description: >-
+        Default and named Seed selection, initialization, discovery, compiled
+        blueprints and diffs, and repository-local verification state.
+    verification-lifecycle:
+      description: >-
+        Claim-based executable evidence, expiry, replay, audit, report, status,
+        synchronization, and cross-Seed dependency inspection.
+    distribution:
+      description: >-
+        The private npm-compatible package, seed executable, packaged genome
+        catalog, and portable Codex and Claude Seed skill.
+  excluded:
+    artifacts:
+      - distillation-exclusions
+    visual-ui:
+      description: >-
+        Visual layout, styling, ANSI palette, terminal cell geometry, wrapping,
+        pager choreography, screenshots, golden frames, and documentation
+        imagery are separate UI authority documented by @distillation-exclusions.
+      artifacts:
+        - distillation-exclusions
+
+artifacts:
+  package-manifest:
+    path: package.json
+    description: Authoritative npm metadata, executable entry point, package surface, and runtime dependency declaration.
+  dependency-lock:
+    path: package-lock.json
+    description: Authoritative npm dependency resolution and integrity lock.
+  genome-catalog:
+    path: resources/genomes
+    description: Authoritative packaged YAML definitions for every built-in genome.
+  portable-skill:
+    path: resources/skills/seed-lang
+    description: Authoritative portable Seed workflow skill and its command, readiness, and SDD references.
+  source-contract:
+    path: src
+    description: Production implementation that defines the current as-built command, format, and state behavior.
+  test-contract:
+    path: test
+    description: Existing deterministic tests for production Seed behavior.
+  distillation-exclusions:
+    path: seed/distillation-exclusions.md
+    description: Complete deferred visual-interface inventory and near-fit non-UI genome review.
+
+interfaces:
+  cli:
+    executable:
+      description: >-
+        The package exposes one seed executable backed by src/cli.js. It accepts
+        a leading --repo path, one optional --seed name, global --help or -h,
+        and named command families.
+      examples:
+        - seed --help
+        - seed --repo PATH validate
+        - seed --seed NAME blueprint --json
+      artifacts:
+        - package-manifest
+        - source-contract
+    project-commands:
+      description: >-
+        init, list, validate, diff, and blueprint operate on the selected Seed;
+        blueprint exposes human-readable or JSON contract data and semantic
+        selection, while diff compares against the selected verification snapshot.
+      examples:
+        - seed init --genome cli-nodejs
+        - seed list
+        - seed validate
+        - seed diff
+        - seed blueprint --json --filter @behavior.genomes.resolution
+    genome-commands:
+      description: >-
+        genome list, init, validate, and blueprint expose built-in, user, and
+        repository genome discovery and inspection.
+      examples:
+        - seed genome list --builtin
+        - seed genome validate --builtin
+        - seed genome blueprint cli-nodejs --json
+      artifacts:
+        - genome-catalog
+    verification-commands:
+      description: >-
+        verify start, reset, pending, next, claim, confirm, fail, check,
+        refresh-expired, audit, report, status, sync expose the verification
+        state machine. Confirm and fail require an owner, evidence files, and
+        executable test commands.
+      examples:
+        - seed verify start
+        - seed verify next --owner agent
+        - seed verify confirm ITEM --owner agent --file PATH --test-cmd COMMAND
+        - seed verify status
+    skill-installation:
+      description: >-
+        install-skill requires exactly one of --codex or --claude and installs
+        the packaged Seed skill into the selected platform's configured user
+        skill root.
+      examples:
+        - seed install-skill --codex
+        - seed install-skill --claude
+      artifacts:
+        - portable-skill
+  files:
+    artifacts:
+      - genome-catalog
+    examples:
+      - seed/seed.yml
+      - .seed/seed.snapshot.yml
+    authored-contracts:
+      description: >-
+        Master uses seed/seed.yml and seed/scripts; named Seeds use
+        seed/NAME/seed.yml and seed/NAME/scripts.
+      examples:
+        - seed/seed.yml
+        - seed/release/seed.yml
+    generated-verification-state:
+      description: >-
+        Master state is under .seed and named state under .seed/NAME, including
+        snapshots, dependency snapshots, sessions, and transient locks.
+      examples:
+        - .seed/seed.snapshot.yml
+        - .seed/release/sessions/default.json
+    genome-origins:
+      description: >-
+        Built-ins come from @genome-catalog, user overrides from
+        ~/.seed/genomes, and repository overrides from seed/genomes.
+      artifacts:
+        - genome-catalog
+      examples:
+        - resources/genomes/cli-nodejs.yml
+        - seed/genomes/project-policy.yml
+  package:
+    artifacts:
+      - package-manifest
+      - dependency-lock
+    examples:
+      - npm pack --dry-run --json
+    npm-compatible:
+      description: >-
+        @package-manifest and @dependency-lock define a private, locally
+        installable and packable npm package containing src, resources, README,
+        package metadata, and the MIT license.
+      artifacts:
+        - package-manifest
+        - dependency-lock
+      examples:
+        - npm install -g .
+        - seed --help
+
+behavior:
+  contract-language:
+    document-model:
+      description: >-
+        A Seed is YAML with required metadata and nonempty scope, interfaces,
+        behavior, constraints, freedom, and verifications sections; errors may
+        be empty. Optional addressable sections are artifacts, state, security,
+        environment, observability, and compatibility.
+    address-normalization:
+      description: >-
+        Addressable trees and ID-bearing lists compile into unique dotted
+        addresses. IDs start alphanumeric and contain only letters, numbers,
+        underscores, and hyphens. Known item properties remain fields rather
+        than child addresses.
+    requirements-readiness:
+      description: >-
+        requirements is a temporary planning inbox. Blueprint and diff expose
+        unresolved entries, but validation and verification start fail until it
+        is absent or empty and the entries have been converted into the contract.
+    artifacts-and-references:
+      description: >-
+        Artifacts use repository-relative paths or HTTP(S) URLs and require
+        descriptions. Items that mention local artifacts declare their IDs.
+        Local, cross-Seed, and genome-qualified references must resolve or fail.
+    policies:
+      description: >-
+        Ordinary items default to local policy, security items default global,
+        and explicit global policy items are supplied as context for every
+        verification claim and checked by audit.
+  repository-selection:
+    default-and-named-seeds:
+      description: >-
+        The default Seed is master. Named Seeds use safe non-master names and
+        isolated authored and generated paths. Listing reports master first and
+        then safe named Seeds in lexical order.
+    initialization:
+      description: >-
+        init validates requested genomes before writes, creates only the selected
+        contract and scripts directory, refuses replacement unless --overwrite,
+        and idempotently ignores only .seed/locks in a seed-lang gitignore block.
+  genomes:
+    resolution:
+      description: >-
+        Genome lookup precedence is built-in, user, then repository. Requested
+        genomes compose in order and local Seed values merge last. The winning
+        address retains origin, ID, and path provenance.
+      artifacts:
+        - genome-catalog
+    composition:
+      description: >-
+        Recursive composition detects cycles and excessive depth. Keyed objects
+        merge recursively, ID arrays merge by ID, addressable tree/list forms
+        normalize together, ordinary arrays replace, and scalars replace.
+    selectors:
+      description: >-
+        String and object selectors include sections, addresses, subtrees, or
+        artifacts with reference and artifact closure. Exclusions remove exact,
+        subtree, ID, artifact, or glob matches after composition. Any unmatched
+        selector fails.
+    complete-exclusion:
+      description: >-
+        Standalone !genome exclusions are order-independent, remove the genome
+        transitively throughout the composed graph, and fail when unmatched.
+  blueprints-and-diffs:
+    constructed-blueprint:
+      description: >-
+        Blueprint compiles local and genome content into fixed semantic section
+        order with exact addresses, values, references, provenance, applied
+        genomes, filters, requirements readiness, and external dependencies.
+    machine-data:
+      description: >-
+        JSON blueprint output contains the complete constructed data model.
+        Section, address or ID filters retain reference closure; offset and limit
+        apply per section. Machine output remains complete for large piped data.
+    cross-seed-dependencies:
+      description: >-
+        Named-Seed and genome-qualified reference syntax resolves against another
+        present compiled Seed, rejects self or missing targets, and enforces
+        requested genome provenance. Referenced Seeds retain separate authority.
+    drift:
+      description: >-
+        Seed diff compares compiled YAML and Blueprint diff compares constructed
+        semantics against the selected snapshot. Canonical dependency drift is
+        reported separately and does not create or expire selected-Seed work.
+  verification:
+    work-queue:
+      description: >-
+        Explicit verification items precede implicit items for addressable
+        obligation sections. Claims have owners and leases; stale claims become
+        reclaimable, ownership gates transitions, and terminal states are
+        confirmed or failed.
+    executable-evidence:
+      description: >-
+        Confirm requires every command to pass; fail requires at least one to
+        fail. Evidence uses existing unique repository-relative files, SHA-256
+        hashes, Seed-address fingerprints, bounded command diagnostics, and the
+        selected repository as command working directory.
+    expiry-and-reconciliation:
+      description: >-
+        Missing or changed evidence, absent test commands, or changed referenced
+        Seed addresses expire terminal evidence. New compiled items enter pending
+        work and removed items leave the reconciled queue.
+    replay-and-refresh:
+      description: >-
+        check executes each unique stored command once and fans results to all
+        uses. refresh-expired is an atomic fast path only for confirmed,
+        evidence-file-only expiry with no contract change or other pending work.
+    completion-and-sync:
+      description: >-
+        completed requires every item terminal; satisfied also requires no failed
+        or expired items. sync requires satisfaction, advances current Seed and
+        dependency snapshots, and preserves only still-valid terminal results.
+  distribution:
+    package-surface:
+      description: >-
+        npm-compatible packing includes the executable production source,
+        packaged genomes, portable skill, README, package metadata, and license;
+        tests and the lockfile are repository inputs rather than shipped files.
+      artifacts:
+        - package-manifest
+        - dependency-lock
+        - genome-catalog
+        - portable-skill
+    portable-skill-installation:
+      description: >-
+        Installation stages a recursive copy, omits Codex-specific agent metadata
+        for Claude, atomically replaces one seed-lang target, restores the prior
+        target on replacement failure, and removes successful backups.
+      artifacts:
+        - portable-skill
+  command-protocol:
+    help-and-dispatch:
+      description: >-
+        --help or -h prints global usage and succeeds from any argument position.
+        --version is not an implemented command. Unknown commands, subcommands,
+        options, unsafe names, and malformed values fail nonzero.
+    streams-and-results:
+      description: >-
+        Normal human and machine result data is written to stdout. Parser and
+        caught operational exceptions use concise Error-prefixed stderr text;
+        validation and verification result diagnostics may remain on stdout.
+
+errors:
+  contract-input:
+    description: >-
+      Missing contracts, malformed YAML, unsupported tags, invalid section
+      shapes or IDs, unresolved requirements, bad artifact declarations,
+      unresolved references, and invalid policies fail with contextual diagnostics.
+  repository-paths:
+    description: >-
+      Missing or non-directory --repo targets, missing or duplicate --seed,
+      unsafe or reserved names, overwrite attempts, and missing snapshots fail
+      without silently selecting another location.
+  genomes:
+    description: >-
+      Unknown genomes, malformed definitions or selectors, unmatched selectors
+      or exclusions, broken references, cycles, and recursion overflow fail with
+      the relevant genome or source context.
+  cross-seed-references:
+    description: >-
+      Missing source Seeds or addresses, self-reference, and genome provenance
+      mismatch fail without taking verification ownership of the source Seed.
+  verification:
+    description: >-
+      Corrupt state, invalid transitions, wrong owners, missing or unsafe evidence,
+      failed proof commands, incomplete audits, expiry, and unsatisfied sync fail
+      visibly while retaining bounded command diagnostics where applicable.
+  skill-installation:
+    description: >-
+      Missing or conflicting platform choice, unsupported targets, missing bundled
+      skill content, and filesystem replacement failures fail and preserve or
+      restore the prior installation when replacement began.
+
+state:
+  selected-seed:
+    description: >-
+      Authored master or named Seed files remain separate from generated .seed
+      snapshots, dependency snapshots, session ledgers, and lock directories.
+    persistence: filesystem
+    consistency: selected-seed-isolation
+    semantics: authored-contract-and-generated-verification-state
+  genome-sources:
+    description: >-
+      Packaged, user, and repository genome sources remain distinct and are
+      re-read for each compilation according to precedence.
+    persistence: filesystem
+    semantics: ordered-source-overrides
+  verification-session:
+    description: >-
+      Session ledgers store claims, attempts, evidence hashes, command results,
+      address fingerprints, and aggregate state. Per-session locks serialize
+      updates and JSON ledgers use temporary-file atomic replacement.
+    persistence: filesystem
+    consistency: lock-serialized-session-updates
+    semantics: incremental-verification-ledger
+  skill-targets:
+    description: >-
+      Explicit install-skill operations persist outside the repository under
+      CODEX_HOME or CLAUDE_HOME, falling back to platform-specific directories
+      under HOME.
+    persistence: filesystem
+    semantics: explicit-user-skill-installation
+
+security:
+  repository-boundaries:
+    description: >-
+      Selected contract, verification state, repository genomes, and evidence
+      paths resolve from the chosen repository. Deliberate exceptions are user
+      genomes and explicit Codex or Claude skill installation destinations.
+    policy: global
+  validated-identifiers-and-evidence:
+    description: >-
+      Seed/session names and evidence paths are normalized and checked; evidence
+      rejects empty, absolute, root, traversal, duplicate, and missing paths.
+    policy: global
+  trusted-proof-command-interface:
+    description: >-
+      Verification test commands are trusted operator-provided shell strings,
+      executed unchanged from the selected repository with a timeout and bounded
+      captured output. They are not an untrusted command-sandbox boundary.
+    policy: global
+  trusted-pager-interface:
+    description: >-
+      PAGER is trusted operator environment input and is shell-executed only when
+      an operator explicitly requests paging.
+    policy: global
+
+environment:
+  node-and-npm:
+    description: >-
+      The product runs as a CommonJS Node.js CLI with npm-managed dependencies.
+      The package declares no Node.js engines range, so master does not invent a
+      minimum runtime version.
+    artifacts:
+      - package-manifest
+      - dependency-lock
+  package-status:
+    description: >-
+      Version 0.0.0 is a private prototype. Local installation and packing are
+      supported; registry publication is not an active product surface.
+    artifacts:
+      - package-manifest
+
+observability:
+  diagnostics:
+    description: >-
+      Command exit status is authoritative. Error text identifies the failed
+      operation, while verification command records retain exit code, signal,
+      timeout state, duration, and visibly truncated stdout and stderr.
+  provenance:
+    description: >-
+      Constructed items expose exact addresses and winning Seed or genome source
+      provenance; cross-Seed dependencies expose source path and provenance.
+  verification-views:
+    description: >-
+      pending, status, audit, and report expose nonterminal work, expiry, failures,
+      policy coverage, evidence files, commands, and aggregate completion.
+
+compatibility:
+  seed-language:
+    description: >-
+      Required section names, address normalization, reference syntax, policy
+      defaults, artifact attachment, requirements gate, and verification item
+      shape are contract-language compatibility surfaces.
+  selected-paths:
+    description: >-
+      seed/seed.yml and .seed are master paths; seed/NAME and .seed/NAME are named
+      paths. Safe-name rules and master reservation are stable path semantics.
+  genome-catalog:
+    description: >-
+      The 204 built-in IDs present in @genome-catalog at distillation commit
+      a07f0e6 are current compatibility surfaces. The retired
+      verify-gli-golden-output alias is not supported.
+    artifacts:
+      - genome-catalog
+  package-surface:
+    description: >-
+      The seed executable and files selected by @package-manifest remain
+      npm-compatible. Observable changes require an intentional Seed change.
+    artifacts:
+      - package-manifest
+  prototype-evolution:
+    description: >-
+      Human wording and internal details may evolve during the private prototype,
+      but command semantics, machine data, paths, formats, and state meaning do
+      not change accidentally.
+
+constraints:
+  selected-seed-authority:
+    description: >-
+      Only this master Seed's explicit and implicit addresses plus global policies
+      create verification ownership; referenced or future Seeds remain separate.
+    policy: global
+  deterministic-data:
+    description: >-
+      Canonical JSON recursively sorts object keys, preserves array order, and
+      deterministic collections retain complete output including data larger
+      than a typical pipe buffer.
+  verification-state-integrity:
+    description: >-
+      Session state updates are lock-serialized, terminal evidence is hash-bound,
+      refresh is all-or-nothing, and failures never fabricate successful evidence.
+    policy: global
+  one-cli-package:
+    description: >-
+      The product remains one npm-compatible package with one seed executable;
+      internal modules may remain focused implementation units.
+  dependency-snapshot-ownership:
+    description: >-
+      Cross-Seed dependency snapshots report dependency drift but never promote
+      source-Seed obligations into master implementation or verification work.
+    policy: global
+  private-prototype:
+    description: >-
+      Package and contract distribution are local/private; publication or public
+      release obligations require a later Seed change.
+
+freedom:
+  internal-modules:
+    description: >-
+      Production may choose maintainable CommonJS module boundaries and algorithms
+      while preserving the observable command, data, state, and error contracts.
+  performance-strategy:
+    description: >-
+      Compilation, diffing, locking, hashing, and command replay strategies may
+      change when deterministic results, bounded diagnostics, and state integrity
+      remain intact.
+  future-surfaces:
+    description: >-
+      New runtimes, publication, commands, formats, or stronger security policies
+      require explicit contract changes rather than inference from this freedom.
+
+verifications:
+  contract-language-behavior:
+    title: Seed language and reference behavior passes
+    description: >-
+      Exercise real parsing, validation, requirements, artifact, policy, default
+      and named path, and cross-Seed reference behavior from @source-contract
+      through @test-contract.
+    method: >-
+      Run node --test test/validation.test.js test/seed-file.test.js
+      test/external-references.test.js from the repository root.
+    evidence_required:
+      - Exact command and exit status.
+      - Passing test summary or complete failing diagnostics.
+      - Confirmation that tests used temporary repositories and did not alter production state.
+    artifacts:
+      - source-contract
+      - test-contract
+  genome-catalog-behavior:
+    title: Built-in genome catalog and compiler passes
+    description: >-
+      Validate every packaged genome and exercise lookup, composition, selectors,
+      exclusions, merge semantics, provenance, and failure paths.
+    method: >-
+      Run node src/cli.js genome validate --builtin and node --test
+      test/genomes.test.js from the repository root.
+    evidence_required:
+      - Both exact commands and exit statuses.
+      - Validated built-in count and passing focused test summary.
+      - Full diagnostics for any invalid genome or failed compiler case.
+    artifacts:
+      - genome-catalog
+      - test-contract
+  semantic-cli-workflows:
+    title: Non-visual CLI workflows pass
+    description: >-
+      Exercise repository routing, named Seeds, references, validation, diffs,
+      verification transitions, large machine output, and @portable-skill
+      installation without treating terminal presentation assertions as master
+      acceptance.
+    method: >-
+      Run node --test --test-name-pattern='global --repo|named Seed|cross-Seed|validate|verify|install-skill|large status output'
+      test/cli.test.js from the repository root.
+    evidence_required:
+      - Exact focused command and selected test names.
+      - Passing summary or complete failure diagnostics.
+      - Confirmation that temporary homes and repositories were cleaned.
+    artifacts:
+      - test-contract
+      - portable-skill
+  verification-lifecycle-behavior:
+    title: Verification ledger behavior passes
+    description: >-
+      Exercise claims, leases, locks, evidence commands, hashes, expiry,
+      reconciliation, replay, refresh, audit, report, completion, and sync.
+    method: Run node --test test/verification-store.test.js from the repository root.
+    evidence_required:
+      - Exact command and exit status.
+      - Passing summary or complete state-machine diagnostics.
+      - Confirmation that only disposable fixture repositories were mutated.
+    artifacts:
+      - test-contract
+  package-surface-behavior:
+    title: Private npm package surface is reproducible
+    description: >-
+      Inspect the npm-compatible pack result without publishing or writing a
+      production package artifact.
+    method: Run npm pack --dry-run --json from the repository root and inspect its file list.
+    evidence_required:
+      - Exact command and exit status.
+      - Package name, version, executable mode, and included file inventory.
+      - Confirmation that src, resources, README, package metadata, and license are present and tests are absent.
+    artifacts:
+      - package-manifest
+      - dependency-lock
+      - portable-skill
+      - genome-catalog
+  master-boundary-review:
+    title: Master contract boundaries remain honest
+    description: >-
+      Inspect the complete constructed blueprint and confirm requirements is
+      empty, authoritative artifacts exist, only honest genome subsets are active,
+      and deferred presentation or near-fit work remains outside master.
+    method: Run seed validate and seed blueprint --json from the repository root, then inspect all sections and artifacts.
+    evidence_required:
+      - Successful validation output.
+      - Complete blueprint item and global-policy counts.
+      - Artifact existence review and deferred-boundary confirmation.
+    artifacts:
+      - distillation-exclusions
