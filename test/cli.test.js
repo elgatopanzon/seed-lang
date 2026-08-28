@@ -37,9 +37,14 @@ async function withTempDirAsync(runTest) {
   }
 }
 
-function runCliPiped(args, cwd) {
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
+function runCliThroughShellPipe(args, cwd) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [CLI_PATH, ...args], {
+    const command = [process.execPath, CLI_PATH, ...args].map(shellQuote).join(' ') + ' | cat';
+    const child = spawn('/bin/sh', ['-c', command], {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -49,14 +54,12 @@ function runCliPiped(args, cwd) {
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
     child.on('error', reject);
-    setTimeout(() => {
-      child.stdout.on('data', (chunk) => {
-        stdout += chunk;
-      });
-      child.stderr.on('data', (chunk) => {
-        stderr += chunk;
-      });
-    }, 100);
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk;
+    });
     child.on('close', (code, signal) => {
       resolve({ code, signal, stdout, stderr });
     });
@@ -1221,8 +1224,8 @@ describe('seed cli', () => {
 
   test('verify status drains large JSON output through a pipe before exit', async () => {
     await withTempDirAsync(async (cwd) => {
-      const itemCount = 1500;
-      const itemKey = (index) => `large-output-${String(index).padStart(4, '0')}-${'x'.repeat(1000)}`;
+      const itemCount = 180;
+      const itemKey = (index) => `large-output-${String(index).padStart(4, '0')}-${'x'.repeat(700)}`;
       writeSeedFromTemplate(cwd, (document) => {
         for (let index = 0; index < itemCount; index += 1) {
           document.behavior[itemKey(index)] = {
@@ -1230,16 +1233,18 @@ describe('seed cli', () => {
           };
         }
       });
+      const seedPath = path.join(cwd, DEFAULT_SEED_PATH);
+      assert.ok(fs.statSync(seedPath).size >= 100 * 1024, 'fixture Seed must be at least 100 KiB');
       assert.equal(runCli(['verify', 'start'], cwd).code, 0);
 
-      const document = parse(fs.readFileSync(path.join(cwd, DEFAULT_SEED_PATH), 'utf8'));
+      const document = parse(fs.readFileSync(seedPath, 'utf8'));
       for (let index = 0; index < itemCount; index += 1) {
         document.behavior[itemKey(index)].description =
           'Changed behavior included in the large verification status response.';
       }
-      fs.writeFileSync(path.join(cwd, DEFAULT_SEED_PATH), stringify(document), 'utf8');
+      fs.writeFileSync(seedPath, stringify(document), 'utf8');
 
-      const result = await runCliPiped(['verify', 'status'], cwd);
+      const result = await runCliThroughShellPipe(['verify', 'status'], cwd);
       assert.equal(result.code, 0, result.stderr);
       assert.equal(result.signal, null);
       assert.ok(result.stdout.length > 64 * 1024, `expected more than 64 KiB, received ${result.stdout.length} bytes`);

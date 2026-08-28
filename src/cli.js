@@ -1198,11 +1198,7 @@ function handleVerifyReport(cwd, seedName) {
 function handleVerifyStatus(cwd, seedName) {
   const status = getStatus({ cwd, seedName });
   const output = JSON.stringify(status, null, 2) + '\n';
-  if (Object.hasOwn(process.stdout, 'write')) {
-    process.stdout.write(output);
-  } else {
-    fs.writeSync(process.stdout.fd, output);
-  }
+  process.stdout.write(output);
   return 0;
 }
 
