@@ -393,7 +393,10 @@ describe('seed genomes', () => {
     assert.equal(composeDevelopment.provenance['artifacts.deploy-dockerfile'].path, 'builtin:deploy-dockerfile');
     assert.equal(composeDevelopment.provenance['artifacts.repo-gitignore'].path, 'builtin:repo-gitignore');
     assert.match(composeDevelopment.document.constraints['compose-development-storage'].description, /host bind mounts/i);
+    assert.match(composeDevelopment.document.constraints['compose-development-storage'].description, /tracked \.gitkeep before Docker Compose starts/i);
+    assert.match(composeDevelopment.document.constraints['compose-development-storage'].description, /sudo/i);
     assert.match(composeDevelopment.document.constraints['compose-development-gitignore'].description, /mutable repo-local.*covered by @repo-gitignore/i);
+    assert.match(composeDevelopment.document.constraints['compose-development-gitignore'].description, /runtime state cannot be committed.*tracked \.gitkeep/i);
     assert.match(composeDevelopment.document.behavior['compose-development-runtime-defaults'].description, /PUID.*PGID.*TZ.*UMASK/i);
 
     const composeProduction = compileGenomeDocument({ id: 'deploy-docker-compose-production', cwd: process.cwd(), home: '' });

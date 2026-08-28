@@ -32,12 +32,12 @@ behavior:
       - compose-development
 constraints:
   compose-development-storage:
-    description: Persistent development data uses explicit host bind mounts such as repo-local config or data directories; named volumes require an image or migration constraint documented by the Seed.
+    description: Persistent development storage uses explicit host bind mounts. In a Git repository, the config mount source and each application data mount source that exists are repository directories containing a tracked .gitkeep before Docker Compose starts; checkout therefore creates them with ordinary non-root ownership and permissions writable by the configured PUID and PGID, even when Docker is invoked through sudo, instead of allowing Docker to create missing root-owned directories. Named volumes require an image or migration constraint documented by the Seed.
     artifacts:
       - compose-development
     policy: global
   compose-development-gitignore:
-    description: Every mutable repo-local directory bind-mounted by @compose-development is covered by @repo-gitignore so generated configuration, databases, caches, logs, uploads, and other runtime state cannot be committed; intentional examples, defaults, fixtures, and keep files remain trackable.
+    description: Every mutable repo-local directory bind-mounted by @compose-development is covered by @repo-gitignore so generated configuration, databases, caches, logs, uploads, and other runtime state cannot be committed; each required config or data mount retains its tracked .gitkeep, and intentional examples, defaults, and fixtures remain trackable.
     artifacts:
       - compose-development
       - repo-gitignore
@@ -62,6 +62,7 @@ verifications:
       - Exact isolated startup and cleanup commands.
       - Repository services and Dockerfile build paths exercised.
       - Persistent bind mounts, published ports, and environment inputs reviewed.
-      - Git ignore diagnostics proving every mutable repo-local mount path is ignored while intentional examples, defaults, fixtures, and keep files remain trackable.
+      - Git index and ignore diagnostics proving required config and data mount directories exist from checkout with tracked .gitkeep files, runtime contents are ignored, and intentional examples, defaults, and fixtures remain trackable.
+      - Ownership and mode diagnostics proving every required bind-mount source is non-root-owned and writable by the configured PUID and PGID before startup, and remains so after the Compose workflow including when Docker is invoked through sudo.
       - Representative workflow and relevant service log results.
       - Resolved PUID, PGID, TZ, UMASK, and FILE__ secret-file inputs without disclosed secret values.
