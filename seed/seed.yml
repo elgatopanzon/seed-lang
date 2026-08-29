@@ -1,12 +1,12 @@
 metadata:
   name: seed-lang
   summary: >-
-    Private Node.js CLI and contract language for authoring, composing,
+    Public-source Node.js CLI and contract language for authoring, composing,
     inspecting, diffing, and verifying Seed software contracts.
   description: >-
     Defines the as-built Seed document model, reusable genome compiler,
     constructed blueprint and diff views, executable verification ledger, and
-    private package and portable-skill distribution surfaces.
+    unpublished npm package and portable-skill distribution surfaces.
 
 genomes:
   - cli-nodejs[environment.npm-install,constraints.nodejs-cli-runtime,freedom.nodejs-cli-structure]
@@ -37,8 +37,9 @@ scope:
         synchronization, and cross-Seed dependency inspection.
     distribution:
       description: >-
-        The private npm-compatible package, seed executable, packaged genome
-        catalog, and portable Codex and Claude Seed skill.
+        The public MIT source repository, unpublished npm-compatible package,
+        seed executable, packaged genome catalog, and portable Codex and Claude
+        Seed skill.
   excluded:
     artifacts:
       - distillation-exclusions
@@ -172,9 +173,9 @@ interfaces:
       - npm pack --dry-run --json
     npm-compatible:
       description: >-
-        @package-manifest and @dependency-lock define a private, locally
-        installable and packable npm package containing src, resources, README,
-        package metadata, and the MIT license.
+        @package-manifest and @dependency-lock define a locally installable and
+        packable npm package that is marked private against registry publication
+        and contains src, resources, README, package metadata, and the MIT license.
       artifacts:
         - package-manifest
         - dependency-lock
@@ -435,8 +436,9 @@ environment:
       - dependency-lock
   package-status:
     description: >-
-      Version 0.0.0 is a private prototype. Local installation and packing are
-      supported; registry publication is not an active product surface.
+      Version 0.0.0 is an unpublished npm prototype in a public MIT source
+      repository. Local installation and packing are supported; npm registry
+      publication is not an active product surface.
     artifacts:
       - package-manifest
 
@@ -480,7 +482,7 @@ compatibility:
       - package-manifest
   prototype-evolution:
     description: >-
-      Human wording and internal details may evolve during the private prototype,
+      Human wording and internal details may evolve during the prototype,
       but command semantics, machine data, paths, formats, and state meaning do
       not change accidentally.
 
@@ -528,8 +530,9 @@ constraints:
     policy: global
   private-prototype:
     description: >-
-      Package and contract distribution are local/private; publication or public
-      release obligations require a later Seed change.
+      The source repository and contract files are publicly distributed under
+      MIT, while the npm package remains marked private against registry
+      publication. Registry release obligations require a later Seed change.
 
 freedom:
   internal-modules:
@@ -698,7 +701,7 @@ verifications:
     artifacts:
       - test-contract
   package-surface-behavior:
-    title: Private npm package surface is reproducible
+    title: Unpublished npm package surface is reproducible
     description: >-
       Inspect the npm-compatible pack result without publishing or writing a
       production package artifact.
