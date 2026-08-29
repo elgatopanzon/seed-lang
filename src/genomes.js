@@ -167,6 +167,95 @@ function listGenomeDefinitions({ cwd, home = process.env.HOME, origins } = {}) {
   });
 }
 
+function includesQuery(value, query) {
+  return typeof value === 'string' && value.toLowerCase().includes(query);
+}
+
+function addressValueIncludesQuery(value, query) {
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value).toLowerCase().includes(query);
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((entry) => addressValueIncludesQuery(entry, query));
+  }
+
+  if (isObject(value)) {
+    return Object.entries(value).some(([key, entry]) => key !== 'id' && addressValueIncludesQuery(entry, query));
+  }
+
+  return false;
+}
+
+function searchGenomeDefinitions({ cwd, home = process.env.HOME, origins, query, fullText = false } = {}) {
+  if (typeof query !== 'string' || query.trim() === '') {
+    throw new Error('Genome search requires a query.');
+  }
+
+  const normalizedQuery = query.trim().toLowerCase();
+
+  return listGenomeDefinitions({ cwd, home, origins }).flatMap((entry) => {
+    const matches = [];
+    let tags = [];
+
+    if (includesQuery(entry.id, normalizedQuery)) {
+      matches.push({ type: 'id', value: entry.id });
+    }
+
+    try {
+      const document = parseSeedYaml(readFileSync(entry.filePath, 'utf8'));
+      const metadata = isObject(document?.metadata) ? document.metadata : {};
+      tags = Array.isArray(metadata.tags)
+        ? metadata.tags.filter((tag) => typeof tag === 'string')
+        : [];
+
+      if (includesQuery(metadata.name, normalizedQuery)) {
+        matches.push({ type: 'name', value: metadata.name });
+      }
+
+      if (includesQuery(metadata.summary, normalizedQuery) || includesQuery(metadata.description, normalizedQuery)) {
+        matches.push({ type: 'description' });
+      }
+
+      tags.forEach((tag) => {
+        if (includesQuery(tag, normalizedQuery)) {
+          matches.push({ type: 'tag', value: tag });
+        }
+      });
+
+      const addressErrors = [];
+      const items = collectPresentAddressableItems(document, addressErrors);
+      items.forEach((item) => {
+        if (includesQuery(item.address, normalizedQuery)) {
+          matches.push({ type: 'address', address: item.address });
+        }
+      });
+
+      if (fullText) {
+        items.forEach((item) => {
+          if (addressValueIncludesQuery(item.value, normalizedQuery)) {
+            matches.push({ type: 'text', address: item.address });
+          }
+        });
+      }
+    } catch (error) {
+      // A malformed definition remains searchable by its filename-derived ID.
+    }
+
+    if (matches.length === 0) {
+      return [];
+    }
+
+    return [{
+      id: entry.id,
+      origin: entry.origin,
+      path: entry.path,
+      tags,
+      matches,
+    }];
+  });
+}
+
 function initRepoGenome({ cwd, id, overwrite = false } = {}) {
   validateGenomeId(id);
   const root = repoGenomeDir(cwd);
@@ -786,6 +875,7 @@ module.exports = {
   mergeSeedFragments,
   parseGenomeSpec,
   resolveGenome,
+  searchGenomeDefinitions,
   validateGenomeDefinition,
   validateGenomeDefinitions,
 };

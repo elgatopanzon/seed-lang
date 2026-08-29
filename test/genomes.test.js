@@ -13,6 +13,7 @@ const {
   mergeSeedFragments,
   parseGenomeSpec,
   resolveGenome,
+  searchGenomeDefinitions,
 } = require('../src/genomes');
 const { validateSeedDocument } = require('../src/validation');
 
@@ -35,6 +36,50 @@ function writeYaml(file, document) {
 }
 
 describe('seed genomes', () => {
+  test('searches genome metadata, tags, direct addresses, and opt-in address text', () => {
+    withTempDir((cwd) => {
+      const genomeDir = path.join(cwd, 'seed', 'genomes');
+      writeYaml(path.join(genomeDir, 'alpha-search.yml'), {
+        metadata: {
+          name: 'Queue Worker',
+          summary: 'Schedules background tasks.',
+          description: 'Resilient job dispatcher.',
+          tags: ['async', 'jobs'],
+        },
+        behavior: {
+          'process-events': {
+            description: 'Retries messages gracefully.',
+          },
+        },
+        constraints: {
+          'local-cache': 'Stores cached state.',
+        },
+      });
+      fs.writeFileSync(path.join(genomeDir, 'broken-search.yml'), 'metadata: [broken', 'utf8');
+
+      const search = (query, options = {}) => searchGenomeDefinitions({
+        cwd,
+        home: '',
+        origins: ['repo'],
+        query,
+        ...options,
+      });
+
+      assert.deepEqual(search('alpha')[0].matches.map((match) => match.type), ['id']);
+      assert.deepEqual(search('QUEUE')[0].matches.map((match) => match.type), ['name']);
+      assert.deepEqual(search('background')[0].matches.map((match) => match.type), ['description']);
+      assert.deepEqual(search('jobs')[0].matches, [{ type: 'tag', value: 'jobs' }]);
+      assert.deepEqual(search('process-events')[0].matches, [{ type: 'address', address: 'behavior.process-events' }]);
+      assert.deepEqual(search('gracefully'), []);
+      assert.deepEqual(search('gracefully', { fullText: true })[0].matches, [{ type: 'text', address: 'behavior.process-events' }]);
+      assert.deepEqual(search('cached state', { fullText: true })[0].matches, [{ type: 'text', address: 'constraints.local-cache' }]);
+      assert.deepEqual(search('broken')[0].matches.map((match) => match.type), ['id']);
+      assert.deepEqual(search('search').map((result) => result.id), ['alpha-search', 'broken-search']);
+      assert.deepEqual(search('jobs')[0].tags, ['async', 'jobs']);
+      assert.deepEqual(search('does-not-exist'), []);
+    });
+  });
+
   test('builtin genome definitions load from packaged YAML resources', () => {
     const expectedBuiltins = [
       'architecture-client-server',

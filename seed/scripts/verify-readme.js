@@ -92,6 +92,8 @@ const executableCommands = new Set([
   'seed verify pending',
   'seed genome list',
   'seed genome list --builtin',
+  'seed genome search docker',
+  'seed genome search graceful shutdown --full-text',
   'seed genome blueprint cli-nodejs',
   'seed genome blueprint repo-open-source-ready --section global-policies',
   'seed genome validate --builtin',
@@ -116,7 +118,7 @@ const executableCommands = new Set([
   'node src/cli.js genome validate --builtin',
 ]);
 
-assert.equal(shellCommands.length, 61, 'README shell command inventory changed');
+assert.equal(shellCommands.length, 63, 'README shell command inventory changed');
 for (const command of shellCommands) {
   assert.ok(
     executableCommands.has(command) || staticReasons.has(command),
@@ -161,6 +163,8 @@ try {
   execute('seed blueprint --head 100', ['blueprint', '--head', '100'], projectRoot);
   execute('seed genome list', ['genome', 'list'], projectRoot);
   execute('seed genome list --builtin', ['genome', 'list', '--builtin'], projectRoot);
+  execute('seed genome search docker', ['genome', 'search', 'docker'], projectRoot);
+  execute('seed genome search graceful shutdown --full-text', ['genome', 'search', 'graceful', 'shutdown', '--full-text'], projectRoot);
   execute('seed genome blueprint cli-nodejs', ['genome', 'blueprint', 'cli-nodejs'], projectRoot);
   execute('seed genome blueprint repo-open-source-ready --section global-policies', ['genome', 'blueprint', 'repo-open-source-ready', '--section', 'global-policies'], projectRoot);
   execute('seed genome validate --builtin', ['genome', 'validate', '--builtin'], projectRoot);

@@ -51,8 +51,9 @@ When creating or updating a Seed:
 1. Treat `requirements` as a temporary planning inbox. Convert every entry into
    the appropriate contract sections, verifications, and artifacts, then remove
    it. Do not begin implementation while any entry remains.
-2. Inspect available presets with `seed genome list` and targeted
-   `seed genome blueprint NAME` commands.
+2. Inspect available presets with `seed genome list`, use `seed genome search`
+   for targeted discovery, and inspect candidates with
+   `seed genome blueprint NAME`.
 3. Record observable requirements in the appropriate addressable sections.
 4. Preserve stable IDs when meaning is unchanged.
 5. Put genuine implementation choices in `freedom`; do not use freedom to hide
@@ -97,7 +98,7 @@ claim or verify the source Seed's items from the dependent Seed.
 
 Valid sections:
 
-- `metadata`: project name and summary.
+- `metadata`: project name, summary, and optional non-empty string-list tags.
 - `genomes`: reusable Seed fragments composed before local values.
 - `requirements`: temporary raw planning TODOs; must be empty before implementation.
 - `scope`: included and excluded boundaries.
@@ -119,6 +120,11 @@ verification item. Security items default to global. Ordinary items default to
 local policy.
 
 ## Genomes
+
+Find relevant definitions with `seed genome search QUERY`. Search matches IDs,
+metadata names and descriptions, tags, and direct authored address names. Add
+`--full-text` only when values inside direct authored addresses should also be
+searched. Results identify origins, tags, match types, and matching addresses.
 
 Genome precedence, lowest to highest:
 

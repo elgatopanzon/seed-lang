@@ -785,6 +785,50 @@ describe('seed cli', () => {
     });
   });
 
+  test('genome search reports match types, addresses, tags, and opt-in full text', () => {
+    withTempDir((cwd) => {
+      fs.mkdirSync(path.join(cwd, 'seed', 'genomes'), { recursive: true });
+      fs.writeFileSync(path.join(cwd, 'seed', 'genomes', 'search-demo.yml'), [
+        'metadata:',
+        '  name: Queue Worker',
+        '  summary: Schedules background tasks.',
+        '  tags: [async, jobs]',
+        'behavior:',
+        '  process-events:',
+        '    description: Retries messages gracefully.',
+      ].join('\n'), 'utf8');
+
+      const tag = runCli(['genome', 'search', 'JOBS', '--repo'], cwd);
+      assert.equal(tag.code, 0);
+      assert.ok(tag.stdout.includes('repo search-demo tags=[async, jobs]'));
+      assert.ok(tag.stdout.includes('- tag: jobs'));
+
+      const address = runCli(['genome', 'search', 'process-events', '--repo'], cwd);
+      assert.equal(address.code, 0);
+      assert.ok(address.stdout.includes('- address: @behavior.process-events'));
+
+      const quietText = runCli(['genome', 'search', 'gracefully', '--repo'], cwd);
+      assert.equal(quietText.code, 0);
+      assert.equal(quietText.stdout, 'No genomes matched "gracefully".');
+
+      const fullText = runCli(['genome', 'search', 'gracefully', '--full-text', '--repo'], cwd);
+      assert.equal(fullText.code, 0);
+      assert.ok(fullText.stdout.includes('- text: @behavior.process-events'));
+
+      const name = runCli(['genome', 'search', 'queue worker', '--repo'], cwd);
+      assert.equal(name.code, 0);
+      assert.ok(name.stdout.includes('- name: Queue Worker'));
+
+      const missing = runCli(['genome', 'search', '--repo'], cwd);
+      assert.equal(missing.code, 1);
+      assert.ok(missing.stderr.includes('requires a query'));
+
+      const unknown = runCli(['genome', 'search', 'jobs', '--bogus'], cwd);
+      assert.equal(unknown.code, 1);
+      assert.ok(unknown.stderr.includes('Unknown option for seed genome search'));
+    });
+  });
+
   test('genome init creates repo genome and refuses overwrite', () => {
     withTempDir((cwd) => {
       const first = runCli(['genome', 'init', 'repo-created'], cwd);

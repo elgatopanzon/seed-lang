@@ -3,7 +3,12 @@ const assert = require('node:assert/strict');
 const { parse } = require('yaml');
 
 const { renderSeedTemplate } = require('../src/seed-file');
-const { collectGlobalPolicyItems, normalizeAddressableSection, validateSeedDocument } = require('../src/validation');
+const {
+  collectGlobalPolicyItems,
+  normalizeAddressableSection,
+  validateGenomeDocument,
+  validateSeedDocument,
+} = require('../src/validation');
 
 describe('validation', () => {
   function codes(list) {
@@ -117,6 +122,29 @@ describe('validation', () => {
 
     assert.equal(document.metadata.version, undefined);
     assert.equal(validateSeedDocument(document).errors.some((entry) => entry.path === '/metadata/version'), false);
+  });
+
+  test('metadata tags are optional nonempty string lists for Seeds and genomes', () => {
+    const document = parse(renderSeedTemplate());
+    document.metadata.tags = ['cli', 'contract language'];
+    assert.deepEqual(validateSeedDocument(document).errors, []);
+
+    const genome = {
+      metadata: {
+        name: 'tagged-genome',
+        summary: 'Tagged genome.',
+        tags: ['runtime', 'Node.js'],
+      },
+      constraints: { tagged: 'Tagged constraint.' },
+    };
+    assert.deepEqual(validateGenomeDocument(genome).errors, []);
+
+    for (const tags of ['cli', [""], ['valid', 42]]) {
+      document.metadata.tags = tags;
+      assert.ok(validateSeedDocument(document).errors.some((entry) => entry.code === 'invalid-metadata-tags'));
+      genome.metadata.tags = tags;
+      assert.ok(validateGenomeDocument(genome).errors.some((entry) => entry.code === 'invalid-metadata-tags'));
+    }
   });
 
   test('normalizes list objects, tree objects, and tree string shorthand into addresses', () => {

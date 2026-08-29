@@ -102,6 +102,18 @@ function validateMetadata(document, errors) {
   if (!isString(document.metadata.summary)) {
     pushError(errors, 'missing-required-field', '/metadata/summary', 'metadata.summary is required and must be a non-empty string');
   }
+
+  validateMetadataTags(document, errors);
+}
+
+function validateMetadataTags(document, errors) {
+  if (!isObject(document.metadata) || document.metadata.tags === undefined) {
+    return;
+  }
+
+  if (!Array.isArray(document.metadata.tags) || !document.metadata.tags.every(isString)) {
+    pushError(errors, 'invalid-metadata-tags', '/metadata/tags', 'metadata.tags must be a list of non-empty strings');
+  }
 }
 
 function shouldRecurseInto(key, value) {
@@ -573,6 +585,7 @@ function validateGenomeDocument(document) {
     };
   }
 
+  validateMetadataTags(document, errors);
   validateRequirements(document, errors);
   const items = collectPresentAddressableItems(document, errors);
   validateDuplicateAddresses(items, errors);

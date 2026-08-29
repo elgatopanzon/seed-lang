@@ -400,7 +400,7 @@ Seed files are YAML. The main sections are:
 
 | Section | Purpose |
 | --- | --- |
-| `metadata` | Project name and summary. |
+| `metadata` | Project name, summary, and optional string-list tags. |
 | `genomes` | Reusable contract fragments composed before local values. |
 | `requirements` | Temporary inbox of raw requirements that still need conversion into the contract. |
 | `scope` | Included and excluded boundaries. |
@@ -500,9 +500,27 @@ List and inspect them:
 ```sh
 seed genome list
 seed genome list --builtin
+seed genome search docker
+seed genome search graceful shutdown --full-text
 seed genome blueprint cli-nodejs
 seed genome blueprint repo-open-source-ready --section global-policies
 seed genome validate --builtin
+```
+
+`seed genome search` uses case-insensitive substring matching over genome IDs,
+metadata names and descriptions, tags, and direct authored address names. It
+reports each matching genome's origin, tags, match types, and matching addresses.
+Add `--full-text` to also search scalar values inside direct authored addresses;
+this is opt-in so descriptive prose does not overwhelm ordinary discovery.
+`--builtin`, `--user`, and `--repo` restrict the searched origins.
+
+Seeds and genomes may declare discovery tags without creating Seed addresses:
+
+```yaml
+metadata:
+  name: Docker deployment
+  summary: Container packaging and deployment contracts.
+  tags: [docker, deployment, containers]
 ```
 
 Genome precedence, lowest to highest:
@@ -832,6 +850,7 @@ seed validate
 seed diff [--no-color]
 
 seed genome list [--builtin] [--user] [--repo]
+seed genome search QUERY [--full-text] [--builtin] [--user] [--repo]
 seed genome init NAME [--overwrite]
 seed genome validate [--builtin] [--user] [--repo]
 seed genome blueprint NAME [blueprint options]

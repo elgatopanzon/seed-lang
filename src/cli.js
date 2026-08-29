@@ -24,6 +24,7 @@ const {
   compileGenomeDocument,
   initRepoGenome,
   listGenomeDefinitions,
+  searchGenomeDefinitions,
   validateGenomeDefinitions,
 } = require('./genomes');
 const {
@@ -56,6 +57,7 @@ function usage() {
     'seed validate',
     'seed diff [--no-color]',
     'seed genome list [--builtin] [--user] [--repo]',
+    'seed genome search QUERY [--full-text] [--builtin] [--user] [--repo]',
     'seed genome init <name> [--overwrite]',
     'seed genome validate [--builtin] [--user] [--repo]',
     'seed genome blueprint <name> [--json] [--color | --no-color] [--section ID] [--filter @ADDRESS] [--limit N] [--offset N] [--head N] [--tail N] [--pager]',
@@ -587,6 +589,57 @@ function handleGenomeList(cwd, args) {
   return 0;
 }
 
+function handleGenomeSearch(cwd, args) {
+  let fullText = false;
+  const filteredArgs = [];
+
+  args.forEach((arg) => {
+    if (arg === '--full-text') {
+      fullText = true;
+    } else {
+      filteredArgs.push(arg);
+    }
+  });
+
+  const parsed = parseOriginFilters(filteredArgs, 'seed genome search');
+  if (parsed.error) {
+    return exitWithError(parsed.error);
+  }
+
+  const query = parsed.rest.join(' ').trim();
+  if (query.length === 0) {
+    return exitWithError('seed genome search requires a query.');
+  }
+
+  const results = searchGenomeDefinitions({
+    cwd,
+    origins: parsed.origins,
+    query,
+    fullText,
+  });
+
+  if (results.length === 0) {
+    console.log(`No genomes matched "${query}".`);
+    return 0;
+  }
+
+  console.log(`Genome search results for "${query}" (${results.length}):`);
+  results.forEach((result) => {
+    const tags = result.tags.length > 0 ? ` tags=[${result.tags.join(', ')}]` : ' tags=[]';
+    console.log(`- ${result.origin} ${result.id}${tags}`);
+    result.matches.forEach((match) => {
+      if (match.address) {
+        console.log(`  - ${match.type}: @${match.address}`);
+      } else if (match.value !== undefined) {
+        console.log(`  - ${match.type}: ${match.value}`);
+      } else {
+        console.log(`  - ${match.type}`);
+      }
+    });
+  });
+  return 0;
+}
+
 function handleGenomeInit(cwd, args) {
   let overwrite = false;
   const names = [];
@@ -700,6 +753,9 @@ function handleGenome(cwd, args) {
   const [subcommand, ...rest] = args;
   if (subcommand === 'list') {
     return handleGenomeList(cwd, rest);
+  }
+  if (subcommand === 'search') {
+    return handleGenomeSearch(cwd, rest);
   }
   if (subcommand === 'init') {
     return handleGenomeInit(cwd, rest);

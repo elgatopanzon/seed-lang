@@ -38,12 +38,19 @@ adding source-Seed verification work.
 
 ```text
 seed genome list [--builtin] [--user] [--repo]
+seed genome search QUERY [--full-text] [--builtin] [--user] [--repo]
 seed genome init NAME [--overwrite]
 seed genome validate [--builtin] [--user] [--repo]
 seed genome blueprint NAME [--json] [--color | --no-color] [--section ID] [--filter @ADDRESS]
                            [--limit N] [--offset N] [--head N] [--tail N]
                            [--pager]
 ```
+
+`search` uses case-insensitive substring matching over genome IDs, metadata
+names and descriptions, tags, and direct authored address names. `--full-text`
+also searches scalar values inside direct authored addresses. Results include
+the genome origin, tags, match types, and matching addresses. Origin flags
+restrict the searched definitions.
 
 ## Verification Session
 
