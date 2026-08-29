@@ -1,12 +1,12 @@
 metadata:
   name: seed-lang
   summary: >-
-    Private Node.js CLI and contract language for authoring, composing,
+    Public-source Node.js CLI and contract language for authoring, composing,
     inspecting, diffing, and verifying Seed software contracts.
   description: >-
     Defines the as-built Seed document model, reusable genome compiler,
     constructed blueprint and diff views, executable verification ledger, and
-    private package and portable-skill distribution surfaces.
+    unpublished npm package and portable-skill distribution surfaces.
 
 genomes:
   - cli-nodejs[environment.npm-install,constraints.nodejs-cli-runtime,freedom.nodejs-cli-structure]
@@ -37,8 +37,9 @@ scope:
         synchronization, and cross-Seed dependency inspection.
     distribution:
       description: >-
-        The private npm-compatible package, seed executable, packaged genome
-        catalog, and portable Codex and Claude Seed skill.
+        The public MIT source repository, unpublished npm-compatible package,
+        seed executable, packaged genome catalog, and portable Codex and Claude
+        Seed skill.
   excluded:
     artifacts:
       - distillation-exclusions
@@ -77,9 +78,7 @@ artifacts:
     description: Complete deferred visual-interface inventory and near-fit non-UI genome review.
   seed-evidence-scripts:
     path: seed/scripts
-    description: >-
-      Repository-owned Seed evidence orchestration and read-only evidence
-      assertions that complement the native Node test suite.
+    description: Deterministic disposable-state checks needed beyond the existing test suite.
 
 interfaces:
   cli:
@@ -174,9 +173,9 @@ interfaces:
       - npm pack --dry-run --json
     npm-compatible:
       description: >-
-        @package-manifest and @dependency-lock define a private, locally
-        installable and packable npm package containing src, resources, README,
-        package metadata, and the MIT license.
+        @package-manifest and @dependency-lock define a locally installable and
+        packable npm package that is marked private against registry publication
+        and contains src, resources, README, package metadata, and the MIT license.
       artifacts:
         - package-manifest
         - dependency-lock
@@ -299,20 +298,11 @@ behavior:
         check executes each unique stored command once and fans results to all
         uses. refresh-expired is an atomic fast path only for confirmed,
         evidence-file-only expiry with no contract change or other pending work.
-    evidence-production:
-      description: >-
-        One repository-owned producer executes shared or expensive proofs once
-        for a stable content-derived product revision and publishes a complete
-        manifest with declared inputs, outputs, command results, and bounded but
-        undiscarded diagnostic locations. Per-address verification commands are
-        read-only consumers of that manifest and do not execute producer work.
     completion-and-sync:
       description: >-
         completed requires every item terminal; satisfied also requires no failed
-        or expired items. sync requires satisfaction and publishes the current
-        Seed snapshot, dependency snapshot, and reconciled session as one
-        crash-consistent selected-Seed transaction while preserving only
-        still-valid terminal results.
+        or expired items. sync requires satisfaction, advances current Seed and
+        dependency snapshots, and preserves only still-valid terminal results.
   distribution:
     package-surface:
       description: >-
@@ -373,10 +363,8 @@ errors:
   verification:
     description: >-
       Corrupt state, invalid transitions, wrong owners, missing or unsafe evidence,
-      failed proof commands, evidence-address binding failures, invalid producer
-      manifests, incomplete audits, expiry, orphaned or contended locks, partial
-      transactions, and unsatisfied sync fail visibly while retaining complete
-      diagnostic artifacts and bounded inline diagnostics where applicable.
+      failed proof commands, incomplete audits, expiry, and unsatisfied sync fail
+      visibly while retaining bounded command diagnostics where applicable.
   skill-installation:
     description: >-
       Missing or conflicting platform choice, unsupported targets, missing bundled
@@ -401,23 +389,10 @@ state:
     description: >-
       Session ledgers store claims, attempts, evidence hashes, command results,
       address fingerprints, and aggregate state. Per-session locks serialize
-      ledger-only updates; one selected-Seed transaction lock serializes every
-      operation that publishes shared snapshots or dependency state. Snapshot,
-      dependency, and reconciled ledger files become visible together or the
-      prior complete generation remains authoritative.
+      updates and JSON ledgers use temporary-file atomic replacement.
     persistence: filesystem
-    consistency: selected-seed-transaction-and-session-locks
+    consistency: lock-serialized-session-updates
     semantics: incremental-verification-ledger
-  verification-evidence-products:
-    description: >-
-      Shared evidence products are keyed by a digest of declared repository
-      inputs rather than mutable branch names or file existence. Successful
-      manifests and referenced durable diagnostics are reproducible; locks,
-      staging paths, incomplete generations, and unreferenced caches are
-      transient.
-    persistence: filesystem
-    consistency: locked-atomic-generation-publication
-    semantics: one-producer-many-read-only-consumers
   skill-targets:
     description: >-
       Explicit install-skill operations persist outside the repository under
@@ -437,13 +412,6 @@ security:
     description: >-
       Seed/session names and evidence paths are normalized and checked; evidence
       rejects empty, absolute, root, traversal, duplicate, and missing paths.
-    policy: global
-  evidence-realpath-containment:
-    description: >-
-      Every evidence file and every traversed parent resolves through filesystem
-      links to a real path inside the selected repository. Missing paths,
-      symlink escapes, and paths that change identity during validation fail
-      before hashes or terminal evidence are recorded.
     policy: global
   trusted-proof-command-interface:
     description: >-
@@ -468,8 +436,9 @@ environment:
       - dependency-lock
   package-status:
     description: >-
-      Version 0.0.0 is a private prototype. Local installation and packing are
-      supported; registry publication is not an active product surface.
+      Version 0.0.0 is an unpublished npm prototype in a public MIT source
+      repository. Local installation and packing are supported; npm registry
+      publication is not an active product surface.
     artifacts:
       - package-manifest
 
@@ -513,7 +482,7 @@ compatibility:
       - package-manifest
   prototype-evolution:
     description: >-
-      Human wording and internal details may evolve during the private prototype,
+      Human wording and internal details may evolve during the prototype,
       but command semantics, machine data, paths, formats, and state meaning do
       not change accidentally.
 
@@ -548,35 +517,7 @@ constraints:
   verification-state-integrity:
     description: >-
       Session state updates are lock-serialized, terminal evidence is hash-bound,
-      selected-Seed snapshot publication is transactionally all-or-nothing,
-      refresh is all-or-nothing, evidence-address binding errors are fatal, and
-      failures never fabricate successful evidence.
-    policy: global
-  single-evidence-producer:
-    description: >-
-      Exactly one repository evidence producer owns shared or expensive proof
-      execution and publication. Its revision key covers every declared product,
-      test, dependency, configuration, and producer input; a lock with recoverable
-      ownership guards each revision; publication atomically exposes a complete
-      success manifest; failures retain diagnostics without publishing success.
-      All verification-item consumers are read-only, and one producer failure is
-      reported once with consumers referring to that result.
-    policy: global
-  seed-support-organization:
-    description: >-
-      Seed-owned executable support source resides under seed/scripts, native
-      Node behavioral tests reside under test, and generated evidence resides in
-      selected-Seed state. Durable generated files are reproducible and tracked
-      only when referenced by the verification ledger; locks, staging files,
-      caches, package outputs, and incomplete generations are ignored and cleaned.
-    policy: global
-  native-test-ownership:
-    description: >-
-      Behavioral assertions expressible with Node APIs, disposable fixtures, or
-      the CLI process reside in the node:test suite under test. Seed scripts
-      orchestrate evidence production or inspect its manifest; standalone shell
-      or external harnesses are reserved for genuine packaging, process,
-      filesystem, or operating-system boundaries.
+      refresh is all-or-nothing, and failures never fabricate successful evidence.
     policy: global
   one-cli-package:
     description: >-
@@ -589,8 +530,9 @@ constraints:
     policy: global
   private-prototype:
     description: >-
-      Package and contract distribution are local/private; publication or public
-      release obligations require a later Seed change.
+      The source repository and contract files are publicly distributed under
+      MIT, while the npm package remains marked private against registry
+      publication. Registry release obligations require a later Seed change.
 
 freedom:
   internal-modules:
@@ -608,81 +550,6 @@ freedom:
       require explicit contract changes rather than inference from this freedom.
 
 verifications:
-  evidence-producer-safety:
-    title: Shared evidence production is revision-safe and reusable
-    description: >-
-      Verify @behavior.verification.evidence-production and
-      @constraints.single-evidence-producer through cold, concurrent, interrupted,
-      and warm executions against a disposable selected-Seed state root.
-    method: >-
-      Run the repository evidence producer from an empty cache, invoke the same
-      revision concurrently, interrupt it at lock and publication fault points,
-      then invoke it warm. Assert exactly one successful execution per expensive
-      proof, one stable content-derived revision, recoverable lock ownership,
-      atomic complete-manifest publication, retained failure diagnostics, and
-      byte-identical read-only consumer results without producer-side writes.
-    evidence_required:
-      - Exact cold, concurrent, interrupted, warm, and consumer commands with exit statuses.
-      - Revision input inventory, digest, execution counts, lock outcomes, and manifest hashes.
-      - Complete producer diagnostics for every injected failure and proof that no success manifest or partial generation became authoritative.
-    artifacts:
-      - source-contract
-      - test-contract
-      - seed-evidence-scripts
-  verification-state-transactions:
-    title: Verification state publication is crash-consistent
-    description: >-
-      Verify @state.verification-session and
-      @constraints.verification-state-integrity under concurrent sessions and
-      injected failures at every snapshot, dependency, and ledger publication step.
-    method: >-
-      Use native disposable-repository tests to race two session IDs that target
-      one selected Seed, interrupt each transaction publication step, and inject
-      evidence-address fingerprinting failure during refresh. Every observation
-      must expose one complete generation, preserve the prior generation after
-      interruption, serialize shared-state writers, and fail without clearing or
-      fabricating evidence bindings.
-    evidence_required:
-      - Exact native test command and exit status.
-      - Concurrent-writer and per-publication-fault results for all three coupled files.
-      - Before/after generation hashes and explicit evidence-binding failure diagnostics.
-    artifacts:
-      - source-contract
-      - test-contract
-  evidence-path-containment:
-    title: Evidence paths cannot escape through filesystem links
-    description: Verify @security.evidence-realpath-containment for files and parent directories.
-    method: >-
-      Use disposable native tests with an in-repository file, an evidence-file
-      symlink to an external target, a parent-directory symlink to an external
-      directory, a dangling link, and a link identity change between validation
-      and hashing. Only the stable in-repository real path may reach terminal evidence.
-    evidence_required:
-      - Exact native test command and exit status.
-      - Realpath containment results for every file and parent-link fixture.
-      - Nonzero results and contextual diagnostics for every escape, dangling, or changed-identity case.
-    artifacts:
-      - source-contract
-      - test-contract
-  support-organization:
-    title: Seed support and native tests have one clear home
-    description: >-
-      Verify @constraints.seed-support-organization and
-      @constraints.native-test-ownership across tracked files and package output.
-    method: >-
-      Run a repository inventory assertion that classifies every file below test,
-      seed/scripts, seed/evidence, and selected .seed state; rejects behavioral
-      tests outside test, executable support outside seed/scripts, unreferenced
-      durable evidence, and tracked locks, caches, staging, incomplete, or package
-      outputs; then inspect npm pack dry-run output for Seed-only support exclusion.
-    evidence_required:
-      - Exact inventory and package-inspection commands with exit statuses.
-      - Complete classified support-file inventory and ledger references for durable generated evidence.
-      - Ignore-rule proof for transient locks, caches, staging paths, incomplete generations, and package outputs.
-    artifacts:
-      - package-manifest
-      - test-contract
-      - seed-evidence-scripts
   repo-license:
     title: Repository license is explicit and consistent
     description: >-
@@ -690,12 +557,12 @@ verifications:
       actually declares the root package license agree on MIT without treating
       dependency licenses or README prose as project license declarations.
     method: >-
-      After @verifications.evidence-producer-safety has published the revision
-      manifest, run the repo-license read-only evidence consumer. It checks the
-      native license-test result and parsed package, lockfile, and LICENSE facts
-      without executing the producer or mutating its output.
+      Run node seed/scripts/verify-license.js from the repository root. The
+      verifier parses package.json and package-lock.json, checks the root package
+      entries, and validates the identifying MIT text in LICENSE with complete
+      assertion diagnostics on mismatch.
     evidence_required:
-      - Producer revision and exact read-only consumer command with exit status.
+      - Exact verifier command and exit status.
       - Parsed root package and lockfile license identifiers.
       - LICENSE identification and mismatch diagnostics.
     artifacts:
@@ -706,11 +573,9 @@ verifications:
   unit-tests:
     title: Unit tests pass
     description: Verify isolated Seed-critical behavior through the repository test suite.
-    method: >-
-      After @verifications.evidence-producer-safety, run the unit-tests read-only
-      evidence consumer against the shared native-test result.
+    method: Run npm test from the repository root as the shared test producer.
     evidence_required:
-      - Producer revision and exact read-only consumer command with exit status.
+      - Exact npm test command and exit status.
       - Complete passing summary or failing diagnostics from all test files.
       - Confirmation that fixture repositories and homes were disposable and cleaned.
     artifacts:
@@ -718,11 +583,9 @@ verifications:
   integration-tests:
     title: Integration tests pass
     description: Verify integrated CLI and filesystem workflows through the repository test suite.
-    method: >-
-      After @verifications.evidence-producer-safety, run the integration-tests
-      read-only evidence consumer against the shared native-test result.
+    method: Run npm test from the repository root as the shared test producer.
     evidence_required:
-      - Producer revision and exact read-only consumer command with exit status.
+      - Exact npm test command and exit status.
       - Complete passing summary or failing diagnostics from all test files.
       - Confirmation that fixture repositories and homes were disposable and cleaned.
     artifacts:
@@ -734,11 +597,16 @@ verifications:
       inventory every shell command, and use @seed-evidence-scripts to exercise
       safe real CLI paths only in disposable repository and user-home locations.
     method: >-
-      After @verifications.evidence-producer-safety, run the repo-readme read-only
-      evidence consumer. It checks the native README inventory and disposable CLI
-      workflow result without rerunning either producer.
+      Reuse npm test as the shared test producer, then run node
+      seed/scripts/verify-readme.js from the repository root. The verifier
+      classifies every README shell command, rejects unknown command forms, and
+      executes representative project, genome, verification, named-Seed, and
+      skill-installation paths under a temporary repository, HOME, CODEX_HOME,
+      and CLAUDE_HOME that it removes in a finally block. Network/global-install,
+      placeholder, interactive pager, and terminal evidence-transition examples
+      are inspected but not executed.
     evidence_required:
-      - Producer revision and exact read-only consumer command with exit status.
+      - Exact npm test and README verifier commands with exit statuses.
       - Complete command-inventory diagnostics on failure.
       - Confirmation that repository files and real user skill homes were unchanged.
     artifacts:
@@ -751,10 +619,10 @@ verifications:
       and named path, and cross-Seed reference behavior from @source-contract
       through @test-contract.
     method: >-
-      After @verifications.evidence-producer-safety, run the contract-language
-      read-only evidence consumer against the shared native-test result.
+      Run node --test test/validation.test.js test/seed-file.test.js
+      test/external-references.test.js from the repository root.
     evidence_required:
-      - Producer revision and exact read-only consumer command with exit status.
+      - Exact command and exit status.
       - Passing test summary or complete failing diagnostics.
       - Confirmation that tests used temporary repositories and did not alter production state.
     artifacts:
@@ -766,11 +634,10 @@ verifications:
       Validate every packaged genome and exercise lookup, composition, selectors,
       exclusions, merge semantics, provenance, and failure paths.
     method: >-
-      After @verifications.evidence-producer-safety, run the genome-catalog
-      read-only evidence consumer against the shared native-test and built-in
-      genome-validation results.
+      Run node src/cli.js genome validate --builtin and node --test
+      test/genomes.test.js from the repository root.
     evidence_required:
-      - Producer revision and exact read-only consumer command with exit status.
+      - Both exact commands and exit statuses.
       - Validated built-in count and passing focused test summary.
       - Full diagnostics for any invalid genome or failed compiler case.
     artifacts:
@@ -783,11 +650,9 @@ verifications:
       verification transitions, large machine output, and @portable-skill
       installation without treating terminal presentation assertions as master
       acceptance.
-    method: >-
-      After @verifications.evidence-producer-safety, run the semantic-cli-workflows
-      read-only evidence consumer against the shared native-test result.
+    method: Run npm test from the repository root as the shared test producer.
     evidence_required:
-      - Producer revision and exact read-only consumer command with exit status.
+      - Exact npm test command and exit status.
       - Passing summary or complete CLI workflow diagnostics.
       - Confirmation that temporary homes and repositories were disposable and cleaned.
     artifacts:
@@ -798,11 +663,9 @@ verifications:
     description: >-
       Exercise non-TTY, NO_COLOR, TERM=dumb, and supported --no-color paths and
       confirm they suppress ANSI without losing readable command content.
-    method: >-
-      After @verifications.evidence-producer-safety, run the accessible-plain-output
-      read-only evidence consumer against the shared native-test result.
+    method: Run npm test from the repository root as the shared test producer.
     evidence_required:
-      - Producer revision and exact read-only consumer command with exit status.
+      - Exact npm test command and exit status.
       - Passing terminal-markdown and CLI assertions for every ANSI-suppression path.
       - Complete diagnostics if plain output loses content or contains unexpected ANSI.
     artifacts:
@@ -815,11 +678,10 @@ verifications:
       skill has been moved to its backup and prove the real CLI fails nonzero
       without losing prior content or leaving a partial staged target.
     method: >-
-      After @verifications.evidence-producer-safety, run the
-      skill-installation-rollback read-only evidence consumer against the native
-      controlled-failure test result.
+      Run node seed/scripts/verify-skill-installer-rollback.js from the repository
+      root using only the disposable CODEX_HOME created and removed by the script.
     evidence_required:
-      - Producer revision and exact read-only consumer command with exit status.
+      - Exact verifier command and exit status.
       - Nonzero nested CLI result and preserved controlled-failure diagnostics.
       - Intact prior marker plus absence of partial target, backup, and staging paths.
     artifacts:
@@ -831,26 +693,21 @@ verifications:
     description: >-
       Exercise claims, leases, locks, evidence commands, hashes, expiry,
       reconciliation, replay, refresh, audit, report, completion, and sync.
-    method: >-
-      After @verifications.evidence-producer-safety, run the
-      verification-lifecycle read-only evidence consumer against the shared
-      native-test result.
+    method: Run node --test test/verification-store.test.js from the repository root.
     evidence_required:
-      - Producer revision and exact read-only consumer command with exit status.
+      - Exact command and exit status.
       - Passing summary or complete state-machine diagnostics.
       - Confirmation that only disposable fixture repositories were mutated.
     artifacts:
       - test-contract
   package-surface-behavior:
-    title: Private npm package surface is reproducible
+    title: Unpublished npm package surface is reproducible
     description: >-
       Inspect the npm-compatible pack result without publishing or writing a
       production package artifact.
-    method: >-
-      After @verifications.evidence-producer-safety, run the package-surface
-      read-only evidence consumer against the single npm pack dry-run result.
+    method: Run npm pack --dry-run --json from the repository root and inspect its file list.
     evidence_required:
-      - Producer revision and exact read-only consumer command with exit status.
+      - Exact command and exit status.
       - Package name, version, executable mode, and included file inventory.
       - Confirmation that src, resources, README, package metadata, and license are present and tests are absent.
     artifacts:

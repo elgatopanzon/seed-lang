@@ -2,43 +2,48 @@
 
 ## Executive assessment
 
-The accepted implementation is a coherent private Node.js CLI with strong domain coverage in `test/`, focused modules around a deliberately central command router, explicit package boundaries, and unusually thorough verification-state behavior. The polish Seed preserves the master product intent, IDs, private-prototype boundary, selected-Seed authority, and non-visual behavior. It adds four implementation priorities: crash-consistent verification state, realpath-safe evidence, one revision-keyed evidence producer with read-only consumers, and clear ownership of native tests versus Seed support.
+The polish Seed is restricted to improving the accuracy and wording of the
+as-built contract. It does not add behavior, architecture, security guarantees,
+evidence systems, implementation constraints, verification obligations, or
+genomes that the current product does not already satisfy.
 
-Priority is P0 for state/evidence correctness, P1 for evidence cost and trustworthiness, and P2 for support-file organization. No application change is made by this review. `requirements` remains empty, and no UI obligation enters the advisory.
+The master Seed accurately captures the implemented Seed language and CLI. No
+eligible product-neutral contract expansion was found. The polish Seed therefore
+preserves every master address, genome, verification method, and evidence
+requirement unchanged.
 
-## Findings encoded in polish Seed
+## Wording corrections retained
 
-- **P0, selected-Seed state needs one transaction authority.** `src/verification-store.js:94` derives locks from the session ID, while `src/verification-store.js:1445-1447` publishes the Seed snapshot, dependency snapshot, and session ledger as three writes to selected-Seed shared state. Different session locks can therefore admit competing shared-state writers, and interruption can expose a mixed generation. In addition, confirmation and refresh catch Seed-address fingerprinting errors and store `null` at `src/verification-store.js:1229-1234` and `src/verification-store.js:1866-1871`, allowing a successful terminal transition without its intended contract binding. The desired state is encoded by `@behavior.verification.completion-and-sync`, `@errors.verification`, `@state.verification-session`, `@constraints.verification-state-integrity`, and `@verifications.verification-state-transactions`. The verification requires concurrent-session races, a fault at every coupled publication point, before/after generation hashes, and a loud binding-failure case.
+The repository is public under MIT, while `package.json` marks the npm package
+private against registry publication. The master Seed repeatedly describes the
+whole project, source, package, or contract distribution as private. The polish
+Seed corrects only that factual distinction:
 
-- **P0, lexical evidence containment is insufficient.** `safeRelativeFilePath` at `src/verification-store.js:201-218` proves only lexical containment; later reads follow filesystem links. A repository-relative evidence file or parent directory can therefore resolve outside the selected repository. `@security.evidence-realpath-containment` requires stable realpath containment before hashing or terminal evidence, and `@verifications.evidence-path-containment` covers file links, parent links, dangling links, and identity changes.
+- The source repository and contract distribution are public under MIT.
+- Version `0.0.0` remains an unpublished npm prototype.
+- Local installation and package dry-run behavior remain supported.
+- npm registry publication remains outside the active product surface.
 
-- **P1, expensive evidence has competing producers and per-address execution semantics.** Four master verifications repeat the exact `npm test` producer at `seed/seed.yml:573`, `seed/seed.yml:583`, `seed/seed.yml:650`, and `seed/seed.yml:663`; focused test producers overlap that full suite. The repair in commit `f771b19` added valuable content hashes, success-only cache reuse, atomic cache replacement, and retained output, but `seed/evidence/verify-distillation.js:14-31` still declares many overlapping producers, `seed/evidence/verify-distillation.js:87-105` infers cache behavior from Linux `/proc` ancestry, and `seed/evidence/verify-distillation.js:170-183` cannot distinguish an active lock from an orphan. This is why passing commands accumulated rather than forming one explicit evidence product. `@behavior.verification.evidence-production`, `@state.verification-evidence-products`, and `@constraints.single-evidence-producer` define one producer, a content-derived revision over declared inputs, recoverable ownership, atomic complete manifests, durable diagnostics, and read-only consumers. `@verifications.evidence-producer-safety` requires cold, concurrent, interrupted, warm, and read-only-consumer proof. Existing verification IDs now consume that shared manifest instead of owning producer work, so one producer failure is reported once rather than repeated for every address.
+These corrections do not change implementation or acceptance behavior.
 
-- **P2, native tests and Seed support need unambiguous ownership.** Production tests already use the established `test/` plus `node:test` layout. However, `seed/scripts/verify-license.js` is a native file assertion, `seed/scripts/verify-skill-installer-rollback.js` injects Node filesystem behavior and calls the CLI in-process, and `seed/scripts/verify-readme.js` is a Node CLI integration suite. Meanwhile executable source lives under the generated-sounding `seed/evidence/verify-distillation.js`, and `.gitignore` contains only `node_modules/`. `@constraints.native-test-ownership` keeps Node behavioral assertions under `test/`; `@constraints.seed-support-organization` keeps evidence orchestration and consumers under `seed/scripts`, preserves intentional `.seed` snapshots and ledgers, and classifies locks, caches, staging paths, incomplete generations, and package outputs as transient. `@verifications.support-organization` verifies the tracked inventory, ledger references, ignore rules, and package exclusion. The `@seed-evidence-scripts` artifact description now reflects this narrower authority.
+## Suggestions reviewed but not encoded
 
-## Run-history lessons
+The review identified possible improvements involving multi-file verification
+transactions, filesystem-link evidence containment, a shared evidence producer,
+and reorganization of Seed support scripts. None describe current as-built
+behavior. Encoding them would invent product guarantees and implementation work,
+so they are deliberately absent from `seed/polish/seed.yml`.
 
-The only supplied runner event says distillation agent `399f7133-d460-4318-99f9-8ddaaf05ffc3` became idle without submitting its report. There is no evidence that a Seed ambiguity, product architecture, or verification boundary caused that provider/workflow failure, so no product contract is built around it. Encoding report-delivery retries in `seed-lang` would confuse Greenhouse orchestration with the Seed language.
+Such changes require a separate explicit Seed-first product decision. They must
+not enter a distilled or polished Seed merely because a reviewer considers them
+desirable.
 
-The accepted repair history is nevertheless useful code evidence. Commit `f771b19` exists because repeated verification commands were expensive enough to require an after-the-fact shared cache. Earlier review could have found this by mapping producers, outputs, revision keys, writers, and consumers before accepting per-address commands. `@constraints.single-evidence-producer` and `@verifications.evidence-producer-safety` make that mapping and its cold/warm proof explicit for later work.
+## Distillation boundary
 
-No durable integration failure history was supplied. No provisionable producer failure is classified as external human evidence.
+Future distillation polish may correct omissions or inaccurate wording only when
+repository code, tests, documentation, artifacts, and history already establish
+the behavior. Potential improvements, defects, aspirational genomes, and stronger
+quality policies belong in a review report or later user-authorized Seed change,
+not in the replacement Seed.
 
-## Repository hygiene
-
-The read-only hygiene scanner covered all 83 reachable commits with raw secret values suppressed. Its first pass failed while decoding the 1.7 MB PNG as UTF-8; the completed pass used a 1 MB text-blob cap and reported no critical or high secret finding. Optional gitleaks, detect-secrets, and trufflehog binaries were unavailable. The broad scanner marked the owner's repeated commit email, public GitHub/npm URLs, and dependency-version substrings as privacy or private-infrastructure candidates; manual inspection found these are not concrete Seed defects. The GitHub SSH remote is a transport form for the public repository URL documented in `README.md:301`, and `package-lock.json` resolves public npm packages.
-
-`README.md` documents purpose, prototype status, prerequisites, installation, use, development, and license. `LICENSE`, `package.json`, and the root lock entry consistently declare MIT. The package is explicitly private at `package.json:4`, so CI, `SECURITY.md`, registry-publication ceremony, history rewriting, and public contributor policy are not active obligations. The tracked `.seed` snapshot and session are intentional verification artifacts, not disposable build output. Transient state hygiene is encoded only where it is concrete through `@constraints.seed-support-organization`.
-
-`assets/seed-banner.png` is the only material large tracked file. It is documentation imagery explicitly assigned to the future app-UI Seed by `seed/distillation-exclusions.md`; no size, format, removal, or screenshot requirement enters polish. The review checkout has no `node_modules`, so `npm test` fails at dependency loading without exercising tests. Installing dependencies would write outside the authorized `seed/polish/**` boundary; this review therefore inspected the complete test sources and accepted recorded state but did not treat the missing local install as a product failure.
-
-## Deferred or rejected suggestions
-
-- All terminal geometry, ANSI policy, tables, pager choreography, screenshots, and the banner remain UI-deferred exactly as required by `seed/distillation-exclusions.md`. No UI genome or acceptance item is present.
-- `architecture-modular-monolith` is not adopted. The import graph already has focused modules and no concrete cycle or boundary bypass was found; adding abstract module ceremony would not repair an observed defect.
-- `verify-smoke-tests` and `cli-help-version` are not adopted. The repository already has real CLI integration coverage, while `--version` is an explicit non-feature rather than a quality defect.
-- The broad `policy-safe-paths` genome is not adopted because user genome and skill-install destinations are intentional external paths. Its evidence-realpath subset is adopted narrowly at `@security.evidence-realpath-containment`.
-- Universal no-shell and no-secret-output policies are rejected because trusted proof commands and explicit pager input are documented shell boundaries, and verification reports intentionally retain bounded command output. Secret redaction would need a separate product decision and concrete disclosure model.
-- A precise Node engine floor is not encoded. The accepted code uses modern Node APIs, but the repository contains no authoritative minimum-version decision or compatibility matrix; inventing one would make the polish Seed implementation-dependent rather than implementation-ready.
-- Public-release CI, security policy, contribution workflow, author-email rewriting, and remote rewriting are rejected because `@constraints.private-prototype` keeps publication outside the active product scope. They may be reconsidered only with an explicit publication Seed change.
-- The runner's idle-without-report retry is left to Greenhouse orchestration. It did not reveal a repository requirement, implementation weakness, or evidence boundary that `seed-lang` can honestly verify.
+Visual UI remains deferred to `seed/distillation-exclusions.md` and is unchanged.
