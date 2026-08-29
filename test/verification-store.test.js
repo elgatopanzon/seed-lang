@@ -407,6 +407,122 @@ describe('verification store', () => {
     });
   });
 
+  test('confirmItem executes one shared command producer per product revision', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+
+      const counterPath = path.join(cwd, '.seed', 'shared-command-count.txt');
+      const counterCommand = `${process.execPath} -e "const fs=require('node:fs');const p='.seed/shared-command-count.txt';const n=fs.existsSync(p)?Number(fs.readFileSync(p,'utf8')):0;fs.writeFileSync(p,String(n+1))"`;
+      ['verify-begin', 'verify-next'].forEach((id, index) => {
+        claimItem({ cwd, itemId: id, owner: 'worker-A', now: () => 1_000 + index * 1_000 });
+        confirmItem({
+          cwd,
+          itemId: id,
+          owner: 'worker-A',
+          files: ['implementation.js'],
+          testCommands: [counterCommand],
+          evidence: `${id} checked with shared command output`,
+          now: () => 1_500 + index * 1_000,
+        });
+      });
+
+      let session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      const first = session.items.find((entry) => entry.id === 'verify-begin').test_commands[0];
+      const second = session.items.find((entry) => entry.id === 'verify-next').test_commands[0];
+      assert.equal(fs.readFileSync(counterPath, 'utf8'), '1');
+      assert.equal(first.reused, false);
+      assert.equal(second.reused, true);
+      assert.equal(first.producerItemId, 'verify-begin');
+      assert.equal(second.producerItemId, 'verify-begin');
+      assert.equal(second.productRevision, first.productRevision);
+      assert.equal(second.executedAt, first.executedAt);
+      assert.equal(second.resultHash.length, 64);
+      const sharedAudit = verificationAudit({ cwd });
+      assert.equal(sharedAudit.errors.some((entry) => entry.code === 'duplicate-command-executions'), false);
+      assert.equal(sharedAudit.warnings.some((entry) => ['command-reuse', 'broad-command-reuse'].includes(entry.code)), false);
+
+      fs.writeFileSync(path.join(cwd, 'implementation.js'), 'module.exports = { changed: true };\n', 'utf8');
+      claimItem({ cwd, itemId: 'verify-final', owner: 'worker-A', now: () => 3_000 });
+      confirmItem({
+        cwd,
+        itemId: 'verify-final',
+        owner: 'worker-A',
+        files: ['implementation.js'],
+        testCommands: [counterCommand],
+        evidence: 'verify-final checked after product content changed',
+        now: () => 3_500,
+      });
+
+      session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      const third = session.items.find((entry) => entry.id === 'verify-final').test_commands[0];
+      assert.equal(fs.readFileSync(counterPath, 'utf8'), '2');
+      assert.equal(third.reused, false);
+      assert.equal(third.producerItemId, 'verify-final');
+      assert.notEqual(third.productRevision, first.productRevision);
+      assert.notEqual(third.executedAt, first.executedAt);
+    });
+  });
+
+  test('shared command records reject partial or corrupt cached output', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+      claimItem({ cwd, itemId: 'verify-begin', owner: 'worker-A' });
+      confirmItem({
+        cwd,
+        itemId: 'verify-begin',
+        owner: 'worker-A',
+        files: ['implementation.js'],
+        testCommands: [PASS_CMD],
+        evidence: 'complete shared command output was recorded',
+      });
+
+      const session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      delete session.items[0].test_commands[0].stdout;
+      fs.writeFileSync(sessionFile(cwd), JSON.stringify(session, null, 2), 'utf8');
+
+      assert.throws(
+        () => getStatus({ cwd }),
+        /shared command result.*stdout/i,
+      );
+    });
+  });
+
+  test('failed shared producers preserve complete stdout stderr and exit status', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+      claimItem({ cwd, itemId: 'verify-begin', owner: 'worker-A' });
+      const diagnosticCommand = `${process.execPath} -e "process.stdout.write('o'.repeat(5000));process.stderr.write('e'.repeat(5000)+'END');process.exitCode=7"`;
+      failItem({
+        cwd,
+        itemId: 'verify-begin',
+        owner: 'worker-A',
+        files: ['implementation.js'],
+        testCommands: [diagnosticCommand],
+        reason: 'controlled producer failure preserves diagnostics',
+      });
+
+      const session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      const result = session.items[0].test_commands[0];
+      assert.equal(result.exitCode, 7);
+      assert.equal(result.stdout, 'o'.repeat(5000));
+      assert.equal(result.stderr, `${'e'.repeat(5000)}END`);
+      assert.equal(result.passed, false);
+      assert.equal(result.reused, false);
+    });
+  });
+
   test('unknown ids throw explicit errors on confirm', () => {
     withTempDir((cwd) => {
       startSession({
@@ -1237,7 +1353,7 @@ describe('verification store', () => {
         seedText: 'seed-contract-text',
       });
 
-      const counterCommand = `${process.execPath} -e "const fs=require('node:fs');const p='check-count.txt';const n=fs.existsSync(p)?Number(fs.readFileSync(p,'utf8')):0;fs.writeFileSync(p,String(n+1))"`;
+      const counterCommand = `${process.execPath} -e "const fs=require('node:fs');const p='.seed/check-count.txt';const n=fs.existsSync(p)?Number(fs.readFileSync(p,'utf8')):0;fs.writeFileSync(p,String(n+1))"`;
       ['verify-begin', 'verify-next', 'verify-final'].forEach((id, index) => {
         claimNext({ cwd, owner: 'worker-A', now: () => 1_000 + index * 1_000 });
         confirmItem({
@@ -1250,14 +1366,14 @@ describe('verification store', () => {
           now: () => 1_500 + index * 1_000,
         });
       });
-      fs.writeFileSync(path.join(cwd, 'check-count.txt'), '0', 'utf8');
+      fs.writeFileSync(path.join(cwd, '.seed', 'check-count.txt'), '0', 'utf8');
 
       const check = checkSession({ cwd, now: () => 10_000 });
 
       assert.equal(check.ok, true);
       assert.equal(check.recordedCommandTotal, 3);
       assert.equal(check.uniqueCommandTotal, 1);
-      assert.equal(fs.readFileSync(path.join(cwd, 'check-count.txt'), 'utf8'), '1');
+      assert.equal(fs.readFileSync(path.join(cwd, '.seed', 'check-count.txt'), 'utf8'), '1');
       assert.equal(check.items.every((item) => item.commands[0].command === counterCommand), true);
       assert.equal(check.items.every((item) => item.commands[0].passed), true);
     });
@@ -1267,7 +1383,7 @@ describe('verification store', () => {
     withTempDir((cwd) => {
       startSampleSessionWithSeed(cwd);
 
-      const counterCommand = `${process.execPath} -e "const fs=require('node:fs');const p='refresh-count.txt';const n=fs.existsSync(p)?Number(fs.readFileSync(p,'utf8')):0;fs.writeFileSync(p,String(n+1))"`;
+      const counterCommand = `${process.execPath} -e "const fs=require('node:fs');const p='.seed/refresh-count.txt';const n=fs.existsSync(p)?Number(fs.readFileSync(p,'utf8')):0;fs.writeFileSync(p,String(n+1))"`;
       ['verify-begin', 'verify-next', 'verify-final'].forEach((id, index) => {
         claimNext({ cwd, owner: 'worker-A', now: () => 1_000 + index * 1_000 });
         confirmItem({
@@ -1280,7 +1396,7 @@ describe('verification store', () => {
           now: () => 1_500 + index * 1_000,
         });
       });
-      fs.writeFileSync(path.join(cwd, 'refresh-count.txt'), '0', 'utf8');
+      fs.writeFileSync(path.join(cwd, '.seed', 'refresh-count.txt'), '0', 'utf8');
       fs.writeFileSync(path.join(cwd, 'implementation.js'), 'module.exports = { refreshed: true };\n', 'utf8');
 
       const refreshed = refreshExpiredEvidence({
@@ -1293,7 +1409,7 @@ describe('verification store', () => {
       assert.equal(refreshed.refreshed, 3);
       assert.equal(refreshed.recordedCommandTotal, 3);
       assert.equal(refreshed.uniqueCommandTotal, 1);
-      assert.equal(fs.readFileSync(path.join(cwd, 'refresh-count.txt'), 'utf8'), '1');
+      assert.equal(fs.readFileSync(path.join(cwd, '.seed', 'refresh-count.txt'), 'utf8'), '1');
       assert.equal(getStatus({ cwd }).expired, 0);
       const session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
       assert.equal(session.items.every((item) => item.status === 'confirmed'), true);

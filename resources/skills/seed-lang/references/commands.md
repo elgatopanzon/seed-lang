@@ -70,9 +70,10 @@ seed verify status
   for normal incremental changes.
 - `pending` reads pending and expired work without claiming it.
 - `next` claims the next pending or expired item.
-- `confirm` executes every supplied command and succeeds only when all pass.
-- `fail` executes every supplied command and succeeds only when at least one
-  fails.
+- `confirm` executes each command once per product-content revision, reuses the
+  complete producer result for later consumers, and succeeds only when all pass.
+- `fail` uses the same content-bound producer results and succeeds only when at
+  least one fails.
 - `check` executes each unique recorded command once and applies the result to
   every occurrence.
 - `refresh-expired` is a strict atomic fast path only for unchanged-contract,

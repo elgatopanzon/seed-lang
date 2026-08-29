@@ -661,8 +661,13 @@ Every confirmation requires:
 - At least one executable test command.
 - Item-specific evidence.
 
-Commands execute immediately from the repository root. Confirmation succeeds
-only when every supplied command exits successfully.
+Commands execute from the repository root. The first occurrence of a command
+produces a content-bound result; later items at the same product revision reuse
+that complete stdout, stderr, exit-status, and timing record without executing
+the command again. Producer and consumer records identify the owning item and
+exclude `.seed` state from the revision. A command that changes product content
+fails instead of caching stale evidence. Confirmation succeeds only when every
+supplied or reused result passed.
 
 ### Record A Terminal Failure
 
@@ -687,9 +692,9 @@ Repeat claims and item-specific verification until:
 No pending verification items.
 ```
 
-Do not bulk-confirm items. Reusing one broad whole-suite command as the sole
-evidence for unrelated requirements weakens verification and is reported by the
-audit.
+Do not bulk-confirm items. Shared command output avoids duplicate execution, but
+each item still requires relevant files and item-specific evidence. The audit
+rejects multiple producer executions for one command and product revision.
 
 ### Completion Gate
 

@@ -1,7 +1,10 @@
 const {
   existsSync,
+  lstatSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
+  readlinkSync,
   rmSync,
   renameSync,
   writeFileSync,
@@ -33,7 +36,6 @@ const DEFAULT_LEASE_MS = 60_000;
 const DEFAULT_LOCK_WAIT_MS = 60_000;
 const DEFAULT_LOCK_RETRY_MS = 50;
 const DEFAULT_TEST_COMMAND_TIMEOUT_MS = 300_000;
-const MAX_TEST_COMMAND_OUTPUT_CHARS = 4_000;
 const SESSION_SCHEMA_VERSION = 1;
 const SESSION_COMMAND_CWD = '.';
 const VALID_STATUSES = [
@@ -46,6 +48,7 @@ const VALID_STATUSES = [
 ];
 const SAFE_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 const SHA256_HEX = /^[a-f0-9]{64}$/;
+const PRODUCT_REVISION_EXCLUDED_DIRECTORIES = new Set(['.git', '.seed', 'node_modules']);
 
 function assertSessionId(sessionId) {
   if (typeof sessionId !== 'string' || !SAFE_SESSION_ID.test(sessionId)) {
@@ -217,16 +220,122 @@ function safeRelativeFilePath(cwd, filePath) {
   return relativePath.split(sep).join('/');
 }
 
-function truncateOutput(value) {
-  if (typeof value !== 'string') {
-    return '';
-  }
+function fallbackProductFiles(root) {
+  const files = [];
+  const visit = (directory, relativeDirectory = '') => {
+    for (const entry of readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name.localeCompare(right.name))) {
+      if (entry.isDirectory() && PRODUCT_REVISION_EXCLUDED_DIRECTORIES.has(entry.name)) {
+        continue;
+      }
+      const relativePath = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name;
+      const absolutePath = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        visit(absolutePath, relativePath);
+      } else {
+        files.push(relativePath);
+      }
+    }
+  };
+  visit(root);
+  return files;
+}
 
-  if (value.length <= MAX_TEST_COMMAND_OUTPUT_CHARS) {
-    return value;
+function productFiles(root) {
+  const listed = spawnSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], {
+    cwd: root,
+    encoding: 'utf8',
+    maxBuffer: 16 * 1024 * 1024,
+  });
+  if (listed.status !== 0) {
+    return fallbackProductFiles(root);
   }
+  return listed.stdout
+    .split('\0')
+    .filter(Boolean)
+    .filter((filePath) => ![...PRODUCT_REVISION_EXCLUDED_DIRECTORIES]
+      .some((directory) => filePath === directory || filePath.startsWith(`${directory}/`)))
+    .sort();
+}
 
-  return value.slice(0, MAX_TEST_COMMAND_OUTPUT_CHARS) + '\n[truncated]';
+function productRevision(cwd) {
+  const root = workspaceRoot(cwd);
+  const hash = createHash('sha256').update('seed-product-revision-v1\0');
+  for (const filePath of productFiles(root)) {
+    const absolutePath = join(root, filePath);
+    hash.update(filePath);
+    hash.update('\0');
+    if (!existsSync(absolutePath)) {
+      hash.update('missing\0');
+      continue;
+    }
+    const stat = lstatSync(absolutePath);
+    hash.update(String(stat.mode & 0o777));
+    hash.update('\0');
+    if (stat.isSymbolicLink()) {
+      hash.update('symlink\0');
+      hash.update(readlinkSync(absolutePath));
+    } else if (stat.isFile()) {
+      hash.update('file\0');
+      hash.update(readFileSync(absolutePath));
+    } else {
+      hash.update('other\0');
+    }
+    hash.update('\0');
+  }
+  return hash.digest('hex');
+}
+
+function commandResultHash(result) {
+  const { resultHash, ...payload } = result;
+  return createHash('sha256').update(canonicalJson(payload), 'utf8').digest('hex');
+}
+
+function isSharedCommandResult(result) {
+  return result && [
+    result.productRevision,
+    result.producerItemId,
+    result.reused,
+    result.resultHash,
+  ].some((value) => value !== undefined);
+}
+
+function assertSharedCommandResult(result, sourcePath, itemId, index) {
+  if (!isSharedCommandResult(result)) {
+    return;
+  }
+  const prefix = `Corrupt session state at ${sourcePath}: shared command result ${itemId}[${index}]`;
+  const requiredStrings = ['command', 'cwd', 'stdout', 'stderr', 'productRevision', 'producerItemId', 'resultHash'];
+  for (const field of requiredStrings) {
+    if (typeof result[field] !== 'string' || (field !== 'stdout' && field !== 'stderr' && result[field].length === 0)) {
+      throw new Error(`${prefix} requires ${field}.`);
+    }
+  }
+  if (!SHA256_HEX.test(result.productRevision)) {
+    throw new Error(`${prefix} productRevision must be a SHA-256 hex digest.`);
+  }
+  if (!SHA256_HEX.test(result.resultHash) || commandResultHash(result) !== result.resultHash) {
+    throw new Error(`${prefix} resultHash does not match the complete stored result.`);
+  }
+  if (result.cwd !== SESSION_COMMAND_CWD || result.shell !== true || typeof result.reused !== 'boolean') {
+    throw new Error(`${prefix} has invalid execution metadata.`);
+  }
+  if (typeof result.timeoutMs !== 'number' || !Number.isFinite(result.timeoutMs)
+    || typeof result.durationMs !== 'number' || !Number.isFinite(result.durationMs)
+    || typeof result.executedAt !== 'number' || !Number.isFinite(result.executedAt)
+    || typeof result.timedOut !== 'boolean' || typeof result.passed !== 'boolean'
+    || !(result.exitCode === null || Number.isInteger(result.exitCode))
+    || !(result.signal === null || typeof result.signal === 'string')) {
+    throw new Error(`${prefix} is missing complete execution diagnostics.`);
+  }
+}
+
+function reusedCommandResult(result) {
+  const reused = {
+    ...structuredClone(result),
+    reused: true,
+  };
+  reused.resultHash = commandResultHash(reused);
+  return reused;
 }
 
 function normalizeTestCommands(commands) {
@@ -242,9 +351,24 @@ function normalizeTestCommands(commands) {
   });
 }
 
-function runTestCommands(cwd, commands, { now } = {}) {
+function runTestCommands(cwd, commands, {
+  now,
+  producerItemId = 'verification-session',
+  reusableResults = [],
+} = {}) {
   const normalized = normalizeTestCommands(commands);
+  const revision = productRevision(cwd);
+  const reusableByCommand = new Map(
+    reusableResults
+      .filter((result) => isSharedCommandResult(result) && result.productRevision === revision)
+      .map((result) => [result.command, result]),
+  );
   return normalized.map((command) => {
+    const reusable = reusableByCommand.get(command);
+    if (reusable) {
+      return reusedCommandResult(reusable);
+    }
+
     const startedAt = resolveNow(now);
     const started = Date.now();
     const result = spawnSync(command, {
@@ -252,13 +376,13 @@ function runTestCommands(cwd, commands, { now } = {}) {
       shell: true,
       encoding: 'utf8',
       timeout: DEFAULT_TEST_COMMAND_TIMEOUT_MS,
-      maxBuffer: 1024 * 1024,
+      maxBuffer: 16 * 1024 * 1024,
     });
     const durationMs = Date.now() - started;
     const exitCode = typeof result.status === 'number' ? result.status : null;
     const timedOut = result.error?.code === 'ETIMEDOUT';
 
-    return {
+    const resultRecord = {
       command,
       cwd: SESSION_COMMAND_CWD,
       shell: true,
@@ -267,11 +391,21 @@ function runTestCommands(cwd, commands, { now } = {}) {
       signal: result.signal ?? null,
       timedOut,
       passed: exitCode === 0 && !timedOut,
-      stdout: truncateOutput(result.stdout),
-      stderr: truncateOutput(result.stderr ?? result.error?.message ?? ''),
+      stdout: result.stdout ?? '',
+      stderr: [result.stderr, result.error?.message].filter(Boolean).join('\n'),
       durationMs,
       executedAt: startedAt,
+      productRevision: revision,
+      producerItemId,
+      reused: false,
     };
+    const completedRevision = productRevision(cwd);
+    if (completedRevision !== revision) {
+      throw new Error(`Test command mutated product content and cannot produce reusable evidence: ${command}`);
+    }
+    resultRecord.resultHash = commandResultHash(resultRecord);
+    reusableByCommand.set(command, resultRecord);
+    return resultRecord;
   });
 }
 
@@ -381,6 +515,16 @@ function assertSessionShape(session, sourcePath, expectedSessionId, expectedSnap
     if (entry.status !== 'claimed' && entry.claim != null) {
       throw new Error(`Corrupt session state at ${sourcePath}: item ${entry.id} has claim metadata without claimed status.`);
     }
+
+    if (entry.test_commands !== undefined && !Array.isArray(entry.test_commands)) {
+      throw new Error(`Corrupt session state at ${sourcePath}: item ${entry.id} test_commands must be an array.`);
+    }
+    (entry.test_commands ?? []).forEach((result, commandIndex) => {
+      if (!result || typeof result !== 'object' || Array.isArray(result)) {
+        throw new Error(`Corrupt session state at ${sourcePath}: item ${entry.id} has an invalid command result at ${commandIndex}.`);
+      }
+      assertSharedCommandResult(result, sourcePath, entry.id, commandIndex);
+    });
   });
 }
 
@@ -1204,7 +1348,14 @@ function transitionItem({
       throw new Error(`Invalid owner for item ${itemId}: expected ${item.claim.owner}, received ${owner}.`);
     }
 
-    const testCommandResults = runTestCommands(cwd, testCommands, { now });
+    const reusableResults = state.items.flatMap((entry) => (
+      Array.isArray(entry.test_commands) ? entry.test_commands : []
+    ));
+    const testCommandResults = runTestCommands(cwd, testCommands, {
+      now,
+      producerItemId: itemId,
+      reusableResults,
+    });
     assertTransitionCommandResults(itemId, targetStatus, testCommandResults);
 
     if (targetStatus === 'confirmed') {
@@ -1575,7 +1726,7 @@ function verificationAudit({ cwd, seedName, sessionId = DEFAULT_SESSION_ID } = {
 
       const command = commandResult.command.trim();
       const usage = commandUsage.get(command) ?? [];
-      usage.push({ id: item.id, address: item.address ?? null });
+      usage.push({ id: item.id, address: item.address ?? null, result: commandResult });
       commandUsage.set(command, usage);
 
       if (item.status === 'confirmed' && commandResult.passed !== true) {
@@ -1609,6 +1760,39 @@ function verificationAudit({ cwd, seedName, sessionId = DEFAULT_SESSION_ID } = {
 
     const addresses = [...new Set(usage.map((entry) => entry.address).filter(Boolean))];
     const ids = usage.map((entry) => entry.id);
+    const sharedResults = usage.map((entry) => entry.result).filter(isSharedCommandResult);
+    if (sharedResults.length === usage.length) {
+      const groupsByRevision = new Map();
+      sharedResults.forEach((result) => {
+        const group = groupsByRevision.get(result.productRevision) ?? [];
+        group.push(result);
+        groupsByRevision.set(result.productRevision, group);
+      });
+      let inconsistent = false;
+      groupsByRevision.forEach((results) => {
+        const executions = new Set(results.map((result) => result.executedAt));
+        const producers = new Set(results.map((result) => result.producerItemId));
+        const embeddedProducerCount = results.filter((result) => result.reused === false).length;
+        const externalProducer = [...producers].every((producer) => ['verify-check', 'refresh-expired'].includes(producer));
+        if (executions.size !== 1 || producers.size !== 1 || (!externalProducer && embeddedProducerCount !== 1)) {
+          inconsistent = true;
+        }
+      });
+      if (inconsistent) {
+        errors.push({
+          code: 'duplicate-command-executions',
+          id: null,
+          address: null,
+          message: 'shared test command has multiple producer executions for one product revision',
+          command,
+          count: usage.length,
+          ids,
+          addresses,
+        });
+      }
+      return;
+    }
+
     const code = usage.length > 5 ? 'broad-command-reuse' : 'command-reuse';
     warnings.push({
       code,
@@ -1708,7 +1892,7 @@ function checkSession({ cwd, seedName, sessionId = DEFAULT_SESSION_ID, now } = {
   ));
   const uniqueCommandList = Array.from(new Set(recordedCommands));
   const uniqueResults = uniqueCommandList.length > 0
-    ? runTestCommands(cwd, uniqueCommandList, { now })
+    ? runTestCommands(cwd, uniqueCommandList, { now, producerItemId: 'verify-check' })
     : [];
   const resultsByCommand = new Map(uniqueResults.map((result) => [result.command, result]));
   const items = terminalItems.map((item) => {
@@ -1723,7 +1907,7 @@ function checkSession({ cwd, seedName, sessionId = DEFAULT_SESSION_ID, now } = {
       };
     }
 
-    const commands = item.test_commands.map((entry) => structuredClone(resultsByCommand.get(entry.command)));
+    const commands = item.test_commands.map((entry) => reusedCommandResult(resultsByCommand.get(entry.command)));
     const commandsMatchStatus = item.status === 'confirmed'
       ? commands.every((entry) => entry.passed)
       : commands.some((entry) => !entry.passed);
@@ -1837,7 +2021,7 @@ function refreshExpiredEvidence({
     ));
     const uniqueCommandList = Array.from(new Set(recordedCommands));
     const uniqueResults = uniqueCommandList.length > 0
-      ? runTestCommands(cwd, uniqueCommandList, { now })
+      ? runTestCommands(cwd, uniqueCommandList, { now, producerItemId: 'refresh-expired' })
       : [];
     const failedCommands = uniqueResults.filter((result) => !result.passed);
     if (failedCommands.length > 0) {
@@ -1862,7 +2046,7 @@ function refreshExpiredEvidence({
         item.evidence_files.map((entry) => entry.path),
       );
       item.test_commands = item.test_commands.map((entry) => (
-        structuredClone(resultsByCommand.get(entry.command))
+        reusedCommandResult(resultsByCommand.get(entry.command))
       ));
       try {
         item.seed_evidence = currentSeedEvidence(cwd, seedName, item);
