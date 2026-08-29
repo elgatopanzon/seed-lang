@@ -128,10 +128,14 @@ interfaces:
         - seed diff
         - seed blueprint --json --filter @behavior.genomes.resolution
     genome-commands:
-      description: genome list, init, validate, and blueprint expose built-in, user,
-        and repository genome discovery and inspection.
+      description: genome list, search, init, validate, and blueprint expose built-in,
+        user, and repository genome discovery and inspection. Search reports
+        matching genome IDs, origins, tags, match types, and direct genome
+        addresses.
       examples:
         - seed genome list --builtin
+        - seed genome search docker
+        - seed genome search graceful shutdown --full-text
         - seed genome validate --builtin
         - seed genome blueprint cli-nodejs --json
       artifacts:
@@ -216,6 +220,10 @@ behavior:
         interfaces, behavior, constraints, freedom, and verifications sections;
         errors may be empty. Optional addressable sections are artifacts, state,
         security, environment, observability, and compatibility.
+    metadata-tags:
+      description: Seed and genome metadata may include an optional tags field
+        containing a simple list of nonempty strings. Tags preserve authored
+        spelling and order and do not create contract addresses.
     address-normalization:
       description: Addressable trees and ID-bearing lists compile into unique dotted
         addresses. IDs start alphanumeric and contain only letters, numbers,
@@ -264,6 +272,14 @@ behavior:
       description: Standalone !genome exclusions are order-independent, remove the
         genome transitively throughout the composed graph, and fail when
         unmatched.
+    search:
+      description: Genome search uses case-insensitive substring matching across
+        definition IDs, metadata names, summaries or descriptions, tags, and
+        direct authored address names. --full-text additionally searches values
+        within each direct address. Built-in, user, and repository origin
+        filters apply; deterministic results report each genome's ID, origin,
+        tags, match types, and matching addresses without treating inherited
+        addresses as direct matches.
   blueprints-and-diffs:
     constructed-blueprint:
       description: Blueprint compiles local and genome content into fixed semantic
@@ -356,9 +372,9 @@ errors:
     description: Operations that load, compile, blueprint, or validate genomes fail
       for unknown or malformed definitions, malformed or unmatched selectors and
       exclusions, broken references, cycles, and recursion overflow with
-      relevant genome or source context. Genome listing may retain a malformed
-      entry with an empty description instead of failing while reading
-      presentation metadata.
+      relevant genome or source context. Genome search rejects a missing query
+      or unknown option. Genome listing and search may retain a malformed entry
+      for an ID match while omitting unavailable metadata and address matches.
   cross-seed-references:
     description: Missing source Seeds or addresses, self-reference, and genome
       provenance mismatch fail without taking verification ownership of the
@@ -392,8 +408,8 @@ compatibility:
     not change without a Seed change.
   seed-language:
     description: Required section names, address normalization, reference syntax,
-      policy defaults, artifact attachment, requirements gate, and verification
-      item shape are contract-language compatibility surfaces.
+      policy defaults, metadata tags, artifact attachment, requirements gate,
+      and verification item shape are contract-language compatibility surfaces.
   selected-paths:
     description: seed/seed.yml and .seed are master paths; seed/NAME and .seed/NAME
       are named paths. Safe-name rules and master reservation are stable path
@@ -564,6 +580,24 @@ verifications:
       - Validated built-in count and passing focused test summary.
       - Full diagnostics for any invalid genome or failed compiler case.
     artifacts:
+      - genome-catalog
+      - test-contract
+  genome-search-behavior:
+    title: Genome metadata and search behavior passes
+    description: Verify optional metadata tags and @behavior.genomes.search across
+      built-in, user, and repository genome definitions.
+    method: Run node --test test/validation.test.js test/genomes.test.js
+      test/cli.test.js from the repository root, including disposable tagged and
+      malformed genome fixtures.
+    evidence_required:
+      - Exact command and exit status.
+      - Valid and invalid metadata tag diagnostics.
+      - ID, name, description, tag, address, opt-in full-text, origin-filter,
+        deterministic-order, and no-result search assertions.
+      - Output assertions showing genome IDs, origins, tags, match types, and
+        matching direct addresses.
+    artifacts:
+      - source-contract
       - genome-catalog
       - test-contract
   semantic-cli-workflows:

@@ -1994,69 +1994,83 @@ function verificationReport({ cwd, seedName, sessionId = DEFAULT_SESSION_ID } = 
   };
 }
 
-function checkSession({ cwd, seedName, sessionId = DEFAULT_SESSION_ID, now } = {}) {
+function checkSession({
+  cwd,
+  seedName,
+  sessionId = DEFAULT_SESSION_ID,
+  now,
+  lockWaitMs = DEFAULT_LOCK_WAIT_MS,
+} = {}) {
   assertSessionId(sessionId);
 
   const path = sessionPath(cwd, seedName, sessionId);
   const label = 'session state ' + path;
-  const state = readSessionState(cwd, seedName, sessionId, label);
-  const checkedAt = resolveNow(now);
-  const terminalItems = state.items.filter((item) => terminalStatus(item));
-  const recordedCommands = terminalItems.flatMap((item) => (
-    Array.isArray(item.test_commands)
-      ? item.test_commands.map((entry) => entry.command)
-      : []
-  ));
-  const uniqueCommandList = Array.from(new Set(recordedCommands));
-  const uniqueResults = uniqueCommandList.length > 0
-    ? runTestCommands(cwd, uniqueCommandList, { now, producerItemId: 'verify-check' })
-    : [];
-  const resultsByCommand = new Map(uniqueResults.map((result) => [result.command, result]));
-  const fannedResults = new Map(fanOutCommandResults(
-    terminalItems.filter((item) => Array.isArray(item.test_commands) && item.test_commands.length > 0),
-    resultsByCommand,
-  ).map(({ item, commands }) => [item.id, commands]));
-  const items = terminalItems.map((item) => {
-    if (!Array.isArray(item.test_commands) || item.test_commands.length === 0) {
+  const lock = lockPath(cwd, seedName, sessionId);
+
+  return withLock(lock, () => {
+    const state = readSessionState(cwd, seedName, sessionId, label);
+    const checkedAt = resolveNow(now);
+    const terminalItems = state.items.filter((item) => terminalStatus(item));
+    const recordedCommands = terminalItems.flatMap((item) => (
+      Array.isArray(item.test_commands)
+        ? item.test_commands.map((entry) => entry.command)
+        : []
+    ));
+    const uniqueCommandList = Array.from(new Set(recordedCommands));
+    const uniqueResults = uniqueCommandList.length > 0
+      ? runTestCommands(cwd, uniqueCommandList, { now, producerItemId: 'verify-check' })
+      : [];
+    const resultsByCommand = new Map(uniqueResults.map((result) => [result.command, result]));
+    const fannedResults = new Map(fanOutCommandResults(
+      terminalItems.filter((item) => Array.isArray(item.test_commands) && item.test_commands.length > 0),
+      resultsByCommand,
+    ).map(({ item, commands }) => [item.id, commands]));
+    const items = terminalItems.map((item) => {
+      if (!Array.isArray(item.test_commands) || item.test_commands.length === 0) {
+        return {
+          id: item.id,
+          address: item.address ?? null,
+          status: item.status,
+          ok: false,
+          error: 'missing test commands',
+          commands: [],
+        };
+      }
+
+      const commands = fannedResults.get(item.id);
+      item.test_commands = commands;
+      const commandsMatchStatus = item.status === 'confirmed'
+        ? commands.every((entry) => entry.passed)
+        : commands.some((entry) => !entry.passed);
       return {
         id: item.id,
         address: item.address ?? null,
         status: item.status,
-        ok: false,
-        error: 'missing test commands',
-        commands: [],
+        ok: item.status === 'confirmed' ? commandsMatchStatus : false,
+        commandsMatchStatus,
+        commands,
       };
-    }
+    });
+    const missing = items.filter((item) => item.error === 'missing test commands').length;
+    const passed = items.filter((item) => item.ok).length;
+    const failed = items.length - passed;
 
-    const commands = fannedResults.get(item.id);
-    const commandsMatchStatus = item.status === 'confirmed'
-      ? commands.every((entry) => entry.passed)
-      : commands.some((entry) => !entry.passed);
+    state.updatedAt = checkedAt;
+    writeJsonAtomically(path, state);
+
     return {
-      id: item.id,
-      address: item.address ?? null,
-      status: item.status,
-      ok: item.status === 'confirmed' ? commandsMatchStatus : false,
-      commandsMatchStatus,
-      commands,
+      sessionId: state.sessionId,
+      checkedAt,
+      total: items.length,
+      passed,
+      failed,
+      missing,
+      recordedCommandTotal: recordedCommands.length,
+      uniqueCommandTotal: uniqueCommandList.length,
+      ok: failed === 0,
+      items,
     };
-  });
-  const missing = items.filter((item) => item.error === 'missing test commands').length;
-  const passed = items.filter((item) => item.ok).length;
-  const failed = items.length - passed;
-
-  return {
-    sessionId: state.sessionId,
-    checkedAt,
-    total: items.length,
-    passed,
-    failed,
-    missing,
-    recordedCommandTotal: recordedCommands.length,
-    uniqueCommandTotal: uniqueCommandList.length,
-    ok: failed === 0,
-    items,
-  };
+  }, { waitMs: lockWaitMs });
 }
 
 function refreshExpiredEvidence({

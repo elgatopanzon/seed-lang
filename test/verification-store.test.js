@@ -1549,6 +1549,17 @@ describe('verification store', () => {
       });
       fs.writeFileSync(path.join(cwd, '.seed', 'check-count.txt'), '0', 'utf8');
 
+      const legacy = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      legacy.items.forEach((item) => {
+        item.test_commands.forEach((command) => {
+          delete command.producerItemId;
+          delete command.productRevision;
+          delete command.resultHash;
+          delete command.reused;
+        });
+      });
+      fs.writeFileSync(sessionFile(cwd), JSON.stringify(legacy, null, 2) + '\n', 'utf8');
+
       const check = checkSession({ cwd, now: () => 10_000 });
 
       assert.equal(check.ok, true);
@@ -1565,7 +1576,11 @@ describe('verification store', () => {
       assert.equal(new Set(results.map((result) => result.executedAt)).size, 1);
       assert.equal(results.every((result) => result.resultHash === hashCommandResult(result)), true);
       const persisted = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
-      assert.notEqual(persisted.items[0].test_commands[0].executedAt, 10_000);
+      const persistedResults = persisted.items.map((item) => item.test_commands[0]);
+      assert.equal(persisted.updatedAt, 10_000);
+      assert.equal(new Set(persistedResults.map((result) => result.executedAt)).size, 1);
+      assert.deepEqual(persistedResults.map((result) => result.reused), [false, true, true]);
+      assert.equal(persistedResults.every((result) => result.resultHash === hashCommandResult(result)), true);
     });
   });
 
