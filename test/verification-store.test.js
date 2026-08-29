@@ -1763,6 +1763,42 @@ describe('verification store', () => {
     });
   });
 
+  test('verificationAudit rejects repeated legacy command records without shared producer metadata', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+      ['verify-begin', 'verify-next', 'verify-final'].forEach((id, index) => {
+        claimNext({ cwd, owner: 'worker-A', now: () => 1_000 + index * 1_000 });
+        confirmItem({
+          cwd,
+          itemId: id,
+          owner: 'worker-A',
+          files: ['implementation.js'],
+          testCommands: [PASS_CMD],
+          evidence: `${id} checked with shared proof`,
+          now: () => 1_500 + index * 1_000,
+        });
+      });
+
+      const session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      session.items.forEach((item) => {
+        delete item.test_commands[0].productRevision;
+        delete item.test_commands[0].producerItemId;
+        delete item.test_commands[0].reused;
+        delete item.test_commands[0].resultHash;
+      });
+      fs.writeFileSync(sessionFile(cwd), JSON.stringify(session, null, 2), 'utf8');
+
+      const audit = verificationAudit({ cwd });
+      assert.equal(audit.ok, false);
+      assert.equal(audit.errors.some((entry) => entry.code === 'legacy-command-reuse'), true);
+      assert.equal(audit.warnings.some((entry) => ['command-reuse', 'broad-command-reuse'].includes(entry.code)), false);
+    });
+  });
+
   test('failItem and confirmItem reject non-string evidence/reason values', () => {
     withTempDir((cwd) => {
       startSession({

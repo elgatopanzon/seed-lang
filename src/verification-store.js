@@ -1910,12 +1910,11 @@ function verificationAudit({ cwd, seedName, sessionId = DEFAULT_SESSION_ID } = {
       return;
     }
 
-    const code = usage.length > 5 ? 'broad-command-reuse' : 'command-reuse';
-    warnings.push({
-      code,
+    errors.push({
+      code: 'legacy-command-reuse',
       id: null,
       address: null,
-      message: 'same test command is reused across multiple verification items',
+      message: 'repeated test command lacks shared producer integrity metadata',
       command,
       count: usage.length,
       ids,
