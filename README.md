@@ -702,7 +702,8 @@ No pending verification items.
 
 Do not bulk-confirm items. Shared command output avoids duplicate execution, but
 each item still requires relevant files and item-specific evidence. The audit
-rejects multiple producer executions for one command and product revision.
+requires exactly one item-owned producer for each command and product revision,
+and rejects missing or multiple producer executions.
 
 ### Completion Gate
 

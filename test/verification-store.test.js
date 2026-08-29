@@ -6,6 +6,7 @@ const { spawn } = require('node:child_process');
 const { parse, stringify } = require('yaml');
 const assert = require('node:assert/strict');
 const { test, describe } = require('node:test');
+const { canonicalJson } = require('../src/canonical-json');
 
 const PASS_CMD = process.execPath + ' -e "process.exit(0)"';
 const FAIL_CMD = process.execPath + ' -e "process.exit(1)"';
@@ -89,6 +90,11 @@ function snapshotFile(cwd) {
 
 function lockPath(cwd, sessionId = 'default') {
   return path.join(cwd, '.seed', 'locks', `${sessionId}.lock`);
+}
+
+function hashCommandResult(result) {
+  const { resultHash, ...payload } = result;
+  return createHash('sha256').update(canonicalJson(payload), 'utf8').digest('hex');
 }
 
 function testFileHash(buffer) {
@@ -487,12 +493,22 @@ describe('verification store', () => {
       });
 
       session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
-      const third = session.items.find((entry) => entry.id === 'verify-final').test_commands[0];
+      const revisedResults = session.items.map((entry) => entry.test_commands[0]);
+      const third = revisedResults[2];
       assert.equal(fs.readFileSync(counterPath, 'utf8'), '2');
       assert.equal(third.reused, false);
       assert.equal(third.producerItemId, 'verify-final');
       assert.notEqual(third.productRevision, first.productRevision);
       assert.notEqual(third.executedAt, first.executedAt);
+      assert.deepEqual(revisedResults.map((result) => result.reused), [true, true, false]);
+      assert.equal(new Set(revisedResults.map((result) => result.producerItemId)).size, 1);
+      assert.equal(new Set(revisedResults.map((result) => result.productRevision)).size, 1);
+      assert.equal(new Set(revisedResults.map((result) => result.executedAt)).size, 1);
+      assert.equal(revisedResults.every((result) => result.resultHash === hashCommandResult(result)), true);
+      assert.equal(
+        verificationAudit({ cwd }).errors.some((entry) => entry.code === 'duplicate-command-executions'),
+        false,
+      );
     });
   });
 
@@ -1541,6 +1557,15 @@ describe('verification store', () => {
       assert.equal(fs.readFileSync(path.join(cwd, '.seed', 'check-count.txt'), 'utf8'), '1');
       assert.equal(check.items.every((item) => item.commands[0].command === counterCommand), true);
       assert.equal(check.items.every((item) => item.commands[0].passed), true);
+      const results = check.items.map((item) => item.commands[0]);
+      assert.deepEqual(results.map((result) => result.reused), [false, true, true]);
+      assert.equal(new Set(results.map((result) => result.producerItemId)).size, 1);
+      assert.equal(results[0].producerItemId, 'verify-begin');
+      assert.equal(new Set(results.map((result) => result.productRevision)).size, 1);
+      assert.equal(new Set(results.map((result) => result.executedAt)).size, 1);
+      assert.equal(results.every((result) => result.resultHash === hashCommandResult(result)), true);
+      const persisted = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      assert.notEqual(persisted.items[0].test_commands[0].executedAt, 10_000);
     });
   });
 
@@ -1579,6 +1604,61 @@ describe('verification store', () => {
       const session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
       assert.equal(session.items.every((item) => item.status === 'confirmed'), true);
       assert.equal(session.items.every((item) => item.test_commands[0].passed), true);
+      const results = session.items.map((item) => item.test_commands[0]);
+      assert.deepEqual(results.map((result) => result.reused), [false, true, true]);
+      assert.equal(new Set(results.map((result) => result.producerItemId)).size, 1);
+      assert.equal(results[0].producerItemId, 'verify-begin');
+      assert.equal(new Set(results.map((result) => result.productRevision)).size, 1);
+      assert.equal(new Set(results.map((result) => result.executedAt)).size, 1);
+      assert.equal(results.every((result) => result.resultHash === hashCommandResult(result)), true);
+      const audit = verificationAudit({ cwd });
+      assert.equal(audit.errors.some((entry) => entry.code === 'duplicate-command-executions'), false);
+    });
+  });
+
+  test('refreshExpiredEvidence updates every consumer when one shared proof expires', () => {
+    withTempDir((cwd) => {
+      startSampleSessionWithSeed(cwd);
+      const ids = ['verify-begin', 'verify-next', 'verify-final'];
+      const evidenceFiles = ids.map((id) => `${id}.js`);
+      evidenceFiles.forEach((file) => {
+        fs.writeFileSync(path.join(cwd, file), 'module.exports = {};\n', 'utf8');
+      });
+      const counterPath = path.join(cwd, '.seed', 'partial-refresh-count.txt');
+      const counterCommand = `${process.execPath} -e "const fs=require('node:fs');const p='.seed/partial-refresh-count.txt';const n=fs.existsSync(p)?Number(fs.readFileSync(p,'utf8')):0;fs.writeFileSync(p,String(n+1))"`;
+      ids.forEach((id, index) => {
+        claimNext({ cwd, owner: 'worker-A', now: () => 1_000 + index * 1_000 });
+        confirmItem({
+          cwd,
+          itemId: id,
+          owner: 'worker-A',
+          files: [evidenceFiles[index]],
+          testCommands: [counterCommand],
+          evidence: `${id} checked with shared proof`,
+          now: () => 1_500 + index * 1_000,
+        });
+      });
+      fs.writeFileSync(counterPath, '0', 'utf8');
+      fs.writeFileSync(path.join(cwd, evidenceFiles[1]), 'module.exports = { changed: true };\n', 'utf8');
+      assert.equal(getStatus({ cwd }).expired, 1);
+
+      const refreshed = refreshExpiredEvidence({
+        cwd,
+        owner: 'synthesis-runner',
+        now: () => 10_000,
+      });
+
+      assert.equal(refreshed.refreshed, 1);
+      assert.deepEqual(refreshed.refreshedIds, ['verify-next']);
+      assert.equal(fs.readFileSync(counterPath, 'utf8'), '1');
+      const session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      const results = session.items.map((item) => item.test_commands[0]);
+      assert.deepEqual(results.map((result) => result.reused), [false, true, true]);
+      assert.equal(new Set(results.map((result) => result.producerItemId)).size, 1);
+      assert.equal(new Set(results.map((result) => result.productRevision)).size, 1);
+      assert.equal(new Set(results.map((result) => result.executedAt)).size, 1);
+      assert.equal(results.every((result) => result.resultHash === hashCommandResult(result)), true);
+      assert.equal(verificationAudit({ cwd }).errors.some((entry) => entry.code === 'duplicate-command-executions'), false);
     });
   });
 
@@ -1647,6 +1727,39 @@ describe('verification store', () => {
       assert.equal(failedAudit.ok, false);
       assert.ok(failedAudit.errors.some((issue) => issue.code === 'expired-evidence'));
       assert.ok(failedAudit.errors.some((issue) => issue.code === 'missing-test-commands'));
+    });
+  });
+
+  test('verificationAudit rejects a shared command group without its item-owned producer', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+      ['verify-begin', 'verify-next', 'verify-final'].forEach((id, index) => {
+        claimNext({ cwd, owner: 'worker-A', now: () => 1_000 + index * 1_000 });
+        confirmItem({
+          cwd,
+          itemId: id,
+          owner: 'worker-A',
+          files: ['implementation.js'],
+          testCommands: [PASS_CMD],
+          evidence: `${id} checked with shared proof`,
+          now: () => 1_500 + index * 1_000,
+        });
+      });
+
+      const session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      session.items.forEach((item) => {
+        item.test_commands[0].reused = true;
+        item.test_commands[0].resultHash = hashCommandResult(item.test_commands[0]);
+      });
+      fs.writeFileSync(sessionFile(cwd), JSON.stringify(session, null, 2), 'utf8');
+
+      const audit = verificationAudit({ cwd });
+      assert.equal(audit.ok, false);
+      assert.equal(audit.errors.some((entry) => entry.code === 'duplicate-command-executions'), true);
     });
   });
 

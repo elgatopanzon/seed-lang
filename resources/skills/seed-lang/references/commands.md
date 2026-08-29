@@ -78,8 +78,9 @@ seed verify status
   attempt diagnostics remain in `test_command_attempts` after a later success.
 - `fail` uses the same content-bound producer results and succeeds only when at
   least one fails.
-- `check` executes each unique recorded command once and applies the result to
-  every occurrence.
+- `check` executes each unique recorded command once, reports one item-owned
+  producer and warm results for the remaining occurrences, and does not mutate
+  the verification session.
 - `refresh-expired` is a strict atomic fast path only for unchanged-contract,
   evidence-file-only expiry.
 - `audit` evaluates completeness and evidence quality.

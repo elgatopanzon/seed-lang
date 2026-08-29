@@ -338,6 +338,53 @@ function reusedCommandResult(result) {
   return reused;
 }
 
+function producerCommandResult(result, producerItemId) {
+  const producer = {
+    ...structuredClone(result),
+    producerItemId,
+    reused: false,
+  };
+  producer.resultHash = commandResultHash(producer);
+  return producer;
+}
+
+function fanOutCommandResults(items, resultsByCommand) {
+  const producersByCommand = new Map();
+  return items.map((item) => ({
+    item,
+    commands: item.test_commands.map((entry) => {
+      if (!resultsByCommand.has(entry.command)) {
+        return structuredClone(entry);
+      }
+      const result = resultsByCommand.get(entry.command);
+      const producerItemId = producersByCommand.get(entry.command);
+      if (producerItemId) {
+        return reusedCommandResult(producerCommandResult(result, producerItemId));
+      }
+      producersByCommand.set(entry.command, item.id);
+      return producerCommandResult(result, item.id);
+    }),
+  }));
+}
+
+function updateSharedCommandConsumers(state, producerItem, results) {
+  const producersByCommand = new Map(results
+    .filter((result) => result.passed === true && result.reused === false)
+    .map((result) => [result.command, result]));
+  if (producersByCommand.size === 0) {
+    return;
+  }
+  state.items.forEach((item) => {
+    if (item === producerItem || item.status !== 'confirmed' || !Array.isArray(item.test_commands)) {
+      return;
+    }
+    item.test_commands = item.test_commands.map((entry) => {
+      const producer = producersByCommand.get(entry.command);
+      return producer ? reusedCommandResult(producer) : entry;
+    });
+  });
+}
+
 function normalizeTestCommands(commands) {
   if (!Array.isArray(commands) || commands.length === 0) {
     throw new Error('at least one test command is required.');
@@ -1438,6 +1485,9 @@ function transitionItem({
     item.claim = null;
     item.evidence_files = evidenceFiles;
     item.test_commands = testCommandResults;
+    if (targetStatus === 'confirmed') {
+      updateSharedCommandConsumers(state, item, testCommandResults);
+    }
     try {
       item.seed_evidence = currentSeedEvidence(cwd, seedName, item);
     } catch (error) {
@@ -1824,18 +1874,24 @@ function verificationAudit({ cwd, seedName, sessionId = DEFAULT_SESSION_ID } = {
     const sharedResults = usage.map((entry) => entry.result).filter(isSharedCommandResult);
     if (sharedResults.length === usage.length) {
       const groupsByRevision = new Map();
-      sharedResults.forEach((result) => {
-        const group = groupsByRevision.get(result.productRevision) ?? [];
-        group.push(result);
-        groupsByRevision.set(result.productRevision, group);
+      usage.forEach((entry) => {
+        const group = groupsByRevision.get(entry.result.productRevision) ?? [];
+        group.push(entry);
+        groupsByRevision.set(entry.result.productRevision, group);
       });
-      let inconsistent = false;
-      groupsByRevision.forEach((results) => {
+      let inconsistent = groupsByRevision.size !== 1;
+      groupsByRevision.forEach((entries) => {
+        const results = entries.map((entry) => entry.result);
         const executions = new Set(results.map((result) => result.executedAt));
         const producers = new Set(results.map((result) => result.producerItemId));
-        const embeddedProducerCount = results.filter((result) => result.reused === false).length;
-        const externalProducer = [...producers].every((producer) => ['verify-check', 'refresh-expired'].includes(producer));
-        if (executions.size !== 1 || producers.size !== 1 || (!externalProducer && embeddedProducerCount !== 1)) {
+        const coldEntries = entries.filter((entry) => entry.result.reused === false);
+        const producerItemId = producers.size === 1 ? [...producers][0] : null;
+        if (
+          executions.size !== 1
+          || producers.size !== 1
+          || coldEntries.length !== 1
+          || coldEntries[0].id !== producerItemId
+        ) {
           inconsistent = true;
         }
       });
@@ -1957,6 +2013,10 @@ function checkSession({ cwd, seedName, sessionId = DEFAULT_SESSION_ID, now } = {
     ? runTestCommands(cwd, uniqueCommandList, { now, producerItemId: 'verify-check' })
     : [];
   const resultsByCommand = new Map(uniqueResults.map((result) => [result.command, result]));
+  const fannedResults = new Map(fanOutCommandResults(
+    terminalItems.filter((item) => Array.isArray(item.test_commands) && item.test_commands.length > 0),
+    resultsByCommand,
+  ).map(({ item, commands }) => [item.id, commands]));
   const items = terminalItems.map((item) => {
     if (!Array.isArray(item.test_commands) || item.test_commands.length === 0) {
       return {
@@ -1969,7 +2029,7 @@ function checkSession({ cwd, seedName, sessionId = DEFAULT_SESSION_ID, now } = {
       };
     }
 
-    const commands = item.test_commands.map((entry) => reusedCommandResult(resultsByCommand.get(entry.command)));
+    const commands = fannedResults.get(item.id);
     const commandsMatchStatus = item.status === 'confirmed'
       ? commands.every((entry) => entry.passed)
       : commands.some((entry) => !entry.passed);
@@ -2075,8 +2135,7 @@ function refreshExpiredEvidence({
       }
     }
 
-    const terminalItems = state.items.filter((item) => terminalStatus(item));
-    const recordedCommands = terminalItems.flatMap((item) => (
+    const recordedCommands = expiredItems.flatMap((item) => (
       Array.isArray(item.test_commands)
         ? item.test_commands.map((entry) => entry.command)
         : []
@@ -2102,14 +2161,21 @@ function refreshExpiredEvidence({
     const resultsByCommand = new Map(
       uniqueResults.map((result) => [result.command, result]),
     );
+    const affectedCommands = new Set(uniqueCommandList);
+    const affectedItems = state.items.filter((item) => (
+      item.status === 'confirmed'
+      && Array.isArray(item.test_commands)
+      && item.test_commands.some((entry) => affectedCommands.has(entry.command))
+    ));
+    const fannedResults = fanOutCommandResults(affectedItems, resultsByCommand);
+    for (const { item, commands } of fannedResults) {
+      item.test_commands = commands;
+    }
     for (const item of expiredItems) {
       item.evidence_files = hashEvidenceFiles(
         cwd,
         item.evidence_files.map((entry) => entry.path),
       );
-      item.test_commands = item.test_commands.map((entry) => (
-        reusedCommandResult(resultsByCommand.get(entry.command))
-      ));
       try {
         item.seed_evidence = currentSeedEvidence(cwd, seedName, item);
       } catch (error) {
