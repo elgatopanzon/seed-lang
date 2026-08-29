@@ -72,6 +72,8 @@ seed verify status
 - `next` claims the next pending or expired item.
 - `confirm` executes each command once per product-content revision, reuses the
   complete producer result for later consumers, and succeeds only when all pass.
+  A failed confirmation remains claimed and atomically retains complete command
+  diagnostics in the session while also reporting them to the caller.
 - `fail` uses the same content-bound producer results and succeeds only when at
   least one fails.
 - `check` executes each unique recorded command once and applies the result to

@@ -669,6 +669,10 @@ exclude `.seed` state from the revision. A command that changes product content
 fails instead of caching stale evidence. Confirmation succeeds only when every
 supplied or reused result passed.
 
+If confirmation fails, the item remains claimed and the complete attempted
+results are written atomically to the session. The CLI reports each failed
+command's exit status, signal, timeout state, stdout, and stderr.
+
 ### Record A Terminal Failure
 
 ```sh

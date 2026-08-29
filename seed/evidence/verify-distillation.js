@@ -47,75 +47,6 @@ function run(command, args, options = {}) {
   return result.stdout;
 }
 
-function walkFiles(target, files) {
-  const stat = fs.statSync(target);
-  if (stat.isFile()) {
-    files.push(target);
-    return;
-  }
-  for (const name of fs.readdirSync(target).sort()) {
-    walkFiles(path.join(target, name), files);
-  }
-}
-
-function producerInputHash(slug) {
-  const inputs = [
-    'LICENSE',
-    'README.md',
-    'package.json',
-    'package-lock.json',
-    'src',
-    'test',
-    'resources',
-    'seed/seed.yml',
-    'seed/distillation-exclusions.md',
-    'seed/scripts',
-    'seed/evidence/verify-distillation.js',
-  ];
-  const files = [];
-  for (const input of inputs) walkFiles(path.join(repositoryRoot, input), files);
-  const hash = crypto.createHash('sha256').update(`producer:${slug}\0`);
-  for (const filename of files.sort()) {
-    hash.update(path.relative(repositoryRoot, filename));
-    hash.update('\0');
-    hash.update(fs.readFileSync(filename));
-    hash.update('\0');
-  }
-  return hash.digest('hex');
-}
-
-function ancestorCommandLines() {
-  const commands = [];
-  let pid = process.ppid;
-  for (let depth = 0; depth < 6 && pid > 1; depth += 1) {
-    try {
-      commands.push(fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').replaceAll('\0', ' '));
-      const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
-      pid = Number.parseInt(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[1], 10);
-    } catch {
-      break;
-    }
-  }
-  return commands;
-}
-
-function isConfirmationCommand() {
-  return ancestorCommandLines().some((command) => command.includes('src/cli.js verify confirm'));
-}
-
-function readProducerCache(cachePath, slug, inputHash) {
-  try {
-    const cache = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
-    if (cache.schema === 1 && cache.slug === slug && cache.inputHash === inputHash && cache.exitCode === 0) {
-      return cache;
-    }
-    throw new Error(`Shared producer cache is invalid: ${cachePath}`);
-  } catch (error) {
-    if (error.code === 'ENOENT') return null;
-    throw error;
-  }
-}
-
 function executeProducer(slug) {
   const definition = producerDefinitions[slug];
   assert.ok(definition, `Unknown shared producer ${slug}.`);
@@ -127,73 +58,23 @@ function executeProducer(slug) {
   });
   assert.ifError(result.error);
   return {
-    schema: 1,
     slug,
-    inputHash: producerInputHash(slug),
     exitCode: result.status,
     signal: result.signal,
     stdout: result.stdout,
     stderr: result.stderr,
-    executedAt: new Date().toISOString(),
   };
 }
 
-function printProducerResult(result, reused) {
-  process.stdout.write(
-    `Shared producer ${result.slug} ${reused ? 'reused' : 'executed'}; input=${result.inputHash}; executedAt=${result.executedAt}\n`,
-  );
+function printProducerResult(result) {
+  process.stdout.write(`Shared producer ${result.slug} executed.\n`);
   process.stdout.write(result.stdout);
   process.stderr.write(result.stderr);
   if (result.exitCode !== 0) process.exitCode = result.exitCode || 1;
 }
 
 function verifySharedProducer(slug) {
-  if (!isConfirmationCommand()) {
-    printProducerResult(executeProducer(slug), false);
-    return;
-  }
-
-  const inputHash = producerInputHash(slug);
-  const cacheRoot = path.join(os.tmpdir(), `seed-distillation-producers-${crypto.createHash('sha256').update(repositoryRoot).digest('hex').slice(0, 16)}`);
-  const cachePath = path.join(cacheRoot, `${slug}.json`);
-  const lockPath = `${cachePath}.lock`;
-  fs.mkdirSync(cacheRoot, { recursive: true });
-
-  const cached = readProducerCache(cachePath, slug, inputHash);
-  if (cached) {
-    printProducerResult(cached, true);
-    return;
-  }
-
-  let lock;
-  try {
-    lock = fs.openSync(lockPath, 'wx');
-  } catch (error) {
-    if (error.code !== 'EEXIST') throw error;
-    const deadline = Date.now() + 300000;
-    while (Date.now() < deadline) {
-      const shared = readProducerCache(cachePath, slug, inputHash);
-      if (shared) {
-        printProducerResult(shared, true);
-        return;
-      }
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
-    }
-    throw new Error(`Timed out waiting for shared producer ${slug}.`);
-  }
-
-  try {
-    const result = executeProducer(slug);
-    if (result.exitCode === 0) {
-      const temporaryPath = `${cachePath}.${process.pid}.tmp`;
-      fs.writeFileSync(temporaryPath, `${JSON.stringify(result)}\n`, { flag: 'wx' });
-      fs.renameSync(temporaryPath, cachePath);
-    }
-    printProducerResult(result, false);
-  } finally {
-    fs.closeSync(lock);
-    fs.rmSync(lockPath, { force: true });
-  }
+  printProducerResult(executeProducer(slug));
 }
 
 function readSeed() {

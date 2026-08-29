@@ -116,7 +116,7 @@ function readJsonFile(path, label) {
 
 function writeJsonAtomically(path, payload) {
   ensureStateDir(path);
-  const tmp = `${path}.${Date.now()}.tmp`;
+  const tmp = `${path}.${process.pid}.${Date.now()}.tmp`;
   writeFileSync(tmp, JSON.stringify(payload, null, 2), 'utf8');
   renameSync(tmp, path);
 }
@@ -413,7 +413,18 @@ function assertTransitionCommandResults(itemId, targetStatus, results) {
   if (targetStatus === 'confirmed') {
     const failed = results.filter((entry) => !entry.passed);
     if (failed.length > 0) {
-      throw new Error('Cannot confirm item ' + itemId + ': test command failed: ' + failed[0].command);
+      const diagnostics = failed.map((entry) => {
+        const exitCode = entry.exitCode === null ? 'null' : entry.exitCode;
+        const signal = entry.signal === null ? 'null' : entry.signal;
+        return [
+          `[failed] exit=${exitCode} signal=${signal} timedOut=${entry.timedOut} cmd=${entry.command}`,
+          'stdout:',
+          entry.stdout,
+          'stderr:',
+          entry.stderr,
+        ].join('\n');
+      }).join('\n');
+      throw new Error(`Cannot confirm item ${itemId}: test command failed\n${diagnostics}`);
     }
     return;
   }
@@ -1356,7 +1367,14 @@ function transitionItem({
       producerItemId: itemId,
       reusableResults,
     });
-    assertTransitionCommandResults(itemId, targetStatus, testCommandResults);
+    try {
+      assertTransitionCommandResults(itemId, targetStatus, testCommandResults);
+    } catch (error) {
+      item.test_commands = testCommandResults;
+      state.updatedAt = nowValue;
+      writeJsonAtomically(path, state);
+      throw error;
+    }
 
     if (targetStatus === 'confirmed') {
       if (evidence !== undefined && typeof evidence !== 'string') {

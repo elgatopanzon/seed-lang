@@ -2,12 +2,14 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
+const { spawn } = require('node:child_process');
 const { parse, stringify } = require('yaml');
 const assert = require('node:assert/strict');
 const { test, describe } = require('node:test');
 
 const PASS_CMD = process.execPath + ' -e "process.exit(0)"';
 const FAIL_CMD = process.execPath + ' -e "process.exit(1)"';
+const CLI_PATH = fs.realpathSync(path.join(__dirname, '..', 'src', 'cli.js'));
 
 const {
   checkSession,
@@ -33,6 +35,16 @@ function withTempDir(run) {
   fs.writeFileSync(path.join(cwd, 'implementation.js'), 'module.exports = {};\n', 'utf8');
   try {
     return run(cwd);
+  } finally {
+    fs.rmSync(cwd, { recursive: true, force: true });
+  }
+}
+
+async function withTempDirAsync(run) {
+  const cwd = tempDir();
+  fs.writeFileSync(path.join(cwd, 'implementation.js'), 'module.exports = {};\n', 'utf8');
+  try {
+    return await run(cwd);
   } finally {
     fs.rmSync(cwd, { recursive: true, force: true });
   }
@@ -85,6 +97,23 @@ function testFileHash(buffer) {
 
 function passCommand(label) {
   return `${process.execPath} -e "process.exit(0)" ${label}`;
+}
+
+function runCliProcess(args, cwd) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [CLI_PATH, '--repo', cwd, ...args], {
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.on('error', reject);
+    child.on('close', (code, signal) => resolve({ code, signal, stdout, stderr }));
+  });
 }
 
 function startSampleSessionWithSeed(cwd) {
@@ -491,6 +520,60 @@ describe('verification store', () => {
       assert.throws(
         () => getStatus({ cwd }),
         /shared command result.*stdout/i,
+      );
+    });
+  });
+
+  test('concurrent consumers serialize one producer and atomically persist warm reuse', async () => {
+    await withTempDirAsync(async (cwd) => {
+      startSampleSessionWithSeed(cwd);
+      claimItem({ cwd, itemId: 'verify-begin', owner: 'worker-A' });
+      claimItem({ cwd, itemId: 'verify-next', owner: 'worker-B' });
+
+      const counterPath = path.join(cwd, '.seed', 'concurrent-command-count.txt');
+      const counterCommand = `${process.execPath} -e "const fs=require('node:fs');const p='.seed/concurrent-command-count.txt';const n=fs.existsSync(p)?Number(fs.readFileSync(p,'utf8')):0;fs.writeFileSync(p,String(n+1));setTimeout(()=>{},150)"`;
+      const observedErrors = [];
+      const observer = setInterval(() => {
+        try {
+          JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+        } catch (error) {
+          observedErrors.push(error);
+        }
+      }, 1);
+
+      const confirmationArgs = (itemId, owner) => [
+        'verify', 'confirm', itemId,
+        '--owner', owner,
+        '--file', 'implementation.js',
+        '--test-cmd', counterCommand,
+        '--evidence', `${itemId} concurrent shared command proof`,
+      ];
+      let processes;
+      try {
+        processes = await Promise.all([
+          runCliProcess(confirmationArgs('verify-begin', 'worker-A'), cwd),
+          runCliProcess(confirmationArgs('verify-next', 'worker-B'), cwd),
+        ]);
+      } finally {
+        clearInterval(observer);
+      }
+      const [firstProcess, secondProcess] = processes;
+
+      assert.equal(firstProcess.code, 0, firstProcess.stderr);
+      assert.equal(secondProcess.code, 0, secondProcess.stderr);
+      assert.deepEqual(observedErrors, []);
+      assert.equal(fs.readFileSync(counterPath, 'utf8'), '1');
+
+      const session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      const results = ['verify-begin', 'verify-next']
+        .map((id) => session.items.find((entry) => entry.id === id).test_commands[0]);
+      assert.deepEqual(results.map((result) => result.reused).sort(), [false, true]);
+      assert.equal(new Set(results.map((result) => result.producerItemId)).size, 1);
+      assert.equal(new Set(results.map((result) => result.productRevision)).size, 1);
+      assert.equal(new Set(results.map((result) => result.executedAt)).size, 1);
+      assert.equal(
+        fs.readdirSync(path.dirname(sessionFile(cwd))).some((name) => name.endsWith('.tmp')),
+        false,
       );
     });
   });
