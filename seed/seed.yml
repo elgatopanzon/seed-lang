@@ -17,7 +17,6 @@ genomes:
   - verify-unit-tests
   - verify-integration-tests
   - repo-readme
-  - repo-license
   - policy-dependency-minimal
 
 requirements: []
@@ -52,6 +51,9 @@ scope:
         - distillation-exclusions
 
 artifacts:
+  repo-license:
+    path: LICENSE
+    description: Authoritative repository license text selected by the project owner.
   package-manifest:
     path: package.json
     description: Authoritative npm metadata, executable entry point, package surface, and runtime dependency declaration.
@@ -483,6 +485,23 @@ compatibility:
       not change accidentally.
 
 constraints:
+  explicit-license-choice:
+    description: >-
+      The repository owner selected the MIT terms recorded in @repo-license;
+      implementation work must not infer or replace that license.
+    artifacts:
+      - repo-license
+    policy: global
+  license-metadata-consistency:
+    description: >-
+      The root package.json and root package entry in package-lock.json declare
+      MIT, matching the authoritative MIT terms in @repo-license. README and
+      source files are not license-declaration surfaces in the as-built product.
+    artifacts:
+      - repo-license
+      - package-manifest
+      - dependency-lock
+    policy: global
   selected-seed-authority:
     description: >-
       Only this master Seed's explicit and implicit addresses plus global policies
@@ -528,6 +547,26 @@ freedom:
       require explicit contract changes rather than inference from this freedom.
 
 verifications:
+  repo-license:
+    title: Repository license is explicit and consistent
+    description: >-
+      Verify the authoritative license text and every repository artifact that
+      actually declares the root package license agree on MIT without treating
+      dependency licenses or README prose as project license declarations.
+    method: >-
+      Run node seed/scripts/verify-license.js from the repository root. The
+      verifier parses package.json and package-lock.json, checks the root package
+      entries, and validates the identifying MIT text in LICENSE with complete
+      assertion diagnostics on mismatch.
+    evidence_required:
+      - Exact verifier command and exit status.
+      - Parsed root package and lockfile license identifiers.
+      - LICENSE identification and mismatch diagnostics.
+    artifacts:
+      - repo-license
+      - package-manifest
+      - dependency-lock
+      - seed-evidence-scripts
   unit-tests:
     title: Unit tests pass
     description: Verify isolated Seed-critical behavior through the repository test suite.

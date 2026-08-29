@@ -148,6 +148,7 @@ material address or lacks evidence for the full genome.
 | `policy-input-validation` | Most CLI, YAML, path, reference, and state inputs fail before mutation | Genome listing converts malformed descriptions to blank text and Seed listing skips unsafe directory names rather than failing universally. |
 | `obs-clear-errors` | Parser, validator, reference, state, and command failures are actionable | Genome-list parse errors can degrade to blank descriptions, conflicting with a universal fail-loud claim. |
 | `repo-dependency-lock` | `package-lock.json` is tracked and clean installs are deterministic | No CI gate proves frozen-install lock drift blocks integration. |
+| `repo-license` | `LICENSE`, `package.json`, and root lockfile metadata consistently select MIT | The genome also covers all documentation and source notices, but those are not license-declaration surfaces today. Master states the narrower as-built license contract locally. |
 
 Additional non-fit policies are deliberately not candidates: `policy-no-external-dependencies`
 is false because `yaml` and `cli-highlight` are runtime dependencies, and a
