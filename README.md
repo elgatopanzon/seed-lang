@@ -671,7 +671,11 @@ supplied or reused result passed.
 
 If confirmation fails, the item remains claimed and the complete attempted
 results are written atomically to the session. The CLI reports each failed
-command's exit status, signal, timeout state, stdout, and stderr.
+command's exit status, signal, timeout state, stdout, and stderr. Failed results
+are diagnostic records, never reusable producers: the next explicit transition
+executes the command again even when product content is unchanged. Rejected
+transition attempts remain available in `test_command_attempts` after a later
+successful retry replaces the item's current `test_commands`.
 
 ### Record A Terminal Failure
 

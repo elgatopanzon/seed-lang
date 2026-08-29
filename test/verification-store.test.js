@@ -606,6 +606,88 @@ describe('verification store', () => {
     });
   });
 
+  test('transient failed shared proof executes again after an external prerequisite is repaired', () => {
+    withTempDir((cwd) => {
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+      claimItem({ cwd, itemId: 'verify-begin', owner: 'worker-A' });
+
+      const counterPath = path.join(cwd, '.seed', 'transient-command-count.txt');
+      const prerequisitePath = path.join(cwd, '.seed', 'host-ready');
+      const transientCommand = `${process.execPath} -e "const fs=require('node:fs');const c='.seed/transient-command-count.txt';const n=fs.existsSync(c)?Number(fs.readFileSync(c,'utf8'))+1:1;fs.writeFileSync(c,String(n));process.stdout.write('attempt='+n);if(!fs.existsSync('.seed/host-ready')){process.stderr.write('host prerequisite missing');process.exitCode=7}"`;
+
+      assert.throws(
+        () => confirmItem({
+          cwd,
+          itemId: 'verify-begin',
+          owner: 'worker-A',
+          files: ['implementation.js'],
+          testCommands: [transientCommand],
+          evidence: 'transient host prerequisite repaired',
+          now: () => 2_000,
+        }),
+        /host prerequisite missing/,
+      );
+
+      let session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      let item = session.items.find((entry) => entry.id === 'verify-begin');
+      const firstFailure = item.test_commands[0];
+      assert.equal(firstFailure.exitCode, 7);
+      assert.equal(firstFailure.stdout, 'attempt=1');
+      assert.equal(firstFailure.stderr, 'host prerequisite missing');
+      assert.equal(firstFailure.passed, false);
+      assert.equal(firstFailure.reused, false);
+
+      fs.writeFileSync(prerequisitePath, 'ready\n', 'utf8');
+      confirmItem({
+        cwd,
+        itemId: 'verify-begin',
+        owner: 'worker-A',
+        files: ['implementation.js'],
+        testCommands: [transientCommand],
+        evidence: 'transient host prerequisite repaired',
+        now: () => 3_000,
+      });
+
+      session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      item = session.items.find((entry) => entry.id === 'verify-begin');
+      const retry = item.test_commands[0];
+      assert.equal(fs.readFileSync(counterPath, 'utf8'), '2');
+      assert.equal(retry.passed, true);
+      assert.equal(retry.reused, false);
+      assert.equal(retry.stdout, 'attempt=2');
+      assert.equal(retry.productRevision, firstFailure.productRevision);
+      assert.notEqual(retry.executedAt, firstFailure.executedAt);
+      assert.equal(item.test_command_attempts.length, 1);
+      assert.equal(item.test_command_attempts[0].targetStatus, 'confirmed');
+      assert.equal(item.test_command_attempts[0].attemptedAt, 2_000);
+      assert.deepEqual(item.test_command_attempts[0].test_commands, [firstFailure]);
+      const reportedItem = verificationReport({ cwd }).items.find((entry) => entry.id === 'verify-begin');
+      assert.deepEqual(reportedItem.test_command_attempts, item.test_command_attempts);
+
+      claimItem({ cwd, itemId: 'verify-next', owner: 'worker-B', now: () => 4_000 });
+      confirmItem({
+        cwd,
+        itemId: 'verify-next',
+        owner: 'worker-B',
+        files: ['implementation.js'],
+        testCommands: [transientCommand],
+        evidence: 'passing result remains reusable for another consumer',
+        now: () => 5_000,
+      });
+
+      session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      const consumer = session.items.find((entry) => entry.id === 'verify-next').test_commands[0];
+      assert.equal(fs.readFileSync(counterPath, 'utf8'), '2');
+      assert.equal(consumer.passed, true);
+      assert.equal(consumer.reused, true);
+      assert.equal(consumer.resultHash.length, 64);
+    });
+  });
+
   test('unknown ids throw explicit errors on confirm', () => {
     withTempDir((cwd) => {
       startSession({

@@ -360,7 +360,11 @@ function runTestCommands(cwd, commands, {
   const revision = productRevision(cwd);
   const reusableByCommand = new Map(
     reusableResults
-      .filter((result) => isSharedCommandResult(result) && result.productRevision === revision)
+      .filter((result) => (
+        isSharedCommandResult(result)
+        && result.passed === true
+        && result.productRevision === revision
+      ))
       .map((result) => [result.command, result]),
   );
   return normalized.map((command) => {
@@ -536,6 +540,29 @@ function assertSessionShape(session, sourcePath, expectedSessionId, expectedSnap
       }
       assertSharedCommandResult(result, sourcePath, entry.id, commandIndex);
     });
+
+    if (entry.test_command_attempts !== undefined && !Array.isArray(entry.test_command_attempts)) {
+      throw new Error(`Corrupt session state at ${sourcePath}: item ${entry.id} test_command_attempts must be an array.`);
+    }
+    (entry.test_command_attempts ?? []).forEach((attempt, attemptIndex) => {
+      const prefix = `Corrupt session state at ${sourcePath}: item ${entry.id} test_command_attempts[${attemptIndex}]`;
+      if (!attempt || typeof attempt !== 'object' || Array.isArray(attempt)) {
+        throw new Error(`${prefix} must be an object.`);
+      }
+      if (!['confirmed', 'failed'].includes(attempt.targetStatus)) {
+        throw new Error(`${prefix} has invalid targetStatus ${attempt.targetStatus}.`);
+      }
+      assertFiniteTimestamp(attempt.attemptedAt, `${entry.id} test command attempt attemptedAt`, sourcePath);
+      if (!Array.isArray(attempt.test_commands) || attempt.test_commands.length === 0) {
+        throw new Error(`${prefix} requires test_commands.`);
+      }
+      attempt.test_commands.forEach((result, commandIndex) => {
+        if (!result || typeof result !== 'object' || Array.isArray(result)) {
+          throw new Error(`${prefix} has an invalid command result at ${commandIndex}.`);
+        }
+        assertSharedCommandResult(result, sourcePath, entry.id, commandIndex);
+      });
+    });
   });
 }
 
@@ -620,6 +647,7 @@ function buildManualSessionItems(seedDocument) {
       reason: null,
       evidence_files: [],
       test_commands: [],
+      test_command_attempts: [],
       seed_evidence: null,
     };
   });
@@ -668,6 +696,7 @@ function buildImplicitSessionItems(seedDocument) {
       reason: null,
       evidence_files: [],
       test_commands: [],
+      test_command_attempts: [],
       seed_evidence: null,
     };
   });
@@ -705,7 +734,11 @@ function normalizeStoredSessionPaths(state, cwd, seedName) {
   const root = workspaceRoot(cwd);
 
   state.items.forEach((item) => {
-    (item.test_commands ?? []).forEach((command) => {
+    const commands = [
+      ...(item.test_commands ?? []),
+      ...(item.test_command_attempts ?? []).flatMap((attempt) => attempt.test_commands ?? []),
+    ];
+    commands.forEach((command) => {
       if (!command || typeof command !== 'object') {
         return;
       }
@@ -766,6 +799,7 @@ function reconcileSessionState(cwd, seedName, state) {
     'reason',
     'evidence_files',
     'test_commands',
+    'test_command_attempts',
     'seed_evidence',
   ];
 
@@ -1370,6 +1404,14 @@ function transitionItem({
     try {
       assertTransitionCommandResults(itemId, targetStatus, testCommandResults);
     } catch (error) {
+      item.test_command_attempts = [
+        ...(item.test_command_attempts ?? []),
+        {
+          targetStatus,
+          attemptedAt: nowValue,
+          test_commands: structuredClone(testCommandResults),
+        },
+      ];
       item.test_commands = testCommandResults;
       state.updatedAt = nowValue;
       writeJsonAtomically(path, state);
@@ -1605,6 +1647,7 @@ function syncSession({
           reason: old.reason ?? null,
           evidence_files: structuredClone(old.evidence_files ?? []),
           test_commands: structuredClone(old.test_commands ?? []),
+          test_command_attempts: structuredClone(old.test_command_attempts ?? []),
           seed_evidence: structuredClone(old.seed_evidence ?? null),
         };
       }
@@ -1879,6 +1922,7 @@ function verificationReport({ cwd, seedName, sessionId = DEFAULT_SESSION_ID } = 
     references: itemSummary(item, verificationReferences(cwd, seedName, item)).references,
     evidence_files: structuredClone(item.evidence_files ?? []),
     test_commands: structuredClone(item.test_commands ?? []),
+    test_command_attempts: structuredClone(item.test_command_attempts ?? []),
     expiration: expirationsById.get(item.id) ?? null,
     audit_errors: auditErrorsById.get(item.id) ?? [],
     audit_warnings: auditWarningsById.get(item.id) ?? [],
