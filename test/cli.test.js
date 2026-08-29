@@ -1349,4 +1349,36 @@ describe('seed cli', () => {
       assert.ok(failMissingValue.stderr.includes('--reason requires a value'));
     });
   });
+
+  test('verify confirm reports and persists complete failed command diagnostics', () => {
+    withTempDir((cwd) => {
+      assert.equal(runCli(['init'], cwd).code, 0);
+      assert.equal(runCli(['verify', 'start'], cwd).code, 0);
+      assert.equal(runCli(['verify', 'next'], cwd).code, 0);
+
+      const diagnosticCommand = `${process.execPath} -p "(process.stdout.write(Buffer.from('UlVOVElNRS1PVVQ=','base64')),process.stderr.write(Buffer.from('UlVOVElNRS1FUlI=','base64')),missingName)"`;
+      const confirmed = runCli([
+        'verify', 'confirm', 'seed-baseline-visibility',
+        '--owner', 'seed-cli',
+        '--file', 'seed/seed.yml',
+        '--test-cmd', diagnosticCommand,
+        '--evidence', 'controlled failing proof',
+      ], cwd);
+
+      assert.equal(confirmed.code, 1);
+      assert.match(confirmed.stderr, /\[failed\] exit=1 signal=null timedOut=false/);
+      assert.ok(confirmed.stderr.includes('RUNTIME-OUT'));
+      assert.ok(confirmed.stderr.includes('RUNTIME-ERR'));
+
+      const session = JSON.parse(fs.readFileSync(sessionPath(cwd), 'utf8'));
+      const item = session.items.find((entry) => entry.id === 'seed-baseline-visibility');
+      assert.equal(item.status, 'claimed');
+      assert.equal(item.claim.owner, 'seed-cli');
+      assert.equal(item.test_commands.length, 1);
+      assert.equal(item.test_commands[0].exitCode, 1);
+      assert.equal(item.test_commands[0].stdout, 'RUNTIME-OUT');
+      assert.ok(item.test_commands[0].stderr.includes('RUNTIME-ERR'));
+      assert.match(item.test_commands[0].resultHash, /^[a-f0-9]{64}$/);
+    });
+  });
 });

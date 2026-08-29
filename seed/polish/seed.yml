@@ -78,7 +78,9 @@ artifacts:
     description: Complete deferred visual-interface inventory and near-fit non-UI genome review.
   seed-evidence-scripts:
     path: seed/scripts
-    description: Deterministic disposable-state checks needed beyond the existing test suite.
+    description: >-
+      Authoritative home for declared Seed-owned executable support that performs
+      read-only assertions or disposable boundary probes beyond the native tests.
 
 interfaces:
   cli:
@@ -514,6 +516,35 @@ constraints:
       Canonical JSON recursively sorts object keys, preserves array order, and
       deterministic collections retain complete output including data larger
       than a typical pipe buffer.
+  reference-classification-authority:
+    description: >-
+      One production reference scanner classifies local, cross-Seed, and
+      genome-qualified tokens. Validation, blueprint filtering, genome closure,
+      and external dependency resolution consume that classification while
+      retaining their established context-specific diagnostics and behavior.
+  evidence-producer-ownership:
+    description: >-
+      One focused production component owns product-revision calculation,
+      command execution, passing-result reuse, failed-attempt retention,
+      diagnostic capture, result integrity, and producer-to-consumer fan-out.
+      Verification transitions, check, refresh, audit, and session persistence
+      consume that authority under the existing session lock and atomic ledger
+      replacement; Seed assertions are read-only consumers of production state.
+  executable-cli-test-boundary:
+    description: >-
+      Claims about executable argument parsing, repository and Seed selection,
+      process exit status, stdout and stderr separation, environment handling,
+      and verification failure diagnostics are exercised through the real
+      src/cli.js child-process boundary. Direct handler invocation remains
+      appropriate for focused routing and formatting unit tests.
+  seed-support-ownership:
+    description: >-
+      Seed-owned executable support resides under @seed-evidence-scripts, maps
+      to a declared verification method, and performs read-only assertions or
+      disposable boundary probes. It contains no independent evidence cache,
+      command-producer registry, or duplicate runner for native test commands.
+    artifacts:
+      - seed-evidence-scripts
   verification-state-integrity:
     description: >-
       Session state updates are lock-serialized, terminal evidence is hash-bound,
@@ -699,6 +730,69 @@ verifications:
       - Passing summary or complete state-machine diagnostics.
       - Confirmation that only disposable fixture repositories were mutated.
     artifacts:
+      - test-contract
+  reference-classification-consistency:
+    title: Reference classification has one production authority
+    description: >-
+      Exercise local, artifact, cross-Seed, and genome-qualified references
+      through validation, blueprint selection and closure, genome composition,
+      and external dependency resolution using the shared production scanner.
+    method: >-
+      Run node --test test/reference-syntax.test.js test/validation.test.js
+      test/genomes.test.js test/external-references.test.js from the repository root.
+    evidence_required:
+      - Exact command and exit status.
+      - Positive and malformed-token coverage for every accepted reference form.
+      - Proof that each consumer uses the shared classification while preserving its established diagnostics and closure semantics.
+    artifacts:
+      - source-contract
+      - test-contract
+  evidence-producer-architecture:
+    title: Shared evidence production has one focused authority
+    description: >-
+      Exercise the production evidence component through session and executable
+      CLI consumers without a parallel cache, producer registry, or assertion-owned
+      execution path.
+    method: >-
+      Run node --test test/evidence-producer.test.js
+      test/verification-store.test.js test/cli-process.test.js from the repository root.
+    evidence_required:
+      - Exact command and exit status.
+      - Cold and warm proof for one execution per stable product revision, passing-result reuse, and product-content invalidation.
+      - Serialized concurrent-consumer, atomic-ledger, corrupt-record, mutation-rejection, and result-integrity proof.
+      - Complete first-failure exit, signal, timeout, stdout, and stderr diagnostics plus successful re-execution after an external prerequisite changes.
+      - Audit rejection of legacy or multiply produced repeated-command records.
+    artifacts:
+      - source-contract
+      - test-contract
+  executable-cli-boundary:
+    title: CLI process semantics use the production executable boundary
+    description: >-
+      Exercise representative project, genome, blueprint, named-Seed, and
+      verification workflows by spawning src/cli.js and observing real process
+      results rather than treating direct handler calls as integration proof.
+    method: Run node --test test/cli-process.test.js from the repository root.
+    evidence_required:
+      - Exact command and exit status.
+      - Representative leading --repo and optional --seed parsing through the executable.
+      - Authoritative exit status and stdout/stderr assertions for success, parser failure, and failed verification confirmation.
+      - Disposable repository and home fixtures with deterministic cleanup.
+    artifacts:
+      - source-contract
+      - test-contract
+  seed-support-hygiene:
+    title: Seed-owned support is declared and single-purpose
+    description: >-
+      Inspect the tracked Seed support inventory and prove every executable is
+      under @seed-evidence-scripts, referenced by a verification method, and
+      limited to read-only assertions or disposable probes outside native-test ownership.
+    method: Run node --test test/repository-structure.test.js from the repository root.
+    evidence_required:
+      - Exact command and exit status.
+      - Complete tracked executable inventory beneath seed with owning verification addresses.
+      - Proof that no Seed support entry implements command-result caching, shared-result persistence, or a duplicate native-test producer registry.
+    artifacts:
+      - seed-evidence-scripts
       - test-contract
   package-surface-behavior:
     title: Unpublished npm package surface is reproducible

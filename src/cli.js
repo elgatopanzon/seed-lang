@@ -1086,7 +1086,11 @@ function formatIssueCodes(issues) {
 function formatCommandResult(command) {
   const state = command.passed ? 'ok' : 'failed';
   const exit = command.exitCode === null || command.exitCode === undefined ? 'null' : command.exitCode;
-  return '[' + state + '] exit=' + exit + ' cmd=' + command.command;
+  const producer = command.producerItemId
+    ? ' producer=' + command.producerItemId + ' reused=' + Boolean(command.reused)
+    : '';
+  const revision = command.productRevision ? ' revision=' + command.productRevision.slice(0, 12) : '';
+  return '[' + state + '] exit=' + exit + producer + revision + ' cmd=' + command.command;
 }
 
 function handleVerifyAudit(cwd, seedName) {
