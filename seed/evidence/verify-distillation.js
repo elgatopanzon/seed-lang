@@ -155,6 +155,7 @@ function verifyMasterBoundary() {
     'package-manifest': 'package.json',
     'dependency-lock': 'package-lock.json',
     'genome-catalog': 'resources/genomes',
+    'github-license-template-catalog': 'seed/github-license-templates.yml',
     'portable-skill': 'resources/skills/seed-lang',
     'source-contract': 'src',
     'test-contract': 'test',
@@ -231,13 +232,22 @@ function verifyDependencies() {
 function verifyGenomeCompatibility() {
   const baseline = run('git', ['ls-tree', '-r', '--name-only', 'a07f0e6', '--', 'resources/genomes']);
   const baselineIds = baseline.trim().split('\n').filter((name) => name.endsWith('.yml')).map((name) => path.basename(name, '.yml')).sort();
+  const licenseCatalog = YAML.parse(fs.readFileSync(
+    path.join(repositoryRoot, 'seed', 'github-license-templates.yml'),
+    'utf8',
+  ));
+  const licenseIds = licenseCatalog.licenses.map((entry) => entry.genome).sort();
+  const expectedIds = [...new Set([...baselineIds, ...licenseIds])].sort();
   const currentIds = fs.readdirSync(path.join(repositoryRoot, 'resources', 'genomes'))
     .filter((name) => name.endsWith('.yml'))
     .map((name) => path.basename(name, '.yml'))
     .sort();
-  assert.deepEqual(currentIds, baselineIds, 'built-in genome IDs differ from authoritative commit a07f0e6');
+  assert.equal(baselineIds.length, 204, 'authoritative baseline genome count changed');
+  assert.equal(licenseIds.length, 13, 'pinned GitHub license genome count changed');
+  assert.equal(new Set(licenseIds).size, licenseIds.length, 'pinned GitHub license genome IDs must be unique');
+  assert.deepEqual(currentIds, expectedIds, 'built-in genome IDs differ from the authoritative baseline plus pinned GitHub license genomes');
   const digest = crypto.createHash('sha256').update(`${currentIds.join('\n')}\n`).digest('hex');
-  console.log(`Genome compatibility passed (${currentIds.length} exact IDs; sha256=${digest}; baseline=a07f0e6).`);
+  console.log(`Genome compatibility passed (${currentIds.length} exact IDs; baseline=a07f0e6 plus ${licenseIds.length} pinned GitHub license genomes; sha256=${digest}).`);
 }
 
 function verifyPackage() {

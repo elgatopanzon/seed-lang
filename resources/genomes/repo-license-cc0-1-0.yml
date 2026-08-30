@@ -1,0 +1,22 @@
+metadata:
+  name: repo-license-cc0-1-0
+  summary: CC0-1.0 repository license selection contract.
+  description: Selects the GitHub Creative Commons Zero v1.0 Universal template for the repository.
+  tags: [repository, license, public-domain, creative-commons]
+genomes:
+  - repo-license
+constraints:
+  selected-repository-license:
+    description: The project owner selects Creative Commons Zero v1.0 Universal using GitHub license key cc0-1.0 and GitHub-reported SPDX identifier CC0-1.0; @repo-license and applicable repository metadata identify those terms consistently.
+    artifacts: [repo-license]
+    policy: global
+verifications:
+  repo-license-selection:
+    title: Repository uses Creative Commons Zero v1.0 Universal
+    description: Verify the owner-selected license artifact and repository metadata match GitHub key cc0-1.0 and SPDX identifier CC0-1.0.
+    artifacts: [repo-license]
+    method: Inspect LICENSE and every applicable repository metadata surface for the selected GitHub license key, SPDX identifier, and matching terms.
+    evidence_required:
+      - LICENSE identification and matching copyright or attribution fields.
+      - GitHub license key cc0-1.0 and SPDX identifier CC0-1.0.
+      - Package, documentation, and source-notice consistency results.

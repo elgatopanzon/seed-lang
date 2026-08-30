@@ -1,0 +1,22 @@
+metadata:
+  name: repo-license-bsd-2-clause
+  summary: BSD-2-Clause repository license selection contract.
+  description: Selects the GitHub BSD 2-Clause Simplified License template for the repository.
+  tags: [repository, license, permissive, bsd]
+genomes:
+  - repo-license
+constraints:
+  selected-repository-license:
+    description: The project owner selects BSD 2-Clause "Simplified" License using GitHub license key bsd-2-clause and GitHub-reported SPDX identifier BSD-2-Clause; @repo-license and applicable repository metadata identify those terms consistently.
+    artifacts: [repo-license]
+    policy: global
+verifications:
+  repo-license-selection:
+    title: Repository uses BSD 2-Clause Simplified License
+    description: Verify the owner-selected license artifact and repository metadata match GitHub key bsd-2-clause and SPDX identifier BSD-2-Clause.
+    artifacts: [repo-license]
+    method: Inspect LICENSE and every applicable repository metadata surface for the selected GitHub license key, SPDX identifier, and matching terms.
+    evidence_required:
+      - LICENSE identification and matching copyright or attribution fields.
+      - GitHub license key bsd-2-clause and SPDX identifier BSD-2-Clause.
+      - Package, documentation, and source-notice consistency results.

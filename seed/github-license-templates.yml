@@ -1,0 +1,57 @@
+source:
+  url: https://api.github.com/licenses
+  accessed: 2026-08-30
+  description: Standard license templates returned by the GitHub Licenses API.
+licenses:
+  - genome: repo-license-agpl-3-0
+    github_key: agpl-3.0
+    name: GNU Affero General Public License v3.0
+    spdx_id: AGPL-3.0
+  - genome: repo-license-apache-2-0
+    github_key: apache-2.0
+    name: Apache License 2.0
+    spdx_id: Apache-2.0
+  - genome: repo-license-bsd-2-clause
+    github_key: bsd-2-clause
+    name: BSD 2-Clause "Simplified" License
+    spdx_id: BSD-2-Clause
+  - genome: repo-license-bsd-3-clause
+    github_key: bsd-3-clause
+    name: BSD 3-Clause "New" or "Revised" License
+    spdx_id: BSD-3-Clause
+  - genome: repo-license-bsl-1-0
+    github_key: bsl-1.0
+    name: Boost Software License 1.0
+    spdx_id: BSL-1.0
+  - genome: repo-license-cc0-1-0
+    github_key: cc0-1.0
+    name: Creative Commons Zero v1.0 Universal
+    spdx_id: CC0-1.0
+  - genome: repo-license-epl-2-0
+    github_key: epl-2.0
+    name: Eclipse Public License 2.0
+    spdx_id: EPL-2.0
+  - genome: repo-license-gpl-2-0
+    github_key: gpl-2.0
+    name: GNU General Public License v2.0
+    spdx_id: GPL-2.0
+  - genome: repo-license-gpl-3-0
+    github_key: gpl-3.0
+    name: GNU General Public License v3.0
+    spdx_id: GPL-3.0
+  - genome: repo-license-lgpl-2-1
+    github_key: lgpl-2.1
+    name: GNU Lesser General Public License v2.1
+    spdx_id: LGPL-2.1
+  - genome: repo-license-mit
+    github_key: mit
+    name: MIT License
+    spdx_id: MIT
+  - genome: repo-license-mpl-2-0
+    github_key: mpl-2.0
+    name: Mozilla Public License 2.0
+    spdx_id: MPL-2.0
+  - genome: repo-license-unlicense
+    github_key: unlicense
+    name: The Unlicense
+    spdx_id: Unlicense

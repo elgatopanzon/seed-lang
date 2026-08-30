@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { stringify } = require('yaml');
+const { parse, stringify } = require('yaml');
 
 const {
   BUILTIN_GENOME_DIR,
@@ -163,6 +163,19 @@ describe('seed genomes', () => {
       'repo-gitignore',
       'repo-issue-templates',
       'repo-license',
+      'repo-license-agpl-3-0',
+      'repo-license-apache-2-0',
+      'repo-license-bsd-2-clause',
+      'repo-license-bsd-3-clause',
+      'repo-license-bsl-1-0',
+      'repo-license-cc0-1-0',
+      'repo-license-epl-2-0',
+      'repo-license-gpl-2-0',
+      'repo-license-gpl-3-0',
+      'repo-license-lgpl-2-1',
+      'repo-license-mit',
+      'repo-license-mpl-2-0',
+      'repo-license-unlicense',
       'repo-monorepo-layout',
       'repo-open-source-ready',
       'repo-ownership',
@@ -555,6 +568,28 @@ describe('seed genomes', () => {
     const repositoryReadme = compileGenomeDocument({ id: 'repo-readme', cwd: process.cwd(), home: '' });
     assert.equal(repositoryReadme.document.artifacts['repo-readme'].path, 'README.md');
     assert.match(repositoryReadme.document.verifications['repo-readme'].method, /execute each setup/i);
+
+    const githubLicenseCatalog = parse(fs.readFileSync(
+      path.join(__dirname, '..', 'seed', 'github-license-templates.yml'),
+      'utf8',
+    ));
+    assert.equal(githubLicenseCatalog.source.url, 'https://api.github.com/licenses');
+    assert.equal(githubLicenseCatalog.licenses.length, 13);
+    githubLicenseCatalog.licenses.forEach(({ genome, github_key: githubKey, spdx_id: spdxId }) => {
+      const license = compileGenomeDocument({ id: genome, cwd: process.cwd(), home: '' });
+      const selection = license.document.constraints['selected-repository-license'];
+      const verification = license.document.verifications['repo-license-selection'];
+      assert.equal(license.document.artifacts['repo-license'].path, 'LICENSE');
+      assert.equal(license.provenance['artifacts.repo-license'].path, 'builtin:repo-license');
+      assert.equal(license.provenance['constraints.explicit-license-choice'].path, 'builtin:repo-license');
+      assert.equal(license.provenance['constraints.selected-repository-license'].path, `builtin:${genome}`);
+      assert.equal(license.provenance['verifications.repo-license-selection'].path, `builtin:${genome}`);
+      assert.equal(selection.policy, 'global');
+      assert.match(selection.description, new RegExp(`GitHub license key ${githubKey.replace('.', '\\.')}`));
+      assert.match(selection.description, new RegExp(`SPDX identifier ${spdxId.replace('.', '\\.')}`));
+      assert.match(verification.evidence_required.join(' '), new RegExp(githubKey.replace('.', '\\.')));
+      assert.match(verification.evidence_required.join(' '), new RegExp(spdxId.replace('.', '\\.')));
+    });
 
     const openSourceReady = compileGenomeDocument({ id: 'repo-open-source-ready', cwd: process.cwd(), home: '' });
     assert.equal(openSourceReady.provenance['artifacts.repo-license'].path, 'builtin:repo-license');

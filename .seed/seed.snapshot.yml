@@ -253,6 +253,9 @@ behavior:
         --overwrite, and idempotently ignores only .seed/locks in a seed-lang
         gitignore block.
   genomes:
+    artifacts:
+      - genome-catalog
+      - github-license-template-catalog
     resolution:
       description: Genome lookup precedence is built-in, user, then repository.
         Requested genomes compose in order and local Seed values merge last. The
@@ -289,6 +292,16 @@ behavior:
         left behind.
       artifacts:
         - genome-catalog
+    repository-license-selection:
+      description: The built-in repo-license-* selection genomes cover every standard
+        template in @github-license-template-catalog. Each composes
+        repo-license, selects one GitHub license key and reported SPDX
+        identifier through shared contract addresses, requires matching LICENSE
+        and repository metadata, and leaves the owner responsible for the legal
+        choice.
+      artifacts:
+        - genome-catalog
+        - github-license-template-catalog
   blueprints-and-diffs:
     constructed-blueprint:
       description: Blueprint compiles local and genome content into fixed semantic
@@ -424,9 +437,9 @@ compatibility:
       are named paths. Safe-name rules and master reservation are stable path
       semantics.
   genome-catalog:
-    description: The 204 built-in IDs present in @genome-catalog at distillation
-      commit a07f0e6 are current compatibility surfaces. The retired
-      verify-gli-golden-output alias is not supported.
+    description: The 217 built-in IDs present in @genome-catalog are current
+      compatibility surfaces. The retired verify-gli-golden-output alias is not
+      supported.
     artifacts:
       - genome-catalog
   package-surface:
@@ -589,9 +602,13 @@ verifications:
       - Validated built-in count and passing focused test summary.
       - Assertions covering /tmp isolation and deployment-genome cleanup after
         configurable runtime-identity tests.
+      - Assertions covering every pinned GitHub license template, its
+        repo-license-* genome, inherited LICENSE artifact, GitHub key, reported
+        SPDX identifier, and selection verification contract.
       - Full diagnostics for any invalid genome or failed compiler case.
     artifacts:
       - genome-catalog
+      - github-license-template-catalog
       - test-contract
   genome-search-behavior:
     title: Genome metadata and search behavior passes
@@ -715,6 +732,10 @@ artifacts:
   genome-catalog:
     path: resources/genomes
     description: Authoritative packaged YAML definitions for every built-in genome.
+  github-license-template-catalog:
+    path: seed/github-license-templates.yml
+    description: Pinned inventory of the standard license templates exposed by the
+      GitHub Licenses API for the built-in repository-license selection genomes.
   portable-skill:
     path: resources/skills/seed-lang
     description: Authoritative portable Seed workflow skill and its command,
