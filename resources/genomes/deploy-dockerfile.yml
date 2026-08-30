@@ -52,6 +52,11 @@ constraints:
     artifacts:
       - deploy-dockerfile
     policy: global
+  dockerfile-runtime-identity-verification-cleanup:
+    description: Every disposable Docker verification or test harness uses a unique workspace created beneath /tmp and a unique container project namespace. All mutable test data, copied build contexts, bind-mount sources, and filesystem artifacts stay beneath that recorded /tmp workspace; the source repository may be read as input but containers never write test artifacts into it. A harness that exercises default or overridden PUID and PGID values installs cleanup before its first mutating command and cleans up after success, failure, interruption, or timeout. Cleanup stops and removes all containers, networks, and volumes created by the run; removes every run-created filesystem entry, using narrowly scoped elevated privileges when tested ownership prevents ordinary deletion; restores the ownership and mode of any pre-existing path it changed; refuses cleanup outside the recorded test boundary; and fails visibly if post-cleanup inspection finds a created resource or path remaining, an altered pre-existing path, or an entry owned by a tested UID or GID outside that boundary. Cleanup failure is reported without masking the original test failure.
+    artifacts:
+      - deploy-dockerfile
+    policy: global
   dockerfile-linuxserver-runtime-parameters:
     description: The runtime supports LinuxServer-style PUID=1000, PGID=1000, TZ=Etc/UTC, and UMASK=022 defaults, applies overrides before application startup, and reports effective identity, timezone, umask, and writable paths without exposing secret values.
     artifacts:
@@ -102,7 +107,7 @@ verifications:
     artifacts:
       - deploy-dockerfile
       - deploy-dockerignore
-    method: Build the image with docker build using Dockerfile, inspect the resolved image configuration, then run a representative smoke command or service startup check.
+    method: In a unique disposable workspace beneath /tmp with cleanup registered before mutation, copy the required build context, build the image with docker build using Dockerfile, inspect the resolved image configuration, then run a representative smoke command or service startup check. Keep all mutable data and bind-mount sources beneath that workspace, exercise successful and forced-failure cleanup paths, and inspect Docker resources plus filesystem ownership after cleanup.
     evidence_required:
       - Exact docker build command and successful result.
       - Built image identifier and resolved entrypoint or command.
@@ -114,6 +119,9 @@ verifications:
       - Graceful stop result showing the application receives and handles the container stop signal.
       - Default PUID=1000 and PGID=1000 application-process identity and writable-path ownership result.
       - Overridden non-root PUID and PGID result proving bind-mounted files use the selected host-compatible ownership.
+      - Successful and forced-failure cleanup results proving no test-created containers, networks, volumes, directories, or files remain and no pre-existing path retains changed ownership or mode.
+      - Workspace diagnostics proving every mutable filesystem artifact and bind-mount source was contained beneath a unique /tmp directory and the source repository was not modified by a container.
+      - Post-cleanup ownership diagnostics covering UID or GID 0, the default 1000 identity, and every overridden PUID or PGID exercised by the harness.
       - Default and overridden TZ and UMASK behavior.
       - FILE__ secret-file success, missing-file failure, and secret-redaction results.
       - /config persistence plus every additional writable runtime path reviewed.

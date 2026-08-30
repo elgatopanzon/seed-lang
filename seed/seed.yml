@@ -272,6 +272,15 @@ behavior:
         deterministic results report each genome's ID, origin, tags, match types,
         and matching addresses without treating inherited addresses as direct
         matches.
+    runtime-verification-cleanup:
+      description: >-
+        Built-in deployment genomes that verify configurable runtime identities
+        require unique disposable workspaces beneath /tmp for all mutable test
+        data and bind-mount sources, reliable cleanup on success and failure,
+        and post-cleanup proof that test containers, volumes, networks,
+        directories, and files with test-selected ownership were not left behind.
+      artifacts:
+        - genome-catalog
   blueprints-and-diffs:
     constructed-blueprint:
       description: >-
@@ -658,6 +667,7 @@ verifications:
     evidence_required:
       - Both exact commands and exit statuses.
       - Validated built-in count and passing focused test summary.
+      - Assertions covering /tmp isolation and deployment-genome cleanup after configurable runtime-identity tests.
       - Full diagnostics for any invalid genome or failed compiler case.
     artifacts:
       - genome-catalog

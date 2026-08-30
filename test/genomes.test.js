@@ -420,6 +420,17 @@ describe('seed genomes', () => {
     assert.equal(dockerfile.document.constraints['dockerfile-build-contract'].policy, 'global');
     assert.equal(dockerfile.document.constraints['dockerfile-build-runtime-separation'].policy, 'global');
     assert.match(dockerfile.document.constraints['dockerfile-non-root-runtime'].description, /PUID.*PGID.*1000/i);
+    assert.equal(dockerfile.document.constraints['dockerfile-runtime-identity-verification-cleanup'].policy, 'global');
+    assert.match(dockerfile.document.constraints['dockerfile-runtime-identity-verification-cleanup'].description, /every disposable Docker verification or test harness.*beneath \/tmp/i);
+    assert.match(dockerfile.document.constraints['dockerfile-runtime-identity-verification-cleanup'].description, /mutable test data.*bind-mount sources.*beneath.*\/tmp workspace/i);
+    assert.match(dockerfile.document.constraints['dockerfile-runtime-identity-verification-cleanup'].description, /source repository.*containers never write test artifacts into it/i);
+    assert.match(dockerfile.document.constraints['dockerfile-runtime-identity-verification-cleanup'].description, /cleanup before its first mutating command/i);
+    assert.match(dockerfile.document.constraints['dockerfile-runtime-identity-verification-cleanup'].description, /success, failure, interruption, or timeout/i);
+    assert.match(dockerfile.document.constraints['dockerfile-runtime-identity-verification-cleanup'].description, /containers, networks, and volumes/i);
+    assert.match(dockerfile.document.constraints['dockerfile-runtime-identity-verification-cleanup'].description, /restores the ownership and mode/i);
+    assert.match(dockerfile.document.verifications['deploy-dockerfile'].method, /forced-failure cleanup paths/i);
+    assert.match(dockerfile.document.verifications['deploy-dockerfile'].evidence_required.join(' '), /every mutable filesystem artifact and bind-mount source.*unique \/tmp directory/i);
+    assert.match(dockerfile.document.verifications['deploy-dockerfile'].evidence_required.join(' '), /Post-cleanup ownership diagnostics.*UID or GID 0.*default 1000.*overridden PUID or PGID/i);
     assert.match(dockerfile.document.constraints['dockerfile-linuxserver-runtime-parameters'].description, /TZ=Etc\/UTC.*UMASK=022/i);
     assert.match(dockerfile.document.constraints['dockerfile-secret-file-environment'].description, /FILE__<NAME>/i);
     assert.match(dockerfile.document.constraints['dockerfile-persistent-config-layout'].description, /\/config/i);
@@ -437,6 +448,7 @@ describe('seed genomes', () => {
     assert.equal(composeDevelopment.document.artifacts['compose-development'].path, 'compose.development.yml');
     assert.equal(composeDevelopment.provenance['artifacts.deploy-dockerfile'].path, 'builtin:deploy-dockerfile');
     assert.equal(composeDevelopment.provenance['artifacts.repo-gitignore'].path, 'builtin:repo-gitignore');
+    assert.equal(composeDevelopment.provenance['constraints.dockerfile-runtime-identity-verification-cleanup'].path, 'builtin:deploy-dockerfile');
     assert.match(composeDevelopment.document.constraints['compose-development-storage'].description, /host bind mounts/i);
     assert.match(composeDevelopment.document.constraints['compose-development-storage'].description, /tracked \.gitkeep before Docker Compose starts/i);
     assert.match(composeDevelopment.document.constraints['compose-development-storage'].description, /sudo/i);
