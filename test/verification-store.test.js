@@ -20,6 +20,7 @@ const {
   failItem,
   getPendingItems,
   getStatus,
+  injectItem,
   refreshExpiredEvidence,
   startSession,
   syncSession,
@@ -509,6 +510,245 @@ describe('verification store', () => {
         verificationAudit({ cwd }).errors.some((entry) => entry.code === 'duplicate-command-executions'),
         false,
       );
+    });
+  });
+
+  test('injectItem records visible attestations without executing commands and check upgrades them', () => {
+    withTempDir((cwd) => {
+      const document = {
+        verifications: [{
+          id: 'verify-injection',
+          title: 'Verify injection',
+          description: 'Verify explicit injected evidence.',
+          method: 'Inspect the injected result.',
+          evidence_required: ['Injection provenance.'],
+        }],
+      };
+      const seedText = stringify(document);
+      fs.mkdirSync(path.join(cwd, 'seed'), { recursive: true });
+      fs.writeFileSync(path.join(cwd, 'seed', 'seed.yml'), seedText, 'utf8');
+      startSession({ cwd, seedDocument: document, seedText });
+      claimItem({ cwd, itemId: 'verify-injection', owner: 'injection-agent', now: () => 1_000 });
+
+      const markerPath = path.join(cwd, '.seed', 'injection-marker');
+      const markerCommand = `${process.execPath} -e "require('node:fs').writeFileSync('.seed/injection-marker','executed')"`;
+      injectItem({
+        cwd,
+        itemId: 'verify-injection',
+        owner: 'injection-agent',
+        authorization: 'operator-requested-sdd-injection',
+        files: ['implementation.js'],
+        commandAttestations: [{ command: markerCommand, passed: true }],
+        evidence: 'Agent directly evaluated the changed injection address as passing.',
+        now: () => 2_000,
+      });
+
+      assert.equal(fs.existsSync(markerPath), false);
+      let session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      let item = session.items[0];
+      assert.equal(item.status, 'confirmed');
+      assert.equal(item.test_commands[0].injected, true);
+      assert.equal(item.test_commands[0].injectionOwner, 'injection-agent');
+      assert.equal(item.test_commands[0].injectionAuthorization, 'operator-requested-sdd-injection');
+      assert.equal(item.test_commands[0].injectedAt, 2_000);
+      assert.equal(item.test_commands[0].passed, true);
+      assert.match(item.test_commands[0].productRevision, /^[a-f0-9]{64}$/);
+      assert.equal(item.test_commands[0].resultHash, hashCommandResult(item.test_commands[0]));
+
+      let status = getStatus({ cwd });
+      assert.equal(status.satisfied, true);
+      assert.equal(status.injected, 1);
+      assert.deepEqual(status.injectedIds, ['verify-injection']);
+      const report = verificationReport({ cwd });
+      assert.equal(report.items[0].test_commands[0].injected, true);
+      assert.equal(verificationAudit({ cwd }).errors.length, 0);
+
+      const pristine = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      const corrupt = structuredClone(pristine);
+      corrupt.items[0].test_commands[0].provenance = 'untrusted-attestation';
+      corrupt.items[0].test_commands[0].resultHash = hashCommandResult(corrupt.items[0].test_commands[0]);
+      fs.writeFileSync(sessionFile(cwd), JSON.stringify(corrupt, null, 2), 'utf8');
+      assert.throws(() => getStatus({ cwd }), /invalid provenance/);
+      fs.writeFileSync(sessionFile(cwd), JSON.stringify(pristine, null, 2), 'utf8');
+
+      const legacy = structuredClone(pristine);
+      delete legacy.items[0].test_commands[0].injectionAuthorization;
+      legacy.items[0].test_commands[0].resultHash = hashCommandResult(legacy.items[0].test_commands[0]);
+      fs.writeFileSync(sessionFile(cwd), JSON.stringify(legacy, null, 2), 'utf8');
+      status = getStatus({ cwd });
+      assert.equal(status.expired, 1);
+      assert.equal(status.expiredEvidence[0].invalidInjectionAuthorization, true);
+
+      checkSession({ cwd, now: () => 3_000 });
+      assert.equal(fs.readFileSync(markerPath, 'utf8'), 'executed');
+      session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      item = session.items[0];
+      assert.equal(item.test_commands[0].injected, undefined);
+      assert.equal(item.test_commands[0].passed, true);
+      status = getStatus({ cwd });
+      assert.equal(status.injected, 0);
+      assert.deepEqual(status.injectedIds, []);
+      assert.equal(syncSession({ cwd, now: () => 4_000 }).synced, true);
+    });
+  });
+
+  test('injected failures retain per-command outcomes and keep the session unsatisfied', () => {
+    withTempDir((cwd) => {
+      const document = {
+        verifications: [{
+          id: 'verify-injection-failure',
+          title: 'Verify injection failure',
+          description: 'Verify explicit injected failure evidence.',
+          method: 'Inspect the injected result.',
+          evidence_required: ['Injection failure provenance.'],
+        }],
+      };
+      const seedText = stringify(document);
+      fs.mkdirSync(path.join(cwd, 'seed'), { recursive: true });
+      fs.writeFileSync(path.join(cwd, 'seed', 'seed.yml'), seedText, 'utf8');
+      startSession({ cwd, seedDocument: document, seedText });
+      claimItem({ cwd, itemId: 'verify-injection-failure', owner: 'injection-agent', now: () => 1_000 });
+
+      assert.throws(() => injectItem({
+        cwd,
+        itemId: 'verify-injection-failure',
+        owner: 'injection-agent',
+        authorization: 'operator-requested-sdd-injection',
+        files: ['implementation.js'],
+        commandAttestations: [{ command: PASS_CMD, passed: true }],
+        evidence: 'Passing evidence.',
+        reason: 'Contradictory reason.',
+        now: () => 1_500,
+      }), /reason only for a failing item/);
+
+      assert.throws(() => injectItem({
+        cwd,
+        itemId: 'verify-injection-failure',
+        owner: 'injection-agent',
+        files: ['implementation.js'],
+        commandAttestations: [{ command: PASS_CMD, passed: true }],
+        evidence: 'Passing evidence.',
+        now: () => 1_500,
+      }), /requires authorization operator-requested-sdd-injection/);
+      assert.throws(() => injectItem({
+        cwd,
+        itemId: 'verify-injection-failure',
+        owner: 'injection-agent',
+        authorization: 'ordinary-sdd',
+        files: ['implementation.js'],
+        commandAttestations: [{ command: PASS_CMD, passed: true }],
+        evidence: 'Passing evidence.',
+        now: () => 1_500,
+      }), /requires authorization operator-requested-sdd-injection/);
+
+      injectItem({
+        cwd,
+        itemId: 'verify-injection-failure',
+        owner: 'injection-agent',
+        authorization: 'operator-requested-sdd-injection',
+        files: ['implementation.js'],
+        commandAttestations: [
+          { command: PASS_CMD, passed: true },
+          { command: FAIL_CMD, passed: false },
+        ],
+        reason: 'Agent directly evaluated one changed-address proof as failing.',
+        now: () => 2_000,
+      });
+
+      const session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      assert.equal(session.items[0].status, 'failed');
+      assert.deepEqual(session.items[0].test_commands.map((entry) => entry.passed), [true, false]);
+      const status = getStatus({ cwd });
+      assert.equal(status.failed, 1);
+      assert.equal(status.injected, 1);
+      assert.equal(status.satisfied, false);
+      assert.throws(() => syncSession({ cwd }), /requires.*satisfied/i);
+    });
+  });
+
+  test('audit accepts reused executable evidence when its producer is reinjected', () => {
+    withTempDir((cwd) => {
+      fs.writeFileSync(path.join(cwd, 'producer.js'), 'module.exports = 1;\n', 'utf8');
+      fs.writeFileSync(path.join(cwd, 'consumer.js'), 'module.exports = 1;\n', 'utf8');
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+
+      ['verify-begin', 'verify-next', 'verify-final'].forEach((id, index) => {
+        claimItem({ cwd, itemId: id, owner: 'worker-A', now: () => 1_000 + index * 1_000 });
+        confirmItem({
+          cwd,
+          itemId: id,
+          owner: 'worker-A',
+          files: [index === 0 ? 'producer.js' : 'consumer.js'],
+          testCommands: [PASS_CMD],
+          evidence: `${id} checked with shared proof`,
+          now: () => 1_500 + index * 1_000,
+        });
+      });
+
+      fs.writeFileSync(path.join(cwd, 'producer.js'), 'module.exports = 2;\n', 'utf8');
+      claimItem({ cwd, itemId: 'verify-begin', owner: 'injection-agent', now: () => 5_000 });
+      injectItem({
+        cwd,
+        itemId: 'verify-begin',
+        owner: 'injection-agent',
+        authorization: 'operator-requested-sdd-injection',
+        files: ['producer.js'],
+        commandAttestations: [{ command: PASS_CMD, passed: true }],
+        evidence: 'Producer change was directly evaluated and injected as passing.',
+        now: () => 5_500,
+      });
+
+      const audit = verificationAudit({ cwd });
+      assert.equal(audit.errors.some((entry) => entry.code === 'duplicate-command-executions'), false);
+      assert.equal(audit.ok, true);
+    });
+  });
+
+  test('reconfirming a replayed producer preserves one cold shared result', () => {
+    withTempDir((cwd) => {
+      fs.writeFileSync(path.join(cwd, 'producer.js'), 'module.exports = 1;\n', 'utf8');
+      fs.writeFileSync(path.join(cwd, 'consumer.js'), 'module.exports = 1;\n', 'utf8');
+      startSession({
+        cwd,
+        seedDocument: sampleDocument(),
+        seedText: 'seed-contract-text',
+      });
+
+      ['verify-begin', 'verify-next', 'verify-final'].forEach((id, index) => {
+        claimItem({ cwd, itemId: id, owner: 'worker-A', now: () => 1_000 + index * 1_000 });
+        confirmItem({
+          cwd,
+          itemId: id,
+          owner: 'worker-A',
+          files: [index === 0 ? 'producer.js' : 'consumer.js'],
+          testCommands: [PASS_CMD],
+          evidence: `${id} checked with shared proof`,
+          now: () => 1_500 + index * 1_000,
+        });
+      });
+
+      fs.writeFileSync(path.join(cwd, 'producer.js'), 'module.exports = 2;\n', 'utf8');
+      checkSession({ cwd, now: () => 5_000 });
+      claimItem({ cwd, itemId: 'verify-begin', owner: 'worker-A', now: () => 5_500 });
+      confirmItem({
+        cwd,
+        itemId: 'verify-begin',
+        owner: 'worker-A',
+        files: ['producer.js'],
+        testCommands: [PASS_CMD],
+        evidence: 'verify-begin reconfirmed after strict replay',
+        now: () => 6_000,
+      });
+
+      const session = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      const results = session.items.map((item) => item.test_commands[0]);
+      assert.equal(results.filter((result) => result.reused === false).length, 1);
+      assert.equal(results[0].reused, false);
+      assert.equal(verificationAudit({ cwd }).ok, true);
     });
   });
 
@@ -1246,6 +1486,118 @@ describe('verification store', () => {
       assert.equal(expiredNext.item.id, 'verify-begin');
     });
   });
+
+  test('selected Seed file evidence expires only for referenced semantic changes', () => {
+    withTempDir((cwd) => {
+      fs.mkdirSync(path.join(cwd, 'seed'), { recursive: true });
+      const seedPath = path.join(cwd, 'seed', 'seed.yml');
+      const document = {
+        behavior: {
+          watched: { description: 'Preserve watched behavior.' },
+          unrelated: { description: 'Preserve unrelated behavior.' },
+        },
+        verifications: [{
+          id: 'verify-watched',
+          title: 'Verify watched behavior',
+          description: 'Verify @behavior.watched.',
+          method: 'Inspect the selected Seed contract.',
+          evidence_required: ['Selected Seed evidence.'],
+        }],
+      };
+      const seedText = stringify(document);
+      fs.writeFileSync(seedPath, seedText, 'utf8');
+      startSession({ cwd, seedDocument: document, seedText });
+
+      claimItem({ cwd, itemId: 'verify-watched', owner: 'worker-A', now: () => 1_000 });
+      confirmItem({
+        cwd,
+        itemId: 'verify-watched',
+        owner: 'worker-A',
+        files: ['seed/seed.yml'],
+        testCommands: [PASS_CMD],
+        evidence: 'watched behavior verified',
+        now: () => 2_000,
+      });
+
+      const unrelatedChange = structuredClone(document);
+      unrelatedChange.behavior = {
+        unrelated: { description: 'Changed unrelated behavior.' },
+        watched: document.behavior.watched,
+      };
+      fs.writeFileSync(seedPath, stringify(unrelatedChange), 'utf8');
+      let status = getStatus({ cwd });
+      assert.equal(status.expiredIds.includes('verify-watched'), false);
+      assert.deepEqual(status.modifiedSeedAddresses, ['behavior.unrelated']);
+
+      unrelatedChange.behavior.watched.description = 'Changed watched behavior.';
+      fs.writeFileSync(seedPath, stringify(unrelatedChange), 'utf8');
+      status = getStatus({ cwd });
+      const expiration = status.expiredEvidence.find((entry) => entry.id === 'verify-watched');
+      assert.equal(expiration.kind, 'seed-address');
+      assert.deepEqual(expiration.files, []);
+      assert.deepEqual(expiration.modifiedAddresses, ['behavior.watched']);
+
+      fs.rmSync(seedPath);
+      status = getStatus({ cwd });
+      const missingExpiration = status.expiredEvidence.find((entry) => entry.id === 'verify-watched');
+      assert.match(missingExpiration.kind, /evidence-file/);
+      assert.equal(missingExpiration.files[0].path, 'seed/seed.yml');
+      assert.equal(missingExpiration.files[0].status, 'missing');
+    });
+  });
+
+  test('named Seed file evidence ignores redundant content-hash changes', () => {
+    withTempDir((cwd) => {
+      const seedName = 'api';
+      const seedDirectory = path.join(cwd, 'seed', seedName);
+      const seedPath = path.join(seedDirectory, 'seed.yml');
+      const document = {
+        behavior: {
+          watched: { description: 'Preserve named behavior.' },
+          unrelated: { description: 'Preserve named supporting behavior.' },
+        },
+        verifications: [{
+          id: 'verify-watched',
+          title: 'Verify named watched behavior',
+          description: 'Verify @behavior.watched.',
+          method: 'Inspect the named Seed contract.',
+          evidence_required: ['Named Seed evidence.'],
+        }],
+      };
+      const seedText = stringify(document);
+      fs.mkdirSync(seedDirectory, { recursive: true });
+      fs.writeFileSync(seedPath, seedText, 'utf8');
+      startSession({ cwd, seedName, seedDocument: document, seedText });
+
+      claimItem({ cwd, seedName, itemId: 'verify-watched', owner: 'worker-A', now: () => 1_000 });
+      confirmItem({
+        cwd,
+        seedName,
+        itemId: 'verify-watched',
+        owner: 'worker-A',
+        files: ['seed/api/seed.yml'],
+        testCommands: [PASS_CMD],
+        evidence: 'named watched behavior verified',
+        now: () => 2_000,
+      });
+
+      const reordered = {
+        verifications: document.verifications,
+        behavior: {
+          unrelated: document.behavior.unrelated,
+          watched: document.behavior.watched,
+        },
+      };
+      fs.writeFileSync(seedPath, stringify(reordered), 'utf8');
+      const status = getStatus({ cwd, seedName });
+      assert.deepEqual(status.modifiedSeedAddresses, []);
+      assert.equal(status.expiredIds.includes('verify-watched'), false);
+
+      fs.writeFileSync(seedPath, 'behavior: [invalid\n', 'utf8');
+      assert.throws(() => getStatus({ cwd, seedName }), /parse|YAML/i);
+    });
+  });
+
   test('modified Seed addresses expire verified items that reference them', () => {
     withTempDir((cwd) => {
       fs.mkdirSync(path.join(cwd, 'seed'), { recursive: true });

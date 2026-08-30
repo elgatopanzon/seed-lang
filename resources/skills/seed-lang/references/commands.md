@@ -65,6 +65,11 @@ seed verify confirm ITEM --owner OWNER --file PATH [--file PATH...]
                     --test-cmd COMMAND [--test-cmd COMMAND...] [--evidence TEXT]
 seed verify fail ITEM --owner OWNER --file PATH [--file PATH...]
                  --test-cmd COMMAND [--test-cmd COMMAND...] [--reason TEXT]
+seed verify inject ITEM --owner OWNER
+                   --authorization operator-requested-sdd-injection
+                   --file PATH [--file PATH...]
+                   (--pass-cmd COMMAND | --fail-cmd COMMAND)...
+                   (--evidence TEXT | --reason TEXT)
 seed verify check
 seed verify refresh-expired --owner OWNER [--json]
 seed verify audit
@@ -85,9 +90,15 @@ seed verify status
   attempt diagnostics remain in `test_command_attempts` after a later success.
 - `fail` uses the same content-bound producer results and succeeds only when at
   least one fails.
+- `inject` does not execute commands. It stores explicit per-command pass/fail
+  attestations with owner, timestamp, revision, file hashes, address fingerprints,
+  and visible injected provenance. It is reserved for operator-requested SDD
+  injection runs and rejects missing or incorrect authorization before changing
+  session state. Supply the exact authorization acknowledgement only after the
+  operator directly requests `SDD injection`.
 - `check` executes each unique recorded command once, reports one item-owned
-  producer and warm results for the remaining occurrences, and does not mutate
-  the verification session.
+  producer and warm results for the remaining occurrences, and replaces injected
+  attestations with executable results.
 - `refresh-expired` is a strict atomic fast path only for unchanged-contract,
   evidence-file-only expiry.
 - `audit` evaluates completeness and evidence quality.

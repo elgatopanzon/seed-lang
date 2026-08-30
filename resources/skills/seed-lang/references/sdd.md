@@ -104,6 +104,51 @@ No pending verification items.
 Do not bulk-confirm items. Do not reuse a broad whole-suite command as sole proof
 for unrelated claims. Each command must directly support its item.
 
+## Explicit SDD Injection
+
+Use this speed-focused mode only when the operator directly asks for `SDD
+injection`. Never infer it from an ordinary SDD request, time pressure, or an
+existing verification backlog.
+
+1. Preserve the current session and inspect its status before editing. Stop if it
+   already contains unrelated pending, failed, blocked, or review work that the
+   requested change cannot honestly resolve.
+2. Change the Seed first, validate it, and inspect the complete Blueprint diff.
+   Identify the exact new or modified addresses and their affected evidence.
+3. Implement only that delta. Directly evaluate the changed behavior with the
+   smallest relevant commands or live checks needed to know what passed and what
+   failed. Do not run the full suite merely to satisfy the ordinary SDD gate.
+4. Claim each new or expired item caused by the changed addresses or owned files.
+   Inject the exact known results without making Seed execute them again:
+
+```text
+seed verify inject ITEM --owner OWNER --file PATH \
+  --authorization operator-requested-sdd-injection \
+  --pass-cmd "FOCUSED COMMAND" \
+  --evidence "ITEM-SPECIFIC OBSERVED RESULT"
+```
+
+Use `--fail-cmd` and `--reason` when any known command failed. Passing and failing
+attestations may be combined. Never inject a guessed, inherited, generic, or
+unobserved result. Use `inject`, not `confirm` or `fail`, so the ledger never
+misrepresents attestation as CLI-executed proof.
+
+The authorization acknowledgement is permitted only inside a directly requested
+`SDD injection` run. Never copy, infer, or supply it during strict SDD, ordinary
+verification, evidence refresh, final acceptance, or an unrequested recovery.
+The CLI rejects missing or incorrect authorization before changing session state.
+
+Do not run `seed verify check` during the injection run. Run `seed verify audit`,
+`seed verify report`, and `seed verify status`; these inspect state without
+executing the injected command strings. Require zero unrelated work and truthful
+injected counts. A passing injection run may sync a satisfied session. A failed
+attestation must remain failed and unsatisfied. Report the injected item count,
+the focused evaluations actually performed, and the skipped full-verification
+limitation.
+
+A later strict SDD run may execute `seed verify check`; it replaces injected
+attestations with ordinary executable command results.
+
 ## Expired Evidence
 
 Use `seed verify status` to distinguish:

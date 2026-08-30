@@ -125,13 +125,17 @@ interfaces:
     verification-commands:
       description: >-
         verify start, reset, pending, next, claim, confirm, fail, check,
-        refresh-expired, audit, report, status, sync expose the verification
-        state machine. Confirm and fail require an owner, evidence files, and
-        executable test commands.
+        inject, refresh-expired, audit, report, status, sync expose the
+        verification state machine. Confirm and fail require an owner, evidence
+        files, and executable test commands. Inject requires an owner, evidence
+        files, the exact --authorization operator-requested-sdd-injection
+        acknowledgement, explicit per-command pass or fail attestations, and
+        evidence or reason text.
       examples:
         - seed verify start
         - seed verify next --owner agent
         - seed verify confirm ITEM --owner agent --file PATH --test-cmd COMMAND
+        - seed verify inject ITEM --owner agent --authorization operator-requested-sdd-injection --file PATH --pass-cmd COMMAND --evidence TEXT
         - seed verify status
     skill-installation:
       description: >-
@@ -333,14 +337,34 @@ behavior:
         selected repository as command working directory.
     expiry-and-reconciliation:
       description: >-
-        Missing or changed evidence, absent test commands, or changed referenced
-        Seed addresses expire terminal evidence. New compiled items enter pending
-        work and removed items leave the reconciled queue.
+        Missing or changed implementation evidence, absent test commands, or
+        changed referenced Seed addresses expire terminal evidence. The selected
+        Seed file remains recorded as evidence, but its content-hash change does
+        not independently expire an item when semantic Seed comparison succeeds;
+        referenced address fingerprints determine that expiry. A missing,
+        unreadable, or invalid selected Seed still fails visibly. New compiled
+        items enter pending work and removed items leave the reconciled queue.
     replay-and-refresh:
       description: >-
         check executes each unique stored command once and fans results to all
         uses. refresh-expired is an atomic fast path only for confirmed,
         evidence-file-only expiry with no contract change or other pending work.
+    injection-run:
+      description: >-
+        Injection is a speed-focused SDD mode used only when the operator directly
+        requests "SDD injection". The agent changes the Seed first, implements the
+        resulting address delta, evaluates only new or modified addresses and
+        affected evidence, then uses verify inject with the exact
+        operator-requested-sdd-injection authorization acknowledgement to record
+        truthful per-command pass or fail attestations without the CLI executing
+        those commands. Missing or incorrect authorization fails before any state
+        transition. Injected records retain the authorization, owner, timestamp,
+        product revision, evidence-file hashes, Seed-address fingerprints, and
+        conspicuous provenance in status, audit, and report output. They may
+        satisfy and sync the session, while a later verify check executes their
+        command strings and replaces the attestations with ordinary executable
+        results. Injection is never selected implicitly and does not weaken
+        missing-file, changed-address, failure, or unsatisfied-session handling.
     completion-and-sync:
       description: >-
         completed requires every item terminal; satisfied also requires no failed
@@ -407,8 +431,9 @@ errors:
   verification:
     description: >-
       Corrupt state, invalid transitions, wrong owners, missing or unsafe evidence,
-      failed proof commands, incomplete audits, expiry, and unsatisfied sync fail
-      visibly while retaining bounded command diagnostics where applicable.
+      malformed or contradictory injection attestations, failed proof commands,
+      incomplete audits, expiry, and unsatisfied sync fail visibly while retaining
+      bounded command diagnostics where applicable.
   skill-installation:
     description: >-
       Missing or conflicting platform choice, unsupported targets, missing bundled
@@ -431,9 +456,10 @@ state:
     semantics: ordered-source-overrides
   verification-session:
     description: >-
-      Session ledgers store claims, attempts, evidence hashes, command results,
-      address fingerprints, and aggregate state. Per-session locks serialize
-      updates and JSON ledgers use temporary-file atomic replacement.
+      Session ledgers store claims, attempts, evidence hashes, executed or
+      explicitly injected command results, address fingerprints, and aggregate
+      state. Per-session locks serialize updates and JSON ledgers use
+      temporary-file atomic replacement.
     persistence: filesystem
     consistency: lock-serialized-session-updates
     semantics: incremental-verification-ledger
@@ -462,6 +488,15 @@ security:
       Verification test commands are trusted operator-provided shell strings,
       executed unchanged from the selected repository with a timeout and bounded
       captured output. They are not an untrusted command-sandbox boundary.
+    policy: global
+  injection-authorization:
+    description: >-
+      verify inject rejects every call unless it includes the exact
+      --authorization operator-requested-sdd-injection acknowledgement. Skills
+      and agents may supply that acknowledgement only after the operator directly
+      requests an SDD injection run. The acknowledgement is a hash-bound,
+      auditable caller attestation, not cryptographic proof of conversation
+      history or operator identity.
     policy: global
   trusted-pager-interface:
     description: >-
@@ -499,7 +534,8 @@ observability:
   verification-views:
     description: >-
       pending, status, audit, and report expose nonterminal work, expiry, failures,
-      policy coverage, evidence files, commands, and aggregate completion.
+      policy coverage, evidence files, executed versus injected commands,
+      injection owners, and aggregate completion.
 
 compatibility:
   seed-language:
@@ -561,7 +597,9 @@ constraints:
   verification-state-integrity:
     description: >-
       Session state updates are lock-serialized, terminal evidence is hash-bound,
-      refresh is all-or-nothing, and failures never fabricate successful evidence.
+      refresh is all-or-nothing, injected attestations are authorization- and
+      revision-bound and visibly distinct from executed proof, and failures never
+      fabricate successful evidence.
     policy: global
   one-cli-package:
     description: >-
@@ -762,6 +800,9 @@ verifications:
     evidence_required:
       - Exact command and exit status.
       - Passing summary or complete state-machine diagnostics.
+      - Assertions that master and named Seed evidence ignores only redundant content-hash changes while referenced address changes and missing or invalid selected Seeds remain visible.
+      - Assertions that injection rejects missing or incorrect operator-requested-sdd-injection authorization before state changes, and stores the exact authorization in hash-bound provenance.
+      - Assertions that explicit injected pass and fail attestations never execute during injection, retain owner and revision provenance, remain hash- and address-expirable, appear in status and report, can sync only when satisfied, and are replaced by executable results during check.
       - Confirmation that only disposable fixture repositories were mutated.
     artifacts:
       - test-contract

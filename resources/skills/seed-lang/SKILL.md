@@ -1,6 +1,6 @@
 ---
 name: seed-lang
-description: Plan, author, inspect, update, implement, and verify software from Seed contracts. Use for seed/seed.yml, Seed genomes and blueprints, Seed Driven Development, implementation from a Seed brief, incremental contract changes, verification evidence, expired evidence, readiness checks, and Seed CLI commands.
+description: Plan, author, inspect, update, implement, and verify software from Seed contracts. Use for seed/seed.yml, Seed genomes and blueprints, Seed Driven Development, explicit SDD injection runs, implementation from a Seed brief, incremental contract changes, verification evidence, expired evidence, readiness checks, and Seed CLI commands.
 ---
 
 # Seed Lang
@@ -43,6 +43,11 @@ The direct portable SDD loop is:
 This workflow does not require an orchestrator, runner, reviewer, task graph, or
 vendor-specific agent feature. Follow [Standalone SDD](references/sdd.md) for the
 complete implementation and completion procedure.
+
+When the operator directly requests `SDD injection`, use the explicit injection
+procedure in [Standalone SDD](references/sdd.md). Never select injection for an
+ordinary SDD request and never supply the injection authorization acknowledgement
+outside that directly requested run.
 
 ## Seed Authoring
 

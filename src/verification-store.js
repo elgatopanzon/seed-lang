@@ -36,6 +36,7 @@ const DEFAULT_LEASE_MS = 60_000;
 const DEFAULT_LOCK_WAIT_MS = 60_000;
 const DEFAULT_LOCK_RETRY_MS = 50;
 const DEFAULT_TEST_COMMAND_TIMEOUT_MS = 300_000;
+const INJECTION_AUTHORIZATION = 'operator-requested-sdd-injection';
 const SESSION_SCHEMA_VERSION = 1;
 const SESSION_COMMAND_CWD = '.';
 const VALID_STATUSES = [
@@ -290,13 +291,59 @@ function commandResultHash(result) {
   return createHash('sha256').update(canonicalJson(payload), 'utf8').digest('hex');
 }
 
+function isInjectedCommandResult(result) {
+  return result?.injected === true;
+}
+
 function isSharedCommandResult(result) {
-  return result && [
+  return result && !isInjectedCommandResult(result) && [
     result.productRevision,
     result.producerItemId,
     result.reused,
     result.resultHash,
   ].some((value) => value !== undefined);
+}
+
+function assertInjectedCommandResult(result, sourcePath, itemId, index) {
+  if (!isInjectedCommandResult(result)) {
+    return;
+  }
+
+  const prefix = `Corrupt session state at ${sourcePath}: injected command result ${itemId}[${index}]`;
+  const requiredStrings = [
+    'command',
+    'cwd',
+    'injectionOwner',
+    'productRevision',
+    'provenance',
+    'producerItemId',
+    'resultHash',
+  ];
+  for (const field of requiredStrings) {
+    if (typeof result[field] !== 'string' || result[field].length === 0) {
+      throw new Error(`${prefix} requires ${field}.`);
+    }
+  }
+  if (result.cwd !== SESSION_COMMAND_CWD || typeof result.passed !== 'boolean') {
+    throw new Error(`${prefix} has invalid attestation metadata.`);
+  }
+  if (
+    (
+      result.injectionAuthorization !== undefined
+      && result.injectionAuthorization !== INJECTION_AUTHORIZATION
+    )
+    || result.provenance !== 'operator-authorized-agent-attestation'
+    || result.producerItemId !== itemId
+  ) {
+    throw new Error(`${prefix} has invalid provenance.`);
+  }
+  assertFiniteTimestamp(result.injectedAt, `${itemId} injected command injectedAt`, sourcePath);
+  if (!SHA256_HEX.test(result.productRevision)) {
+    throw new Error(`${prefix} productRevision must be a SHA-256 hex digest.`);
+  }
+  if (!SHA256_HEX.test(result.resultHash) || commandResultHash(result) !== result.resultHash) {
+    throw new Error(`${prefix} resultHash does not match the complete stored attestation.`);
+  }
 }
 
 function assertSharedCommandResult(result, sourcePath, itemId, index) {
@@ -346,6 +393,42 @@ function producerCommandResult(result, producerItemId) {
   };
   producer.resultHash = commandResultHash(producer);
   return producer;
+}
+
+function injectedCommandResult(cwd, owner, authorization, itemId, attestation, injectedAt) {
+  const result = {
+    command: attestation.command,
+    cwd: SESSION_COMMAND_CWD,
+    passed: attestation.passed,
+    injected: true,
+    injectionAuthorization: authorization,
+    injectionOwner: owner,
+    injectedAt,
+    productRevision: productRevision(cwd),
+    provenance: 'operator-authorized-agent-attestation',
+    producerItemId: itemId,
+  };
+  result.resultHash = commandResultHash(result);
+  return result;
+}
+
+function normalizeCommandAttestations(attestations) {
+  if (!Array.isArray(attestations) || attestations.length === 0) {
+    throw new Error('injectItem requires at least one command attestation.');
+  }
+
+  return attestations.map((attestation, index) => {
+    if (!attestation || typeof attestation !== 'object' || Array.isArray(attestation)) {
+      throw new Error(`injectItem command attestation ${index + 1} must be an object.`);
+    }
+    if (typeof attestation.command !== 'string' || attestation.command.trim().length === 0) {
+      throw new Error(`injectItem command attestation ${index + 1} requires a non-empty command.`);
+    }
+    if (typeof attestation.passed !== 'boolean') {
+      throw new Error(`injectItem command attestation ${index + 1} requires a boolean passed result.`);
+    }
+    return { command: attestation.command, passed: attestation.passed };
+  });
 }
 
 function fanOutCommandResults(items, resultsByCommand) {
@@ -585,7 +668,11 @@ function assertSessionShape(session, sourcePath, expectedSessionId, expectedSnap
       if (!result || typeof result !== 'object' || Array.isArray(result)) {
         throw new Error(`Corrupt session state at ${sourcePath}: item ${entry.id} has an invalid command result at ${commandIndex}.`);
       }
-      assertSharedCommandResult(result, sourcePath, entry.id, commandIndex);
+      if (isInjectedCommandResult(result)) {
+        assertInjectedCommandResult(result, sourcePath, entry.id, commandIndex);
+      } else {
+        assertSharedCommandResult(result, sourcePath, entry.id, commandIndex);
+      }
     });
 
     if (entry.test_command_attempts !== undefined && !Array.isArray(entry.test_command_attempts)) {
@@ -607,7 +694,11 @@ function assertSessionShape(session, sourcePath, expectedSessionId, expectedSnap
         if (!result || typeof result !== 'object' || Array.isArray(result)) {
           throw new Error(`${prefix} has an invalid command result at ${commandIndex}.`);
         }
-        assertSharedCommandResult(result, sourcePath, entry.id, commandIndex);
+        if (isInjectedCommandResult(result)) {
+          assertInjectedCommandResult(result, sourcePath, entry.id, commandIndex);
+        } else {
+          assertSharedCommandResult(result, sourcePath, entry.id, commandIndex);
+        }
       });
     });
   });
@@ -1078,12 +1169,13 @@ function terminalStatus(item) {
   return ['confirmed', 'failed'].includes(item.status);
 }
 
-function currentEvidenceExpiration(cwd, item) {
+function currentEvidenceExpiration(cwd, seedName, item) {
   const files = Array.isArray(item.evidence_files) ? item.evidence_files : [];
   if (!terminalStatus(item) || files.length === 0) {
     return null;
   }
 
+  const selectedSeedPath = seedPaths(seedName).seedPath;
   const changedFiles = [];
   files.forEach((file) => {
     if (!file || typeof file.path !== 'string' || typeof file.sha256 !== 'string') {
@@ -1109,7 +1201,7 @@ function currentEvidenceExpiration(cwd, item) {
     }
 
     const actualSha256 = fileHash(readFileSync(absolutePath));
-    if (actualSha256 !== file.sha256) {
+    if (actualSha256 !== file.sha256 && relativePath !== selectedSeedPath) {
       changedFiles.push({
         path: relativePath,
         expectedSha256: file.sha256,
@@ -1137,17 +1229,30 @@ function currentTestCommandExpiration(item) {
     return null;
   }
 
-  if (Array.isArray(item.test_commands) && item.test_commands.length > 0) {
-    return null;
+  if (!Array.isArray(item.test_commands) || item.test_commands.length === 0) {
+    return {
+      kind: 'test-command-missing',
+      id: item.id,
+      address: item.address ?? null,
+      status: item.status,
+      reason: 'terminal verification evidence is missing test_commands',
+    };
   }
 
-  return {
-    kind: 'test-command-missing',
-    id: item.id,
-    address: item.address ?? null,
-    status: item.status,
-    reason: 'terminal verification evidence is missing test_commands',
-  };
+  if (item.test_commands.some((result) => (
+    isInjectedCommandResult(result)
+    && result.injectionAuthorization !== INJECTION_AUTHORIZATION
+  ))) {
+    return {
+      kind: 'injection-authorization',
+      id: item.id,
+      address: item.address ?? null,
+      status: item.status,
+      reason: 'injected verification evidence lacks the required authorization acknowledgement',
+    };
+  }
+
+  return null;
 }
 
 function currentSeedAddressExpiration(cwd, seedName, item, changedAddresses) {
@@ -1179,7 +1284,7 @@ function currentSeedAddressExpiration(cwd, seedName, item, changedAddresses) {
 }
 
 function currentItemExpiration(cwd, seedName, item, changedAddresses = new Set()) {
-  const evidence = currentEvidenceExpiration(cwd, item);
+  const evidence = currentEvidenceExpiration(cwd, seedName, item);
   const testCommand = currentTestCommandExpiration(item);
   const seedAddress = currentSeedAddressExpiration(cwd, seedName, item, changedAddresses);
 
@@ -1193,7 +1298,8 @@ function currentItemExpiration(cwd, seedName, item, changedAddresses = new Set()
     address: item.address ?? null,
     status: item.status,
     files: evidence?.files ?? [],
-    missingTestCommands: Boolean(testCommand),
+    missingTestCommands: testCommand?.kind === 'test-command-missing',
+    invalidInjectionAuthorization: testCommand?.kind === 'injection-authorization',
     modifiedAddresses: seedAddress?.modifiedAddresses ?? [],
   };
 }
@@ -1447,7 +1553,11 @@ function transitionItem({
       now,
       producerItemId: itemId,
       reusableResults,
-    });
+    }).map((result) => (
+      result.reused === true && result.producerItemId === itemId
+        ? producerCommandResult(result, itemId)
+        : result
+    ));
     try {
       assertTransitionCommandResults(itemId, targetStatus, testCommandResults);
     } catch (error) {
@@ -1506,6 +1616,88 @@ function confirmItem(options = {}) {
 
 function failItem(options = {}) {
   return transitionItem({ ...options, targetStatus: 'failed' });
+}
+
+function injectItem({
+  cwd,
+  seedName,
+  sessionId = DEFAULT_SESSION_ID,
+  itemId,
+  owner,
+  authorization,
+  now,
+  evidence,
+  reason,
+  files,
+  commandAttestations,
+  lockWaitMs = DEFAULT_LOCK_WAIT_MS,
+} = {}) {
+  assertSessionId(sessionId);
+  assertOwner(owner);
+  if (authorization !== INJECTION_AUTHORIZATION) {
+    throw new Error(`injectItem requires authorization ${INJECTION_AUTHORIZATION}.`);
+  }
+  if (typeof itemId !== 'string' || !itemId) {
+    throw new Error('injectItem requires an itemId string.');
+  }
+
+  const evidenceFiles = hashEvidenceFiles(cwd, files);
+  const attestations = normalizeCommandAttestations(commandAttestations);
+  const targetStatus = attestations.every((entry) => entry.passed) ? 'confirmed' : 'failed';
+  if (targetStatus === 'confirmed' && (typeof evidence !== 'string' || evidence.trim().length === 0)) {
+    throw new Error(`injectItem requires evidence text for passing item ${itemId}.`);
+  }
+  if (targetStatus === 'confirmed' && reason !== undefined) {
+    throw new Error(`injectItem accepts reason only for a failing item ${itemId}.`);
+  }
+  if (targetStatus === 'failed' && (typeof reason !== 'string' || reason.trim().length === 0)) {
+    throw new Error(`injectItem requires reason text for failing item ${itemId}.`);
+  }
+  if (targetStatus === 'failed' && evidence !== undefined) {
+    throw new Error(`injectItem accepts evidence only for a passing item ${itemId}.`);
+  }
+
+  const nowValue = normalizeNow(now);
+  const path = sessionPath(cwd, seedName, sessionId);
+  const label = `session state ${path}`;
+  const lock = lockPath(cwd, seedName, sessionId);
+
+  return withLock(lock, () => {
+    const state = readSessionState(cwd, seedName, sessionId, label);
+    const item = state.items.find((entry) => entry.id === itemId);
+    if (!item) {
+      throw new Error(`Unknown verification id ${itemId} in session ${sessionId}.`);
+    }
+    if (item.status !== 'claimed') {
+      throw new Error(`Invalid injection transition for item ${itemId}: expected claimed, found ${item.status}.`);
+    }
+    if (isClaimStale(item.claim, nowValue)) {
+      item.status = 'pending';
+      item.claim = null;
+      writeJsonAtomically(path, state);
+      throw new Error(`Invalid injection transition for item ${itemId}: claim lease expired and was recovered.`);
+    }
+    if (item.claim.owner !== owner) {
+      throw new Error(`Invalid owner for item ${itemId}: expected ${item.claim.owner}, received ${owner}.`);
+    }
+
+    item.status = targetStatus;
+    item.claim = null;
+    item.evidence = targetStatus === 'confirmed' ? evidence : null;
+    item.reason = targetStatus === 'failed' ? reason : null;
+    item.evidence_files = evidenceFiles;
+    item.test_commands = attestations.map((attestation) => (
+      injectedCommandResult(cwd, owner, authorization, itemId, attestation, nowValue)
+    ));
+    try {
+      item.seed_evidence = currentSeedEvidence(cwd, seedName, item);
+    } catch (error) {
+      item.seed_evidence = null;
+    }
+    state.updatedAt = nowValue;
+    writeJsonAtomically(path, state);
+    return itemSummary(item, verificationReferences(cwd, seedName, item), globalPolicies(cwd, seedName));
+  }, { waitMs: lockWaitMs });
 }
 
 function resetSession({
@@ -1595,6 +1787,13 @@ function summarizeStatus(cwd, seedName, state) {
   const failedIds = state.items
     .filter((entry) => entry.status === 'failed' && !expiredIdSet.has(entry.id))
     .map((entry) => entry.id);
+  const injectedIds = state.items
+    .filter((entry) => terminalStatus(entry))
+    .filter((entry) => (entry.test_commands ?? []).some(isInjectedCommandResult))
+    .map((entry) => entry.id);
+  const injectedCommands = state.items.reduce((count, entry) => (
+    count + (entry.test_commands ?? []).filter(isInjectedCommandResult).length
+  ), 0);
 
   const verified = confirmed + failed;
   const passed = confirmed;
@@ -1618,6 +1817,9 @@ function summarizeStatus(cwd, seedName, state) {
     expiredIds,
     expiredEvidence,
     failedIds,
+    injected: injectedIds.length,
+    injectedCommands,
+    injectedIds,
     modifiedSeedAddresses: seedChanges,
     completion,
     completed,
@@ -1847,13 +2049,6 @@ function verificationAudit({ cwd, seedName, sessionId = DEFAULT_SESSION_ID } = {
         });
       }
 
-      if (item.status === 'failed' && commandResult.passed === true) {
-        addIssue(errors, 'failed-command-passing', item, 'failed item stores a passing test command', {
-          command,
-          exitCode: commandResult.exitCode ?? null,
-        });
-      }
-
       if (/^\.\/seed\/scripts\//.test(command) && command.trim().split(/\s+/).length < 2) {
         addIssue(warnings, 'script-command-without-case', item, 'Seed verification script command has no named case argument', { command });
       }
@@ -1865,16 +2060,17 @@ function verificationAudit({ cwd, seedName, sessionId = DEFAULT_SESSION_ID } = {
   });
 
   commandUsage.forEach((usage, command) => {
-    if (usage.length <= 1) {
+    const executedUsage = usage.filter((entry) => !isInjectedCommandResult(entry.result));
+    if (executedUsage.length <= 1) {
       return;
     }
 
-    const addresses = [...new Set(usage.map((entry) => entry.address).filter(Boolean))];
-    const ids = usage.map((entry) => entry.id);
-    const sharedResults = usage.map((entry) => entry.result).filter(isSharedCommandResult);
-    if (sharedResults.length === usage.length) {
+    const addresses = [...new Set(executedUsage.map((entry) => entry.address).filter(Boolean))];
+    const ids = executedUsage.map((entry) => entry.id);
+    const sharedResults = executedUsage.map((entry) => entry.result).filter(isSharedCommandResult);
+    if (sharedResults.length === executedUsage.length) {
       const groupsByRevision = new Map();
-      usage.forEach((entry) => {
+      executedUsage.forEach((entry) => {
         const group = groupsByRevision.get(entry.result.productRevision) ?? [];
         group.push(entry);
         groupsByRevision.set(entry.result.productRevision, group);
@@ -1886,11 +2082,21 @@ function verificationAudit({ cwd, seedName, sessionId = DEFAULT_SESSION_ID } = {
         const producers = new Set(results.map((result) => result.producerItemId));
         const coldEntries = entries.filter((entry) => entry.result.reused === false);
         const producerItemId = producers.size === 1 ? [...producers][0] : null;
+        const producerItem = producerItemId
+          ? state.items.find((item) => item.id === producerItemId)
+          : null;
+        const injectedProducerReplacement = coldEntries.length === 0
+          && producerItem
+          && (producerItem.test_commands ?? []).some((result) => (
+            isInjectedCommandResult(result) && result.command.trim() === command
+          ));
         if (
           executions.size !== 1
           || producers.size !== 1
-          || coldEntries.length !== 1
-          || coldEntries[0].id !== producerItemId
+          || (
+            !injectedProducerReplacement
+            && (coldEntries.length !== 1 || coldEntries[0].id !== producerItemId)
+          )
         ) {
           inconsistent = true;
         }
@@ -1902,7 +2108,7 @@ function verificationAudit({ cwd, seedName, sessionId = DEFAULT_SESSION_ID } = {
           address: null,
           message: 'shared test command has multiple producer executions for one product revision',
           command,
-          count: usage.length,
+          count: executedUsage.length,
           ids,
           addresses,
         });
@@ -1916,7 +2122,7 @@ function verificationAudit({ cwd, seedName, sessionId = DEFAULT_SESSION_ID } = {
       address: null,
       message: 'repeated test command lacks shared producer integrity metadata',
       command,
-      count: usage.length,
+      count: executedUsage.length,
       ids,
       addresses,
     });
@@ -2220,11 +2426,13 @@ function getStatus({ cwd, seedName, sessionId = DEFAULT_SESSION_ID } = {}) {
 }
 
 module.exports = {
+  INJECTION_AUTHORIZATION,
   startSession,
   claimItem,
   claimNext,
   confirmItem,
   failItem,
+  injectItem,
   resetSession,
   syncSession,
   getStatus,

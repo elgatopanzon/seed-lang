@@ -710,6 +710,40 @@ terminal for the current session, so do not use `fail` as an intermediate
 debugging marker. Fix in-scope defects and obtain passing proof before confirming
 when the implementation is expected to finish satisfied.
 
+### Run Explicit SDD Injection
+
+Use injection only when the operator directly requests `SDD injection`. The
+agent changes the Seed first, implements the resulting delta, evaluates the new
+or modified addresses and affected evidence, then records its known per-command
+results without asking Seed to execute the commands again:
+
+```sh
+seed verify inject ITEM_ID \
+  --owner codex \
+  --authorization operator-requested-sdd-injection \
+  --file src/feature.js \
+  --file test/feature.test.js \
+  --pass-cmd "node --test test/feature.test.js" \
+  --evidence "ITEM_ID changed path was directly evaluated as passing"
+```
+
+Use `--fail-cmd` for each known failing command and `--reason` when any command
+failed. Passing and failing command attestations may be combined. Injection is
+an explicit speed and assurance tradeoff: the record is bound to the owner,
+authorization acknowledgement, timestamp, product revision, evidence-file
+hashes, and Seed-address fingerprints, but it is visibly labeled as injected
+rather than executed. Calls missing the exact
+`--authorization operator-requested-sdd-injection` acknowledgement fail without
+changing session state. `status` reports injected item and command counts, and
+`report` renders `[injected-ok]` or `[injected-failed]` provenance. A later
+`seed verify check` executes the stored command strings and replaces the
+attestations with ordinary command results.
+
+Injected failures keep the session unsatisfied. Missing or modified files and
+changed referenced Seed addresses expire injected evidence normally. Never infer
+injection mode from ordinary SDD requests and never attest a result the agent did
+not directly establish during the requested run.
+
 ### Exhaust The Queue
 
 Repeat claims and item-specific verification until:
@@ -866,6 +900,7 @@ seed verify next [--owner OWNER]
 seed verify claim ITEM [--owner OWNER]
 seed verify confirm ITEM --owner OWNER --file PATH --test-cmd COMMAND
 seed verify fail ITEM --owner OWNER --file PATH --test-cmd COMMAND
+seed verify inject ITEM --owner OWNER --authorization operator-requested-sdd-injection --file PATH (--pass-cmd COMMAND | --fail-cmd COMMAND) (--evidence TEXT | --reason TEXT)
 seed verify check
 seed verify refresh-expired --owner OWNER [--json]
 seed verify audit

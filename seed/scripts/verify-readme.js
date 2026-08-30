@@ -68,6 +68,7 @@ const staticReasons = new Map([
   ['seed verify claim ITEM_ID --owner codex', 'placeholder item and state-dependent claim transition'],
   ['seed verify confirm ITEM_ID  --owner codex  --file src/feature.js  --file test/feature.test.js  --test-cmd "node --test test/feature.test.js"  --evidence "ITEM_ID exercised the production path and passed its focused test"', 'placeholder item, files, and terminal evidence transition'],
   ['seed verify fail ITEM_ID  --owner codex  --file src/feature.js  --test-cmd "node --test test/feature.test.js"  --reason "ITEM_ID fails the declared empty-input behavior"', 'placeholder item, file, and terminal evidence transition'],
+  ['seed verify inject ITEM_ID  --owner codex  --authorization operator-requested-sdd-injection  --file src/feature.js  --file test/feature.test.js  --pass-cmd "node --test test/feature.test.js"  --evidence "ITEM_ID changed path was directly evaluated as passing"', 'placeholder item, files, and operator-authorized injection transition'],
   ['seed verify check', 'state-dependent replay covered by the repository test producer'],
   ['seed verify audit', 'state-dependent completion gate covered by the repository test producer'],
   ['seed verify report', 'state-dependent report covered by the repository test producer'],
@@ -118,7 +119,7 @@ const executableCommands = new Set([
   'node src/cli.js genome validate --builtin',
 ]);
 
-assert.equal(shellCommands.length, 63, 'README shell command inventory changed');
+assert.equal(shellCommands.length, 64, 'README shell command inventory changed');
 for (const command of shellCommands) {
   assert.ok(
     executableCommands.has(command) || staticReasons.has(command),

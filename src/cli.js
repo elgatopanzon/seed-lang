@@ -28,6 +28,7 @@ const {
   validateGenomeDefinitions,
 } = require('./genomes');
 const {
+  INJECTION_AUTHORIZATION,
   checkSession,
   refreshExpiredEvidence,
   verificationAudit,
@@ -36,6 +37,7 @@ const {
   claimItem,
   confirmItem,
   failItem,
+  injectItem,
   getPendingItems,
   getStatus,
   resetSession,
@@ -75,6 +77,7 @@ function usage() {
     'seed verify report',
     'seed verify confirm <constraint-id> --owner OWNER --file PATH [--file PATH...] --test-cmd CMD [--test-cmd CMD...] [--evidence TEXT]',
     'seed verify fail <constraint-id> --owner OWNER --file PATH [--file PATH...] --test-cmd CMD [--test-cmd CMD...] [--reason TEXT]',
+    `seed verify inject <constraint-id> --owner OWNER --authorization ${INJECTION_AUTHORIZATION} --file PATH [--file PATH...] (--pass-cmd CMD | --fail-cmd CMD)... (--evidence TEXT | --reason TEXT)`,
     'seed verify status',
     '',
     `seed source defaults to ${DEFAULT_SEED_PATH}; --seed NAME uses seed/NAME/seed.yml and .seed/NAME`,
@@ -370,6 +373,77 @@ function parseConstraintActionArgs(args, command, optionName) {
     return { error: `seed verify ${command} requires at least one --test-cmd command.` };
   }
 
+  return parsed;
+}
+
+function parseVerifyInjectArgs(args) {
+  if (args.length === 0 || args[0].startsWith('-')) {
+    return { error: 'seed verify inject requires exactly one <constraint-id>.' };
+  }
+
+  const parsed = {
+    itemId: args[0],
+    owner: undefined,
+    authorization: undefined,
+    files: [],
+    commandAttestations: [],
+    evidence: undefined,
+    reason: undefined,
+  };
+  for (let index = 1; index < args.length; index += 1) {
+    const arg = args[index];
+    if (['--owner', '--authorization', '--file', '--pass-cmd', '--fail-cmd', '--evidence', '--reason'].includes(arg)) {
+      const value = readOptionValue(args, index, arg, 'inject');
+      if (value.error) {
+        return value;
+      }
+      if (arg === '--owner') {
+        parsed.owner = value.value;
+      } else if (arg === '--authorization') {
+        parsed.authorization = value.value;
+      } else if (arg === '--file') {
+        parsed.files.push(value.value);
+      } else if (arg === '--pass-cmd' || arg === '--fail-cmd') {
+        parsed.commandAttestations.push({ command: value.value, passed: arg === '--pass-cmd' });
+      } else if (arg === '--evidence') {
+        parsed.evidence = value.value;
+      } else {
+        parsed.reason = value.value;
+      }
+      index += 1;
+    } else if (arg.startsWith('-')) {
+      return { error: `Unknown option for seed verify inject: ${arg}` };
+    } else {
+      return { error: 'seed verify inject requires exactly one <constraint-id>.' };
+    }
+  }
+
+  if (!parsed.owner) {
+    return { error: 'owner invalid: seed verify inject requires --owner.' };
+  }
+  if (parsed.authorization !== INJECTION_AUTHORIZATION) {
+    return { error: `seed verify inject requires --authorization ${INJECTION_AUTHORIZATION}.` };
+  }
+  if (parsed.files.length === 0) {
+    return { error: 'seed verify inject requires at least one --file path.' };
+  }
+  if (parsed.commandAttestations.length === 0) {
+    return { error: 'seed verify inject requires at least one --pass-cmd or --fail-cmd attestation.' };
+  }
+
+  const failed = parsed.commandAttestations.some((entry) => !entry.passed);
+  if (failed && !parsed.reason) {
+    return { error: 'seed verify inject requires --reason when any command is attested as failed.' };
+  }
+  if (failed && parsed.evidence !== undefined) {
+    return { error: 'seed verify inject accepts --evidence only when every command is attested as passing.' };
+  }
+  if (!failed && parsed.reason !== undefined) {
+    return { error: 'seed verify inject accepts --reason only when at least one command is attested as failed.' };
+  }
+  if (!failed && !parsed.evidence) {
+    return { error: 'seed verify inject requires --evidence when every command is attested as passing.' };
+  }
   return parsed;
 }
 
@@ -1087,6 +1161,18 @@ function handleVerifyFail(cwd, seedName, constraintId, owner, reason, files, tes
   }
 }
 
+function handleVerifyInject(cwd, seedName, options) {
+  try {
+    const item = injectItem({ cwd, seedName, ...options });
+    console.log(`Injected verification ${options.itemId}`);
+    console.log(`status: ${item.status}`);
+    console.log('provenance: operator-authorized-agent-attestation; commands not executed');
+    return 0;
+  } catch (error) {
+    return exitWithError(error.message);
+  }
+}
+
 function handleVerifyCheck(cwd, seedName) {
   try {
     const result = checkSession({ cwd, seedName });
@@ -1140,6 +1226,15 @@ function formatIssueCodes(issues) {
 }
 
 function formatCommandResult(command) {
+  if (command.injected === true) {
+    const state = command.passed ? 'injected-ok' : 'injected-failed';
+    const owner = command.injectionOwner ? ' owner=' + command.injectionOwner : '';
+    const authorization = command.injectionAuthorization
+      ? ' authorization=' + command.injectionAuthorization
+      : '';
+    const revision = command.productRevision ? ' revision=' + command.productRevision.slice(0, 12) : '';
+    return '[' + state + ']' + owner + authorization + revision + ' cmd=' + command.command;
+  }
   const state = command.passed ? 'ok' : 'failed';
   const exit = command.exitCode === null || command.exitCode === undefined ? 'null' : command.exitCode;
   const producer = command.producerItemId
@@ -1193,7 +1288,7 @@ function handleVerifyReport(cwd, seedName) {
 
     console.log('Seed verification report');
     console.log('Session: ' + report.sessionId);
-    console.log('Status: total=' + status.total + ' verified=' + status.verified + ' passed=' + status.passed + ' failed=' + status.failed + ' pending=' + status.pending + ' expired=' + status.expired);
+    console.log('Status: total=' + status.total + ' verified=' + status.verified + ' passed=' + status.passed + ' failed=' + status.failed + ' pending=' + status.pending + ' expired=' + status.expired + ' injected=' + status.injected);
     console.log('Completed: ' + status.completed + ' satisfied=' + status.satisfied);
     console.log('Audit: ' + audit.errors.length + ' errors, ' + audit.warnings.length + ' warnings');
 
@@ -1502,6 +1597,14 @@ function run(argv = process.argv.slice(2)) {
       }
 
       return handleVerifyFail(cwd, seedName, parsed.constraintId, parsed.owner, parsed.payload, parsed.files, parsed.testCommands);
+    }
+
+    if (subcommand === 'inject') {
+      const parsed = parseVerifyInjectArgs(subRest);
+      if (parsed.error) {
+        return exitWithError(parsed.error);
+      }
+      return handleVerifyInject(cwd, seedName, parsed);
     }
 
     if (subcommand === 'status') {

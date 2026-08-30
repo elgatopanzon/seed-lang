@@ -1319,6 +1319,103 @@ describe('seed cli', () => {
     });
   });
 
+  test('verify inject records visible command attestations without executing them', () => {
+    withTempDir((cwd) => {
+      assert.equal(runCli(['init'], cwd).code, 0);
+      assert.equal(runCli(['verify', 'start'], cwd).code, 0);
+      assert.equal(runCli(['verify', 'next', '--owner', 'injection-agent'], cwd).code, 0);
+
+      const markerPath = path.join(cwd, '.seed', 'cli-injection-marker');
+      const markerCommand = `${process.execPath} -e "require('node:fs').writeFileSync('.seed/cli-injection-marker','executed')"`;
+      const injected = runCli([
+        'verify', 'inject', 'seed-baseline-visibility',
+        '--owner', 'injection-agent',
+        '--authorization', 'operator-requested-sdd-injection',
+        '--file', 'implementation.js',
+        '--pass-cmd', markerCommand,
+        '--evidence', 'Changed Seed baseline address directly evaluated as passing.',
+      ], cwd);
+      assert.equal(injected.code, 0, injected.stderr);
+      assert.ok(injected.stdout.includes('Injected verification seed-baseline-visibility'));
+      assert.ok(injected.stdout.includes('commands not executed'));
+      assert.equal(fs.existsSync(markerPath), false);
+
+      let status = JSON.parse(runCli(['verify', 'status'], cwd).stdout);
+      assert.equal(status.injected, 1);
+      assert.deepEqual(status.injectedIds, ['seed-baseline-visibility']);
+      const report = runCli(['verify', 'report'], cwd);
+      assert.equal(report.code, 0);
+      assert.ok(report.stdout.includes('injected=1'));
+      assert.ok(report.stdout.includes('[injected-ok] owner=injection-agent'));
+      assert.ok(report.stdout.includes('authorization=operator-requested-sdd-injection'));
+
+      const checked = runCli(['verify', 'check'], cwd);
+      assert.equal(checked.code, 0, checked.stderr);
+      assert.equal(fs.readFileSync(markerPath, 'utf8'), 'executed');
+      status = JSON.parse(runCli(['verify', 'status'], cwd).stdout);
+      assert.equal(status.injected, 0);
+      assert.deepEqual(status.injectedIds, []);
+    });
+  });
+
+  test('verify inject rejects incomplete or contradictory attestations', () => {
+    withTempDir((cwd) => {
+      assert.equal(runCli(['init'], cwd).code, 0);
+      assert.equal(runCli(['verify', 'start'], cwd).code, 0);
+      assert.equal(runCli(['verify', 'next', '--owner', 'injection-agent'], cwd).code, 0);
+
+      const missingOwner = runCli([
+        'verify', 'inject', 'seed-baseline-visibility',
+        '--authorization', 'operator-requested-sdd-injection',
+        '--file', 'implementation.js', '--pass-cmd', PASS_CMD, '--evidence', 'passing evidence',
+      ], cwd);
+      assert.equal(missingOwner.code, 1);
+      assert.ok(missingOwner.stderr.includes('requires --owner'));
+
+      const missingAttestation = runCli([
+        'verify', 'inject', 'seed-baseline-visibility',
+        '--owner', 'injection-agent', '--authorization', 'operator-requested-sdd-injection',
+        '--file', 'implementation.js', '--evidence', 'passing evidence',
+      ], cwd);
+      assert.equal(missingAttestation.code, 1);
+      assert.ok(missingAttestation.stderr.includes('--pass-cmd or --fail-cmd'));
+
+      const passingWithReason = runCli([
+        'verify', 'inject', 'seed-baseline-visibility',
+        '--owner', 'injection-agent', '--authorization', 'operator-requested-sdd-injection',
+        '--file', 'implementation.js',
+        '--pass-cmd', PASS_CMD, '--reason', 'contradictory result',
+      ], cwd);
+      assert.equal(passingWithReason.code, 1);
+      assert.ok(passingWithReason.stderr.includes('--reason only'));
+
+      const failingWithEvidence = runCli([
+        'verify', 'inject', 'seed-baseline-visibility',
+        '--owner', 'injection-agent', '--authorization', 'operator-requested-sdd-injection',
+        '--file', 'implementation.js',
+        '--fail-cmd', FAIL_CMD, '--evidence', 'contradictory result',
+      ], cwd);
+      assert.equal(failingWithEvidence.code, 1);
+      assert.ok(failingWithEvidence.stderr.includes('requires --reason'));
+
+      const missingAuthorization = runCli([
+        'verify', 'inject', 'seed-baseline-visibility',
+        '--owner', 'injection-agent', '--file', 'implementation.js',
+        '--pass-cmd', PASS_CMD, '--evidence', 'passing evidence',
+      ], cwd);
+      assert.equal(missingAuthorization.code, 1);
+      assert.ok(missingAuthorization.stderr.includes('requires --authorization operator-requested-sdd-injection'));
+
+      const wrongAuthorization = runCli([
+        'verify', 'inject', 'seed-baseline-visibility',
+        '--owner', 'injection-agent', '--authorization', 'ordinary-sdd',
+        '--file', 'implementation.js', '--pass-cmd', PASS_CMD, '--evidence', 'passing evidence',
+      ], cwd);
+      assert.equal(wrongAuthorization.code, 1);
+      assert.ok(wrongAuthorization.stderr.includes('requires --authorization operator-requested-sdd-injection'));
+    });
+  });
+
   test('verify audit reports incomplete sessions and weak evidence warnings', () => {
     withTempDir((cwd) => {
       runCli(['init'], cwd);
