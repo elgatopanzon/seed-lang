@@ -1011,6 +1011,79 @@ describe('seed cli', () => {
     });
   });
 
+  test('verify reopen previews evidence-file repair and requires apply before mutation', () => {
+    withTempDir((cwd) => {
+      runCli(['init'], cwd);
+      assert.equal(runCli(['verify', 'start'], cwd).code, 0);
+      assert.equal(runCli(['verify', 'claim', 'seed-baseline-visibility', '--owner', 'worker-A'], cwd).code, 0);
+      assert.equal(runCli([
+        'verify', 'confirm', 'seed-baseline-visibility',
+        '--owner', 'worker-A', '--file', 'implementation.js',
+        '--test-cmd', PASS_CMD, '--evidence', 'Initial executable evidence for repair.',
+      ], cwd).code, 0);
+
+      const preview = runCli([
+        'verify', 'reopen', '--evidence-file', 'implementation.js',
+        '--owner', 'repair-agent', '--reason', 'Narrow evidence ownership.',
+      ], cwd);
+      assert.equal(preview.code, 0, preview.stderr);
+      assert.ok(preview.stdout.includes('Evidence repair preview'));
+      assert.ok(preview.stdout.includes('seed-baseline-visibility'));
+      assert.ok(preview.stdout.includes('rerun with --apply'));
+      let session = JSON.parse(fs.readFileSync(sessionPath(cwd), 'utf8'));
+      assert.equal(session.items.find((entry) => entry.id === 'seed-baseline-visibility').status, 'confirmed');
+
+      const applied = runCli([
+        'verify', 'reopen', '--evidence-file', 'implementation.js',
+        '--owner', 'repair-agent', '--reason', 'Narrow evidence ownership.', '--apply',
+      ], cwd);
+      assert.equal(applied.code, 0, applied.stderr);
+      assert.ok(applied.stdout.includes('Reopened 1 verification item'));
+      session = JSON.parse(fs.readFileSync(sessionPath(cwd), 'utf8'));
+      const item = session.items.find((entry) => entry.id === 'seed-baseline-visibility');
+      assert.equal(item.status, 'claimed');
+      assert.equal(item.claim.owner, 'repair-agent');
+      assert.equal(item.reopen_history.length, 1);
+
+      const report = runCli(['verify', 'report'], cwd);
+      assert.equal(report.code, 0);
+      assert.ok(report.stdout.includes('reopen history: 1'));
+    });
+  });
+
+  test('verify reopen accepts explicit items and rejects unsafe argument combinations', () => {
+    withTempDir((cwd) => {
+      runCli(['init'], cwd);
+      assert.equal(runCli(['verify', 'start'], cwd).code, 0);
+      assert.equal(runCli(['verify', 'claim', 'seed-baseline-visibility', '--owner', 'worker-A'], cwd).code, 0);
+      assert.equal(runCli([
+        'verify', 'confirm', 'seed-baseline-visibility',
+        '--owner', 'worker-A', '--file', 'implementation.js',
+        '--test-cmd', PASS_CMD, '--evidence', 'Initial executable evidence for repair.',
+      ], cwd).code, 0);
+
+      const conflicting = runCli([
+        'verify', 'reopen', 'seed-baseline-visibility', '--evidence-file', 'implementation.js',
+        '--owner', 'repair-agent', '--reason', 'Invalid mixed selectors.',
+      ], cwd);
+      assert.equal(conflicting.code, 1);
+      assert.ok(conflicting.stderr.includes('either item IDs or --evidence-file'));
+
+      const missingReason = runCli([
+        'verify', 'reopen', 'seed-baseline-visibility', '--owner', 'repair-agent',
+      ], cwd);
+      assert.equal(missingReason.code, 1);
+      assert.ok(missingReason.stderr.includes('requires --reason'));
+
+      const reopened = runCli([
+        'verify', 'reopen', 'seed-baseline-visibility',
+        '--owner', 'repair-agent', '--reason', 'Replace over-broad evidence.',
+      ], cwd);
+      assert.equal(reopened.code, 0, reopened.stderr);
+      assert.ok(reopened.stdout.includes('Reopened 1 verification item'));
+    });
+  });
+
   test('verify pending lists pending and expired items', () => {
     withTempDir((cwd) => {
       writeSeedFromTemplate(cwd, (document) => {
@@ -1435,6 +1508,37 @@ describe('seed cli', () => {
     });
   });
 
+  test('verify audit and report render evidence-link warnings through ordinary warning channels', () => {
+    withTempDir((cwd) => {
+      runCli(['init'], cwd);
+      assert.equal(runCli(['verify', 'start'], cwd).code, 0);
+      const session = JSON.parse(fs.readFileSync(sessionPath(cwd), 'utf8'));
+      const ids = session.items.slice(0, 10).map((item) => item.id);
+      ids.forEach((id) => {
+        assert.equal(runCli(['verify', 'claim', id, '--owner', 'worker-A'], cwd).code, 0);
+        assert.equal(runCli([
+          'verify', 'confirm', id,
+          '--owner', 'worker-A', '--file', 'implementation.js',
+          '--test-cmd', PASS_CMD, '--evidence', `${id} checked with shared fixture proof.`,
+        ], cwd).code, 0);
+      });
+
+      const audit = runCli(['verify', 'audit'], cwd);
+      assert.equal(audit.code, 1);
+      assert.ok(audit.stdout.includes('Warnings:'));
+      assert.ok(audit.stdout.includes('high-evidence-file-fanout'));
+      assert.ok(audit.stdout.includes('repeated-evidence-bundle'));
+      assert.ok(audit.stdout.includes('file: implementation.js'));
+      assert.ok(audit.stdout.includes('ids:'));
+
+      const report = runCli(['verify', 'report'], cwd);
+      assert.equal(report.code, 0);
+      assert.ok(report.stdout.includes('Global warnings:'));
+      assert.ok(report.stdout.includes('high-evidence-file-fanout'));
+      assert.ok(report.stdout.includes('repeated-evidence-bundle'));
+    });
+  });
+
   test('verify confirm and fail options accept only known flags and require values', () => {
     withTempDir((cwd) => {
       runCli(['init'], cwd);
@@ -1497,7 +1601,7 @@ describe('seed cli', () => {
       assert.equal(runCli(['verify', 'start'], cwd).code, 0);
       assert.equal(runCli(['verify', 'next'], cwd).code, 0);
 
-      const diagnosticCommand = `${process.execPath} -p "(process.stdout.write(Buffer.from('UlVOVElNRS1PVVQ=','base64')),process.stderr.write(Buffer.from('UlVOVElNRS1FUlI=','base64')),missingName)"`;
+      const diagnosticCommand = `${process.execPath} -p "(require('node:fs').writeSync(1,Buffer.from('UlVOVElNRS1PVVQ=','base64')),require('node:fs').writeSync(2,Buffer.from('UlVOVElNRS1FUlI=','base64')),missingName)"`;
       const confirmed = runCli([
         'verify', 'confirm', 'seed-baseline-visibility',
         '--owner', 'seed-cli',

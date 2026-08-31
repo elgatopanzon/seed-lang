@@ -168,6 +168,33 @@ This executes each unique stored proof once and updates evidence atomically only
 if every proof passes. It refuses semantic contract changes and must not replace
 review of modified Seed addresses.
 
+## Evidence Link Audit And Repair
+
+Inspect `seed verify audit` and `seed verify report` for advisory warnings about
+high evidence-file fanout, repeated evidence bundles, or proof commands shared
+across many address families. These warnings identify review candidates; they do
+not prove that a linkage is semantically wrong.
+
+If the stored file ownership is wrong, reopen exact terminal items without
+resetting unrelated session progress:
+
+```text
+seed verify reopen ITEM --owner OWNER --reason "ITEM-SPECIFIC REPAIR"
+```
+
+For one high-fanout file, preview the matching terminal items first:
+
+```text
+seed verify reopen --evidence-file PATH --owner OWNER --reason "REPAIR PURPOSE"
+```
+
+Review every listed ID, then add `--apply` to reopen that exact current batch.
+Applied reopen preserves prior terminal evidence in `reopen_history` and claims
+the selected items. Run focused proof and use `confirm` or `fail` with narrow
+replacement files. Use `refresh-expired` when existing linkage remains correct;
+use `reopen` only when ownership itself needs repair. Never edit generated
+session state or treat reopen as proof.
+
 ## Completion Gate
 
 After the queue is exhausted, run in order:

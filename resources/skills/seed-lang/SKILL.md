@@ -49,6 +49,11 @@ procedure in [Standalone SDD](references/sdd.md). Never select injection for an
 ordinary SDD request and never supply the injection authorization acknowledgement
 outside that directly requested run.
 
+Use `seed verify audit` to review evidence-link fanout warnings. When stored
+evidence ownership is itself wrong, use the explicit `verify reopen` preview and
+apply workflow in [Standalone SDD](references/sdd.md); do not reset unrelated
+session progress or silently remove evidence provenance.
+
 ## Seed Authoring
 
 When creating or updating a Seed:

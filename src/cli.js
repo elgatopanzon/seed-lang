@@ -35,6 +35,7 @@ const {
   verificationReport,
   claimNext,
   claimItem,
+  reopenEvidence,
   confirmItem,
   failItem,
   injectItem,
@@ -70,6 +71,8 @@ function usage() {
     'seed verify sync',
     'seed verify next [--owner OWNER]',
     'seed verify claim <constraint-id> [--owner OWNER]',
+    'seed verify reopen <constraint-id> [<constraint-id>...] --owner OWNER --reason TEXT',
+    'seed verify reopen --evidence-file PATH --owner OWNER --reason TEXT [--apply]',
     'seed verify pending',
     'seed verify check',
     'seed verify refresh-expired --owner OWNER [--json]',
@@ -280,6 +283,55 @@ function parseVerifyClaimArgs(args) {
     } else {
       return { error: `seed verify claim does not take positional arguments: ${arg}` };
     }
+  }
+  return { options };
+}
+
+function parseVerifyReopenArgs(args) {
+  const options = {
+    itemIds: [],
+    evidenceFile: undefined,
+    owner: undefined,
+    reason: undefined,
+    apply: false,
+  };
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (['--owner', '--reason', '--evidence-file'].includes(arg)) {
+      const parsed = readOptionValue(args, index, arg, 'reopen');
+      if (parsed.error) {
+        return parsed;
+      }
+      if (arg === '--owner') {
+        options.owner = parsed.value;
+      } else if (arg === '--reason') {
+        options.reason = parsed.value;
+      } else if (options.evidenceFile !== undefined) {
+        return { error: 'seed verify reopen accepts exactly one --evidence-file.' };
+      } else {
+        options.evidenceFile = parsed.value;
+      }
+      index += 1;
+    } else if (arg === '--apply') {
+      options.apply = true;
+    } else if (arg.startsWith('-')) {
+      return { error: `Unknown option for seed verify reopen: ${arg}` };
+    } else {
+      options.itemIds.push(arg);
+    }
+  }
+
+  if ((options.itemIds.length > 0) === (options.evidenceFile !== undefined)) {
+    return { error: 'seed verify reopen requires either item IDs or --evidence-file, not both.' };
+  }
+  if (options.itemIds.length > 0 && options.apply) {
+    return { error: 'seed verify reopen --apply is only valid with --evidence-file.' };
+  }
+  if (!options.owner) {
+    return { error: 'owner invalid: seed verify reopen requires --owner.' };
+  }
+  if (!options.reason) {
+    return { error: 'seed verify reopen requires --reason.' };
   }
   return { options };
 }
@@ -1121,6 +1173,24 @@ function handleVerifyClaim(cwd, seedName, itemId, owner = DEFAULT_OWNER) {
   return 0;
 }
 
+function handleVerifyReopen(cwd, seedName, options) {
+  try {
+    const result = reopenEvidence({ cwd, seedName, ...options });
+    if (!result.applied) {
+      console.log(`Evidence repair preview: ${result.ids.length} terminal verification item(s) cite ${result.evidenceFile}`);
+      result.ids.forEach((id) => console.log('- ' + id));
+      console.log('No session state changed; rerun with --apply to reopen these items.');
+      return 0;
+    }
+    const itemLabel = result.reopened === 1 ? 'item' : 'items';
+    console.log(`Reopened ${result.reopened} verification ${itemLabel} for focused evidence replacement.`);
+    result.ids.forEach((id) => console.log('- ' + id));
+    return 0;
+  } catch (error) {
+    return exitWithError(error.message);
+  }
+}
+
 function handleVerifyConfirm(cwd, seedName, constraintId, owner, evidence, files, testCommands) {
   try {
     const item = confirmItem({
@@ -1268,8 +1338,17 @@ function handleVerifyAudit(cwd, seedName) {
         if (issue.command) {
           console.log('  command: ' + issue.command);
         }
+        if (issue.file) {
+          console.log('  file: ' + issue.file);
+        }
+        if (Array.isArray(issue.files) && issue.files.length > 0) {
+          console.log('  files: ' + issue.files.join(', '));
+        }
         if (Array.isArray(issue.ids) && issue.ids.length > 0) {
           console.log('  ids: ' + issue.ids.join(', '));
+        }
+        if (issue.omittedIds > 0) {
+          console.log('  omitted ids: ' + issue.omittedIds);
         }
       });
     }
@@ -1304,7 +1383,25 @@ function handleVerifyReport(cwd, seedName) {
       console.log('Global errors: ' + formatIssueCodes(report.global_errors));
     }
     if (report.global_warnings.length > 0) {
-      console.log('Global warnings: ' + formatIssueCodes(report.global_warnings));
+      console.log('Global warnings:');
+      report.global_warnings.forEach((issue) => {
+        console.log('- ' + issue.code + ': ' + issue.message);
+        if (issue.file) {
+          console.log('  file: ' + issue.file);
+        }
+        if (Array.isArray(issue.files) && issue.files.length > 0) {
+          console.log('  files: ' + issue.files.join(', '));
+        }
+        if (issue.command) {
+          console.log('  command: ' + issue.command);
+        }
+        if (Array.isArray(issue.ids) && issue.ids.length > 0) {
+          console.log('  ids: ' + issue.ids.join(', '));
+        }
+        if (issue.omittedIds > 0) {
+          console.log('  omitted ids: ' + issue.omittedIds);
+        }
+      });
     }
 
     console.log('Items:');
@@ -1327,6 +1424,9 @@ function handleVerifyReport(cwd, seedName) {
       }
       if (item.reason) {
         console.log('  reason: ' + item.reason);
+      }
+      if (item.reopen_history.length > 0) {
+        console.log('  reopen history: ' + item.reopen_history.length);
       }
 
       if (item.references?.addresses?.length > 0) {
@@ -1579,6 +1679,14 @@ function run(argv = process.argv.slice(2)) {
       } catch (error) {
         return exitWithError(error.message);
       }
+    }
+
+    if (subcommand === 'reopen') {
+      const parsed = parseVerifyReopenArgs(subRest);
+      if (parsed.error) {
+        return exitWithError(parsed.error);
+      }
+      return handleVerifyReopen(cwd, seedName, parsed.options);
     }
 
     if (subcommand === 'confirm') {

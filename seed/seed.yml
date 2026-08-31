@@ -124,16 +124,20 @@ interfaces:
         - genome-catalog
     verification-commands:
       description: >-
-        verify start, reset, pending, next, claim, confirm, fail, check,
+        verify start, reset, pending, next, claim, reopen, confirm, fail, check,
         inject, refresh-expired, audit, report, status, sync expose the
         verification state machine. Confirm and fail require an owner, evidence
         files, and executable test commands. Inject requires an owner, evidence
         files, the exact --authorization operator-requested-sdd-injection
         acknowledgement, explicit per-command pass or fail attestations, and
-        evidence or reason text.
+        evidence or reason text. Reopen requires an owner and reason, preserves
+        prior terminal evidence as history, and either names exact items or
+        previews an evidence-file selection before explicit --apply.
       examples:
         - seed verify start
         - seed verify next --owner agent
+        - seed verify reopen ITEM --owner agent --reason TEXT
+        - seed verify reopen --evidence-file PATH --owner agent --reason TEXT --apply
         - seed verify confirm ITEM --owner agent --file PATH --test-cmd COMMAND
         - seed verify inject ITEM --owner agent --authorization operator-requested-sdd-injection --file PATH --pass-cmd COMMAND --evidence TEXT
         - seed verify status
@@ -349,6 +353,23 @@ behavior:
         check executes each unique stored command once and fans results to all
         uses. refresh-expired is an atomic fast path only for confirmed,
         evidence-file-only expiry with no contract change or other pending work.
+    evidence-link-audit:
+      description: >-
+        audit and report surface ordinary warnings when one evidence file has a
+        large verification blast radius, many items share an identical evidence
+        bundle, or one proof command is coupled across many address families.
+        Warnings include affected counts and item IDs, remain advisory rather
+        than fabricating semantic certainty, and use the same warning channels as
+        all other verification audit findings.
+    evidence-repair:
+      description: >-
+        reopen is an explicit fast path for repairing over-broad or incorrect
+        evidence ownership without resetting unrelated session progress. Exact
+        item IDs reopen immediately; --evidence-file previews matching terminal
+        items without mutation unless --apply is supplied. Applied reopen
+        operations preserve prior status, support text, files, commands, and
+        Seed evidence in item history, then claim each selected item for the
+        owner so focused confirm or fail evidence must replace it.
     injection-run:
       description: >-
         Injection is a speed-focused SDD mode used only when the operator directly
@@ -598,8 +619,9 @@ constraints:
     description: >-
       Session state updates are lock-serialized, terminal evidence is hash-bound,
       refresh is all-or-nothing, injected attestations are authorization- and
-      revision-bound and visibly distinct from executed proof, and failures never
-      fabricate successful evidence.
+      revision-bound and visibly distinct from executed proof, reopen preserves
+      displaced terminal evidence as history before focused reverification, and
+      failures never fabricate successful evidence.
     policy: global
   one-cli-package:
     description: >-
@@ -803,6 +825,8 @@ verifications:
       - Assertions that master and named Seed evidence ignores only redundant content-hash changes while referenced address changes and missing or invalid selected Seeds remain visible.
       - Assertions that injection rejects missing or incorrect operator-requested-sdd-injection authorization before state changes, and stores the exact authorization in hash-bound provenance.
       - Assertions that explicit injected pass and fail attestations never execute during injection, retain owner and revision provenance, remain hash- and address-expirable, appear in status and report, can sync only when satisfied, and are replaced by executable results during check.
+      - Assertions that evidence-link fanout, repeated bundles, and broad shared-command coupling appear through ordinary audit and report warnings with bounded affected-item detail.
+      - Assertions that reopen rejects nonterminal or unknown items, previews evidence-file matches without mutation, requires explicit --apply for batch mutation, preserves complete prior terminal evidence history, and claims only selected items for focused replacement evidence.
       - Confirmation that only disposable fixture repositories were mutated.
     artifacts:
       - test-contract

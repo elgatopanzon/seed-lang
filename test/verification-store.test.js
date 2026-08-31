@@ -21,6 +21,7 @@ const {
   getPendingItems,
   getStatus,
   injectItem,
+  reopenEvidence,
   refreshExpiredEvidence,
   startSession,
   syncSession,
@@ -842,7 +843,7 @@ describe('verification store', () => {
         seedText: 'seed-contract-text',
       });
       claimItem({ cwd, itemId: 'verify-begin', owner: 'worker-A' });
-      const diagnosticCommand = `${process.execPath} -e "process.stdout.write('o'.repeat(5000));process.stderr.write('e'.repeat(5000)+'END');process.exitCode=7"`;
+      const diagnosticCommand = `${process.execPath} -e "const fs=require('node:fs');fs.writeSync(1,'o'.repeat(5000));fs.writeSync(2,'e'.repeat(5000)+'END');process.exitCode=7"`;
       failItem({
         cwd,
         itemId: 'verify-begin',
@@ -873,7 +874,7 @@ describe('verification store', () => {
 
       const counterPath = path.join(cwd, '.seed', 'transient-command-count.txt');
       const prerequisitePath = path.join(cwd, '.seed', 'host-ready');
-      const transientCommand = `${process.execPath} -e "const fs=require('node:fs');const c='.seed/transient-command-count.txt';const n=fs.existsSync(c)?Number(fs.readFileSync(c,'utf8'))+1:1;fs.writeFileSync(c,String(n));process.stdout.write('attempt='+n);if(!fs.existsSync('.seed/host-ready')){process.stderr.write('host prerequisite missing');process.exitCode=7}"`;
+      const transientCommand = `${process.execPath} -e "const fs=require('node:fs');const c='.seed/transient-command-count.txt';const n=fs.existsSync(c)?Number(fs.readFileSync(c,'utf8'))+1:1;fs.writeFileSync(c,String(n));fs.writeSync(1,'attempt='+n);if(!fs.existsSync('.seed/host-ready')){fs.writeSync(2,'host prerequisite missing');process.exitCode=7}"`;
 
       assert.throws(
         () => confirmItem({
@@ -1878,6 +1879,160 @@ describe('verification store', () => {
     });
   });
 
+  test('reopenEvidence preserves terminal provenance and claims exact items for replacement proof', () => {
+    withTempDir((cwd) => {
+      startSampleSessionWithSeed(cwd);
+      claimItem({ cwd, itemId: 'verify-begin', owner: 'worker-A', now: () => 1_000 });
+      confirmItem({
+        cwd,
+        itemId: 'verify-begin',
+        owner: 'worker-A',
+        files: ['implementation.js'],
+        testCommands: [PASS_CMD],
+        evidence: 'Original focused evidence for verify-begin.',
+        now: () => 1_500,
+      });
+
+      const reopened = reopenEvidence({
+        cwd,
+        itemIds: ['verify-begin'],
+        owner: 'repair-agent',
+        reason: 'Narrow over-broad evidence ownership.',
+        now: () => 2_000,
+      });
+
+      assert.equal(reopened.applied, true);
+      assert.deepEqual(reopened.ids, ['verify-begin']);
+      const state = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      const item = state.items.find((entry) => entry.id === 'verify-begin');
+      assert.equal(item.status, 'claimed');
+      assert.equal(item.claim.owner, 'repair-agent');
+      assert.equal(item.evidence, null);
+      assert.deepEqual(item.evidence_files, []);
+      assert.deepEqual(item.test_commands, []);
+      assert.equal(item.reopen_history.length, 1);
+      assert.equal(item.reopen_history[0].previousStatus, 'confirmed');
+      assert.equal(item.reopen_history[0].evidence, 'Original focused evidence for verify-begin.');
+      assert.equal(item.reopen_history[0].evidence_files[0].path, 'implementation.js');
+      assert.equal(item.reopen_history[0].test_commands[0].command, PASS_CMD);
+      assert.equal(item.reopen_history[0].reason, 'Narrow over-broad evidence ownership.');
+
+      const reportItem = verificationReport({ cwd }).items.find((entry) => entry.id === 'verify-begin');
+      assert.equal(reportItem.reopen_history.length, 1);
+    });
+  });
+
+  test('reopenEvidence previews evidence-file batches and applies them atomically only when requested', () => {
+    withTempDir((cwd) => {
+      startSampleSessionWithSeed(cwd);
+      ['verify-begin', 'verify-next', 'verify-final'].forEach((id, index) => {
+        claimItem({ cwd, itemId: id, owner: 'worker-A', now: () => 1_000 + index * 1_000 });
+        confirmItem({
+          cwd,
+          itemId: id,
+          owner: 'worker-A',
+          files: ['implementation.js'],
+          testCommands: [PASS_CMD],
+          evidence: `${id} has executable focused evidence.`,
+          now: () => 1_500 + index * 1_000,
+        });
+      });
+      const before = fs.readFileSync(sessionFile(cwd), 'utf8');
+
+      const preview = reopenEvidence({
+        cwd,
+        evidenceFile: 'implementation.js',
+        owner: 'repair-agent',
+        reason: 'Repair shared evidence linkage.',
+        apply: false,
+        now: () => 5_000,
+      });
+      assert.equal(preview.applied, false);
+      assert.deepEqual(preview.ids, ['verify-begin', 'verify-next', 'verify-final']);
+      assert.equal(fs.readFileSync(sessionFile(cwd), 'utf8'), before);
+
+      const applied = reopenEvidence({
+        cwd,
+        evidenceFile: 'implementation.js',
+        owner: 'repair-agent',
+        reason: 'Repair shared evidence linkage.',
+        apply: true,
+        now: () => 5_000,
+      });
+      assert.equal(applied.applied, true);
+      assert.equal(applied.reopened, 3);
+      const state = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      assert.equal(state.items.every((item) => item.status === 'claimed'), true);
+      assert.equal(state.items.every((item) => item.reopen_history.length === 1), true);
+    });
+  });
+
+  test('reopenEvidence reassigns shared proof ownership when its producer is reopened', () => {
+    withTempDir((cwd) => {
+      startSampleSessionWithSeed(cwd);
+      ['verify-begin', 'verify-next', 'verify-final'].forEach((id, index) => {
+        claimItem({ cwd, itemId: id, owner: 'worker-A', now: () => 1_000 + index * 1_000 });
+        confirmItem({
+          cwd,
+          itemId: id,
+          owner: 'worker-A',
+          files: ['implementation.js'],
+          testCommands: [PASS_CMD],
+          evidence: `${id} has executable shared evidence.`,
+          now: () => 1_500 + index * 1_000,
+        });
+      });
+
+      reopenEvidence({
+        cwd,
+        itemIds: ['verify-begin'],
+        owner: 'repair-agent',
+        reason: 'Replace producer evidence ownership.',
+        now: () => 5_000,
+      });
+
+      const state = JSON.parse(fs.readFileSync(sessionFile(cwd), 'utf8'));
+      const remaining = state.items.filter((item) => item.status === 'confirmed');
+      assert.deepEqual(remaining.map((item) => item.test_commands[0].reused), [false, true]);
+      assert.equal(new Set(remaining.map((item) => item.test_commands[0].producerItemId)).size, 1);
+      assert.equal(remaining[0].test_commands[0].producerItemId, 'verify-next');
+      assert.equal(verificationAudit({ cwd }).errors.some((entry) => entry.code === 'duplicate-command-executions'), false);
+    });
+  });
+
+  test('reopenEvidence rejects unknown or nonterminal selections without partial mutation', () => {
+    withTempDir((cwd) => {
+      startSampleSessionWithSeed(cwd);
+      claimItem({ cwd, itemId: 'verify-begin', owner: 'worker-A', now: () => 1_000 });
+      confirmItem({
+        cwd,
+        itemId: 'verify-begin',
+        owner: 'worker-A',
+        files: ['implementation.js'],
+        testCommands: [PASS_CMD],
+        evidence: 'Terminal evidence ready for repair.',
+        now: () => 1_500,
+      });
+      const before = fs.readFileSync(sessionFile(cwd), 'utf8');
+
+      assert.throws(() => reopenEvidence({
+        cwd,
+        itemIds: ['verify-begin', 'verify-next'],
+        owner: 'repair-agent',
+        reason: 'Atomic repair selection.',
+      }), /requires terminal items.*verify-next.*pending/);
+      assert.equal(fs.readFileSync(sessionFile(cwd), 'utf8'), before);
+
+      assert.throws(() => reopenEvidence({
+        cwd,
+        itemIds: ['missing-item'],
+        owner: 'repair-agent',
+        reason: 'Unknown selection.',
+      }), /Unknown verification id missing-item/);
+      assert.equal(fs.readFileSync(sessionFile(cwd), 'utf8'), before);
+    });
+  });
+
   test('checkSession executes each unique recorded command once and fans out its result', () => {
     withTempDir((cwd) => {
       startSession({
@@ -2094,6 +2249,59 @@ describe('verification store', () => {
       assert.equal(failedAudit.ok, false);
       assert.ok(failedAudit.errors.some((issue) => issue.code === 'expired-evidence'));
       assert.ok(failedAudit.errors.some((issue) => issue.code === 'missing-test-commands'));
+    });
+  });
+
+  test('verificationAudit warns through ordinary channels about broad evidence linkage', () => {
+    withTempDir((cwd) => {
+      const sectionItems = (prefix) => Object.fromEntries(
+        Array.from({ length: 4 }, (_, index) => [`${prefix}-${index + 1}`, `${prefix} requirement ${index + 1}`]),
+      );
+      const document = {
+        behavior: sectionItems('behavior'),
+        errors: sectionItems('error'),
+        compatibility: sectionItems('compatibility'),
+        verifications: [{
+          id: 'manual-proof',
+          title: 'Manual proof',
+          description: 'Manual proof participates in evidence-link audit coverage.',
+          method: 'Run the shared fixture proof.',
+          evidence_required: ['Executable fixture result.'],
+        }],
+      };
+      const seedText = stringify(document);
+      fs.mkdirSync(path.join(cwd, 'seed'), { recursive: true });
+      fs.writeFileSync(path.join(cwd, 'seed', 'seed.yml'), seedText, 'utf8');
+      startSession({ cwd, seedDocument: document, seedText });
+      const ids = getPendingItems({ cwd }).map((item) => item.id);
+      ids.forEach((id, index) => {
+        claimItem({ cwd, itemId: id, owner: 'worker-A', now: () => 1_000 + index * 1_000 });
+        confirmItem({
+          cwd,
+          itemId: id,
+          owner: 'worker-A',
+          files: ['implementation.js'],
+          testCommands: [PASS_CMD],
+          evidence: `${id} checked with the shared fixture proof.`,
+          now: () => 1_500 + index * 1_000,
+        });
+      });
+
+      const audit = verificationAudit({ cwd });
+      assert.equal(audit.ok, true);
+      assert.equal(audit.warnings.some((entry) => entry.code === 'high-evidence-file-fanout'), true);
+      assert.equal(audit.warnings.some((entry) => entry.code === 'repeated-evidence-bundle'), true);
+      assert.equal(audit.warnings.some((entry) => entry.code === 'broad-command-coupling'), true);
+      const fanout = audit.warnings.find((entry) => entry.code === 'high-evidence-file-fanout');
+      assert.equal(fanout.file, 'implementation.js');
+      assert.equal(fanout.count, 13);
+      assert.equal(fanout.total, 13);
+      assert.equal(fanout.ids.length, 13);
+
+      const report = verificationReport({ cwd });
+      assert.equal(report.global_warnings.some((entry) => entry.code === 'high-evidence-file-fanout'), true);
+      assert.equal(report.global_warnings.some((entry) => entry.code === 'repeated-evidence-bundle'), true);
+      assert.equal(report.global_warnings.some((entry) => entry.code === 'broad-command-coupling'), true);
     });
   });
 

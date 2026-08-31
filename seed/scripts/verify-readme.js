@@ -38,6 +38,7 @@ const contentAssertions = [
   [/## Blueprints And Diffs[\s\S]*complete model-facing contract[\s\S]*blueprint diff[\s\S]*compiled YAML/, 'blueprint and diff behavior'],
   [/## Standalone Seed Driven Development[\s\S]*Update the Seed contract first[\s\S]*Reverify new and expired items/, 'standalone SDD workflow'],
   [/## Verification[\s\S]*repository-local evidence ledger[\s\S]*Every confirmation requires[\s\S]*Completion requires/, 'verification workflow'],
+  [/## Evidence Link Audit And Repair[\s\S]*verify reopen[\s\S]*reopen_history[\s\S]*does not bypass injection authorization/, 'evidence-link audit and repair workflow'],
   [/## Command Summary[\s\S]*seed verify refresh-expired[\s\S]*Run `seed --help` for the exact current syntax/, 'command summary'],
   [/## Repository Layout[\s\S]*resources\/[\s\S]*verification-store\.js[\s\S]*test\/\s+Node test suite/, 'repository layout'],
   [/## Development[\s\S]*npm test[\s\S]*genome validate --builtin[\s\S]*npm pack --dry-run --json/, 'development checks'],
@@ -66,6 +67,9 @@ const staticReasons = new Map([
   ['seed blueprint --filter @behavior.outputs', 'illustrative address that depends on the target Seed'],
   ['seed blueprint --pager', 'interactive pager handoff'],
   ['seed verify claim ITEM_ID --owner codex', 'placeholder item and state-dependent claim transition'],
+  ['seed verify reopen ITEM_ID --owner repair-agent  --reason "replace over-broad evidence ownership"', 'placeholder item and state-dependent evidence repair'],
+  ['seed verify reopen --evidence-file README.md --owner repair-agent  --reason "narrow README evidence ownership"', 'state-dependent evidence repair preview'],
+  ['seed verify reopen --evidence-file README.md --owner repair-agent  --reason "narrow README evidence ownership" --apply', 'state-dependent evidence repair mutation'],
   ['seed verify confirm ITEM_ID  --owner codex  --file src/feature.js  --file test/feature.test.js  --test-cmd "node --test test/feature.test.js"  --evidence "ITEM_ID exercised the production path and passed its focused test"', 'placeholder item, files, and terminal evidence transition'],
   ['seed verify fail ITEM_ID  --owner codex  --file src/feature.js  --test-cmd "node --test test/feature.test.js"  --reason "ITEM_ID fails the declared empty-input behavior"', 'placeholder item, file, and terminal evidence transition'],
   ['seed verify inject ITEM_ID  --owner codex  --authorization operator-requested-sdd-injection  --file src/feature.js  --file test/feature.test.js  --pass-cmd "node --test test/feature.test.js"  --evidence "ITEM_ID changed path was directly evaluated as passing"', 'placeholder item, files, and operator-authorized injection transition'],
@@ -119,7 +123,7 @@ const executableCommands = new Set([
   'node src/cli.js genome validate --builtin',
 ]);
 
-assert.equal(shellCommands.length, 64, 'README shell command inventory changed');
+assert.equal(shellCommands.length, 67, 'README shell command inventory changed');
 for (const command of shellCommands) {
   assert.ok(
     executableCommands.has(command) || staticReasons.has(command),

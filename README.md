@@ -771,7 +771,8 @@ seed verify status
 - `check` reruns stored proof commands. Identical command strings are executed
   once and their result is applied to every referencing item.
 - `audit` reports incomplete work, failures, expired evidence, missing executable
-  proof, and suspicious evidence quality.
+  proof, suspicious evidence quality, high evidence-file fanout, repeated file
+  bundles, and proof commands coupled across many address families.
 - `report` renders status, audit findings, items, files, commands, and evidence.
 - `status` emits aggregate machine-readable state and expiry details.
 
@@ -813,6 +814,43 @@ seed verify refresh-expired --owner automation --json
 This strict fast path executes every unique stored proof once and updates all
 affected evidence atomically only when every command passes. It refuses semantic
 Seed changes and must not replace review of modified contract addresses.
+
+## Evidence Link Audit And Repair
+
+Audit warnings expose evidence ownership with an unusually large expiry blast
+radius. They appear through the ordinary `verify audit` warning list and the
+global or item warning sections in `verify report`. These warnings are advisory:
+they identify linkage worth reviewing without pretending that file relevance can
+always be inferred mechanically.
+
+When the stored linkage itself is wrong, reopen exact terminal items without
+resetting unrelated verification progress:
+
+```sh
+seed verify reopen ITEM_ID --owner repair-agent \
+  --reason "replace over-broad evidence ownership"
+```
+
+For a high-fanout file, preview every matching terminal item first:
+
+```sh
+seed verify reopen --evidence-file README.md --owner repair-agent \
+  --reason "narrow README evidence ownership"
+```
+
+The preview does not mutate the session. After reviewing its item IDs, apply the
+batch explicitly:
+
+```sh
+seed verify reopen --evidence-file README.md --owner repair-agent \
+  --reason "narrow README evidence ownership" --apply
+```
+
+Applied reopen operations preserve each item's prior terminal status, evidence,
+failure reason, files, commands, and Seed fingerprints in `reopen_history`, then
+claim the item for the supplied owner. Run focused proof and use `confirm` or
+`fail` to replace the evidence. Reopen never validates old evidence by itself and
+does not bypass injection authorization.
 
 ## Working Outside The Project Directory
 
@@ -898,6 +936,8 @@ seed verify sync
 seed verify pending
 seed verify next [--owner OWNER]
 seed verify claim ITEM [--owner OWNER]
+seed verify reopen ITEM [ITEM...] --owner OWNER --reason TEXT
+seed verify reopen --evidence-file PATH --owner OWNER --reason TEXT [--apply]
 seed verify confirm ITEM --owner OWNER --file PATH --test-cmd COMMAND
 seed verify fail ITEM --owner OWNER --file PATH --test-cmd COMMAND
 seed verify inject ITEM --owner OWNER --authorization operator-requested-sdd-injection --file PATH (--pass-cmd COMMAND | --fail-cmd COMMAND) (--evidence TEXT | --reason TEXT)

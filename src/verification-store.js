@@ -37,6 +37,9 @@ const DEFAULT_LOCK_WAIT_MS = 60_000;
 const DEFAULT_LOCK_RETRY_MS = 50;
 const DEFAULT_TEST_COMMAND_TIMEOUT_MS = 300_000;
 const INJECTION_AUTHORIZATION = 'operator-requested-sdd-injection';
+const EVIDENCE_LINK_WARNING_MIN_ITEMS = 10;
+const EVIDENCE_LINK_WARNING_MIN_RATIO = 0.5;
+const EVIDENCE_LINK_WARNING_MAX_IDS = 25;
 const SESSION_SCHEMA_VERSION = 1;
 const SESSION_COMMAND_CWD = '.';
 const VALID_STATUSES = [
@@ -701,6 +704,37 @@ function assertSessionShape(session, sourcePath, expectedSessionId, expectedSnap
         }
       });
     });
+
+    if (entry.reopen_history !== undefined && !Array.isArray(entry.reopen_history)) {
+      throw new Error(`Corrupt session state at ${sourcePath}: item ${entry.id} reopen_history must be an array.`);
+    }
+    (entry.reopen_history ?? []).forEach((history, historyIndex) => {
+      const prefix = `Corrupt session state at ${sourcePath}: item ${entry.id} reopen_history[${historyIndex}]`;
+      if (!history || typeof history !== 'object' || Array.isArray(history)) {
+        throw new Error(`${prefix} must be an object.`);
+      }
+      if (!['confirmed', 'failed'].includes(history.previousStatus)) {
+        throw new Error(`${prefix} has invalid previousStatus ${history.previousStatus}.`);
+      }
+      if (typeof history.owner !== 'string' || history.owner.trim().length === 0
+        || typeof history.reason !== 'string' || history.reason.trim().length === 0) {
+        throw new Error(`${prefix} requires owner and reason.`);
+      }
+      assertFiniteTimestamp(history.reopenedAt, `${entry.id} reopen history reopenedAt`, sourcePath);
+      if (!Array.isArray(history.evidence_files) || !Array.isArray(history.test_commands)) {
+        throw new Error(`${prefix} requires evidence_files and test_commands arrays.`);
+      }
+      history.test_commands.forEach((result, commandIndex) => {
+        if (!result || typeof result !== 'object' || Array.isArray(result)) {
+          throw new Error(`${prefix} has an invalid command result at ${commandIndex}.`);
+        }
+        if (isInjectedCommandResult(result)) {
+          assertInjectedCommandResult(result, sourcePath, entry.id, commandIndex);
+        } else {
+          assertSharedCommandResult(result, sourcePath, entry.id, commandIndex);
+        }
+      });
+    });
   });
 }
 
@@ -786,6 +820,7 @@ function buildManualSessionItems(seedDocument) {
       evidence_files: [],
       test_commands: [],
       test_command_attempts: [],
+      reopen_history: [],
       seed_evidence: null,
     };
   });
@@ -835,6 +870,7 @@ function buildImplicitSessionItems(seedDocument) {
       evidence_files: [],
       test_commands: [],
       test_command_attempts: [],
+      reopen_history: [],
       seed_evidence: null,
     };
   });
@@ -875,6 +911,7 @@ function normalizeStoredSessionPaths(state, cwd, seedName) {
     const commands = [
       ...(item.test_commands ?? []),
       ...(item.test_command_attempts ?? []).flatMap((attempt) => attempt.test_commands ?? []),
+      ...(item.reopen_history ?? []).flatMap((history) => history.test_commands ?? []),
     ];
     commands.forEach((command) => {
       if (!command || typeof command !== 'object') {
@@ -938,6 +975,7 @@ function reconcileSessionState(cwd, seedName, state) {
     'evidence_files',
     'test_commands',
     'test_command_attempts',
+    'reopen_history',
     'seed_evidence',
   ];
 
@@ -1496,6 +1534,158 @@ function claimItem({
   }, { waitMs: lockWaitMs });
 }
 
+function rebalanceSharedCommandProducers(state, commands) {
+  const affectedCommands = new Set(commands);
+  if (affectedCommands.size === 0) {
+    return;
+  }
+
+  const remainingItems = state.items.filter((item) => (
+    terminalStatus(item)
+    && Array.isArray(item.test_commands)
+    && item.test_commands.some((entry) => affectedCommands.has(entry.command))
+  ));
+  const resultsByCommand = new Map();
+  remainingItems.forEach((item) => {
+    item.test_commands.forEach((entry) => {
+      if (
+        affectedCommands.has(entry.command)
+        && !isInjectedCommandResult(entry)
+        && !resultsByCommand.has(entry.command)
+      ) {
+        resultsByCommand.set(entry.command, entry);
+      }
+    });
+  });
+  fanOutCommandResults(remainingItems, resultsByCommand).forEach(({ item, commands: results }) => {
+    item.test_commands = results;
+  });
+}
+
+function reopenEvidence({
+  cwd,
+  seedName,
+  sessionId = DEFAULT_SESSION_ID,
+  itemIds = [],
+  evidenceFile,
+  owner,
+  reason,
+  apply,
+  leaseMs = DEFAULT_LEASE_MS,
+  now,
+  lockWaitMs = DEFAULT_LOCK_WAIT_MS,
+} = {}) {
+  assertSessionId(sessionId);
+  assertOwner(owner);
+  if (typeof reason !== 'string' || reason.trim().length === 0) {
+    throw new Error('reopenEvidence requires a non-empty reason.');
+  }
+  if (typeof leaseMs !== 'number' || !Number.isFinite(leaseMs) || leaseMs <= 0) {
+    throw new Error('reopenEvidence requires leaseMs to be a positive number.');
+  }
+
+  const hasItemIds = Array.isArray(itemIds) && itemIds.length > 0;
+  const hasEvidenceFile = evidenceFile !== undefined;
+  if (hasItemIds === hasEvidenceFile) {
+    throw new Error('reopenEvidence requires either itemIds or one evidenceFile selector.');
+  }
+  if (hasItemIds && new Set(itemIds).size !== itemIds.length) {
+    throw new Error('reopenEvidence itemIds must not contain duplicates.');
+  }
+  if (hasItemIds && itemIds.some((itemId) => typeof itemId !== 'string' || itemId.length === 0)) {
+    throw new Error('reopenEvidence itemIds must be non-empty strings.');
+  }
+
+  const selectedEvidenceFile = hasEvidenceFile ? safeRelativeFilePath(cwd, evidenceFile) : null;
+  const shouldApply = hasItemIds || apply === true;
+  const nowValue = normalizeNow(now);
+  const path = sessionPath(cwd, seedName, sessionId);
+  const label = `session state ${path}`;
+  const lock = lockPath(cwd, seedName, sessionId);
+
+  return withLock(lock, () => {
+    const state = readSessionState(cwd, seedName, sessionId, label);
+    let selected;
+    if (hasItemIds) {
+      selected = itemIds.map((itemId) => {
+        const item = state.items.find((entry) => entry.id === itemId);
+        if (!item) {
+          throw new Error(`Unknown verification id ${itemId} in session ${sessionId}.`);
+        }
+        return item;
+      });
+    } else {
+      selected = state.items.filter((item) => (
+        terminalStatus(item)
+        && (item.evidence_files ?? []).some((entry) => entry.path === selectedEvidenceFile)
+      ));
+      if (selected.length === 0) {
+        throw new Error(`No terminal verification items cite evidence file ${selectedEvidenceFile}.`);
+      }
+    }
+
+    const nonterminal = selected.filter((item) => !terminalStatus(item));
+    if (nonterminal.length > 0) {
+      throw new Error(
+        'reopenEvidence requires terminal items; found '
+        + nonterminal.map((item) => `${item.id}:${item.status}`).join(', '),
+      );
+    }
+
+    const ids = selected.map((item) => item.id);
+    if (!shouldApply) {
+      return {
+        sessionId,
+        applied: false,
+        reopened: 0,
+        ids,
+        evidenceFile: selectedEvidenceFile,
+      };
+    }
+
+    const displacedCommands = [];
+    selected.forEach((item) => {
+      displacedCommands.push(...(item.test_commands ?? []).map((entry) => entry.command));
+      item.reopen_history = [
+        ...(item.reopen_history ?? []),
+        {
+          reopenedAt: nowValue,
+          owner,
+          reason: reason.trim(),
+          previousStatus: item.status,
+          evidence: item.evidence ?? null,
+          failureReason: item.reason ?? null,
+          evidence_files: structuredClone(item.evidence_files ?? []),
+          test_commands: structuredClone(item.test_commands ?? []),
+          seed_evidence: structuredClone(item.seed_evidence ?? null),
+        },
+      ];
+      item.status = 'claimed';
+      item.claim = {
+        owner,
+        claimedAt: nowValue,
+        leaseUntil: nowValue + leaseMs,
+      };
+      item.attempts = (item.attempts ?? 0) + 1;
+      item.evidence = null;
+      item.reason = null;
+      item.evidence_files = [];
+      item.test_commands = [];
+      item.seed_evidence = null;
+    });
+    rebalanceSharedCommandProducers(state, displacedCommands);
+    state.updatedAt = nowValue;
+    writeJsonAtomically(path, state);
+    return {
+      sessionId,
+      applied: true,
+      reopened: selected.length,
+      ids,
+      evidenceFile: selectedEvidenceFile,
+    };
+  }, { waitMs: lockWaitMs });
+}
+
 function transitionItem({
   cwd,
   seedName,
@@ -1900,6 +2090,7 @@ function syncSession({
           evidence_files: structuredClone(old.evidence_files ?? []),
           test_commands: structuredClone(old.test_commands ?? []),
           test_command_attempts: structuredClone(old.test_command_attempts ?? []),
+          reopen_history: structuredClone(old.reopen_history ?? []),
           seed_evidence: structuredClone(old.seed_evidence ?? null),
         };
       }
@@ -2059,7 +2250,85 @@ function verificationAudit({ cwd, seedName, sessionId = DEFAULT_SESSION_ID } = {
     }
   });
 
+  const terminalItems = state.items.filter((item) => terminalStatus(item));
+  const fileUsage = new Map();
+  const bundleUsage = new Map();
+  terminalItems.forEach((item) => {
+    const paths = [...new Set((item.evidence_files ?? [])
+      .map((entry) => entry?.path)
+      .filter((entry) => typeof entry === 'string'))].sort();
+    paths.forEach((file) => {
+      const items = fileUsage.get(file) ?? [];
+      items.push(item);
+      fileUsage.set(file, items);
+    });
+    if (paths.length > 0) {
+      const key = paths.join('\0');
+      const bundle = bundleUsage.get(key) ?? { files: paths, items: [] };
+      bundle.items.push(item);
+      bundleUsage.set(key, bundle);
+    }
+  });
+
+  const fanoutThreshold = Math.max(
+    EVIDENCE_LINK_WARNING_MIN_ITEMS,
+    Math.ceil(terminalItems.length * EVIDENCE_LINK_WARNING_MIN_RATIO),
+  );
+  fileUsage.forEach((items, file) => {
+    if (items.length < fanoutThreshold) {
+      return;
+    }
+    const ids = items.map((item) => item.id);
+    warnings.push({
+      code: 'high-evidence-file-fanout',
+      id: null,
+      address: null,
+      message: `evidence file ${file} is linked to ${items.length}/${terminalItems.length} terminal items and has a large expiry blast radius`,
+      file,
+      count: items.length,
+      total: terminalItems.length,
+      ratio: terminalItems.length === 0 ? 0 : items.length / terminalItems.length,
+      ids: ids.slice(0, EVIDENCE_LINK_WARNING_MAX_IDS),
+      omittedIds: Math.max(0, ids.length - EVIDENCE_LINK_WARNING_MAX_IDS),
+    });
+  });
+
+  bundleUsage.forEach(({ files, items }) => {
+    if (items.length < EVIDENCE_LINK_WARNING_MIN_ITEMS) {
+      return;
+    }
+    const ids = items.map((item) => item.id);
+    warnings.push({
+      code: 'repeated-evidence-bundle',
+      id: null,
+      address: null,
+      message: `${items.length} terminal items share one identical ${files.length}-file evidence bundle; review whether ownership is item-specific`,
+      files,
+      count: items.length,
+      ids: ids.slice(0, EVIDENCE_LINK_WARNING_MAX_IDS),
+      omittedIds: Math.max(0, ids.length - EVIDENCE_LINK_WARNING_MAX_IDS),
+    });
+  });
+
   commandUsage.forEach((usage, command) => {
+    const coupledUsage = [...new Map(usage.map((entry) => [entry.id, entry])).values()];
+    const commandAddresses = [...new Set(coupledUsage.map((entry) => entry.address).filter(Boolean))];
+    const addressFamilies = [...new Set(commandAddresses.map((address) => address.split('.')[0]))];
+    if (coupledUsage.length >= EVIDENCE_LINK_WARNING_MIN_ITEMS && addressFamilies.length >= 3) {
+      const ids = coupledUsage.map((entry) => entry.id);
+      warnings.push({
+        code: 'broad-command-coupling',
+        id: null,
+        address: null,
+        message: `one proof command is linked to ${coupledUsage.length} items across ${addressFamilies.length} address families; review whether the consumers need focused proofs`,
+        command,
+        count: coupledUsage.length,
+        addressFamilies,
+        ids: ids.slice(0, EVIDENCE_LINK_WARNING_MAX_IDS),
+        omittedIds: Math.max(0, ids.length - EVIDENCE_LINK_WARNING_MAX_IDS),
+      });
+    }
+
     const executedUsage = usage.filter((entry) => !isInjectedCommandResult(entry.result));
     if (executedUsage.length <= 1) {
       return;
@@ -2184,6 +2453,7 @@ function verificationReport({ cwd, seedName, sessionId = DEFAULT_SESSION_ID } = 
     evidence_files: structuredClone(item.evidence_files ?? []),
     test_commands: structuredClone(item.test_commands ?? []),
     test_command_attempts: structuredClone(item.test_command_attempts ?? []),
+    reopen_history: structuredClone(item.reopen_history ?? []),
     expiration: expirationsById.get(item.id) ?? null,
     audit_errors: auditErrorsById.get(item.id) ?? [],
     audit_warnings: auditWarningsById.get(item.id) ?? [],
@@ -2433,6 +2703,7 @@ module.exports = {
   confirmItem,
   failItem,
   injectItem,
+  reopenEvidence,
   resetSession,
   syncSession,
   getStatus,

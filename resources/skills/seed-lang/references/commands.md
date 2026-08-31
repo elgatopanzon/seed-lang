@@ -61,6 +61,8 @@ seed verify sync
 seed verify pending
 seed verify next [--owner OWNER]
 seed verify claim ITEM [--owner OWNER]
+seed verify reopen ITEM [ITEM...] --owner OWNER --reason TEXT
+seed verify reopen --evidence-file PATH --owner OWNER --reason TEXT [--apply]
 seed verify confirm ITEM --owner OWNER --file PATH [--file PATH...]
                     --test-cmd COMMAND [--test-cmd COMMAND...] [--evidence TEXT]
 seed verify fail ITEM --owner OWNER --file PATH [--file PATH...]
@@ -82,6 +84,9 @@ seed verify status
   for normal incremental changes.
 - `pending` reads pending and expired work without claiming it.
 - `next` claims the next pending or expired item.
+- `reopen` preserves prior terminal evidence in `reopen_history` and claims exact
+  items for focused replacement proof. Evidence-file selection previews matching
+  terminal items without mutation; `--apply` is required to reopen that batch.
 - `confirm` executes each command once per product-content revision, reuses the
   complete producer result for later consumers, and succeeds only when all pass.
   A failed confirmation remains claimed and atomically retains complete command
@@ -101,7 +106,9 @@ seed verify status
   attestations with executable results.
 - `refresh-expired` is a strict atomic fast path only for unchanged-contract,
   evidence-file-only expiry.
-- `audit` evaluates completeness and evidence quality.
+- `audit` evaluates completeness and evidence quality, including advisory
+  warnings for high evidence-file fanout, repeated evidence bundles, and proof
+  commands coupled across many address families.
 - `report` renders status, audit findings, items, files, commands, and evidence.
 - `status` emits machine-readable aggregate and expiry details.
 - `sync` promotes a satisfied current Seed snapshot while preserving valid
